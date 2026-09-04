@@ -11,24 +11,26 @@ COPY frontend/ ./
 RUN npm run build
 
 # ============================================================
-# 阶段 2：Python 运行时（3.12 + uv + FastAPI）
+# 阶段 2：Python 运行时（uv 官方镜像：内置 uv + CPython 3.12 on bookworm-slim）
+#
+# 使用 uv 官方提供的 python 运行时镜像（ghcr.io/astral-sh/uv），
+# 该镜像已内置 uv 与 CPython 3.12，等价于 python:3.12-slim + uv，
+# 但少了一整层 uv COPY，构建更快、镜像更小。
+# 镜像 tag 中 uv 版本固定到 0.4.x，保证可复现。
 # ============================================================
-FROM python:3.12-slim AS runtime
+FROM ghcr.io/astral-sh/uv:0.4.4-python3.12-bookworm-slim AS runtime
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
+    UV_NO_CACHE=1 \
     PORTVIEW_PORT=7577 \
     PATH="/app/.venv/bin:$PATH"
 
-# 系统依赖
+# 系统依赖（gnupg：gpg --dearmor 需要，--no-install-recommends 不会自动带上）
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates gnupg lsb-release net-tools procps \
     && rm -rf /var/lib/apt/lists/*
-
-# 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # 安装 Docker CLI（用于读取容器端口）
 RUN set -eux; \
@@ -38,11 +40,9 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends docker-ce-cli; \
     rm -rf /var/lib/apt/lists/*
 
-# Python 依赖（uv 安装到独立 venv）
-COPY pyproject.toml ./
-RUN uv venv /app/.venv --python 3.12 \
-    && uv pip install --python /app/.venv/bin/python \
-        fastapi "uvicorn[standard]" docker psutil pydantic
+# Python 运行时依赖（uv 从锁文件安装，跳过项目本体与 dev 依赖 → 可复现且更快）
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-install-project --no-dev --python 3.12
 
 # 应用代码 + 前端产物 + 示例配置
 COPY app/ ./app/

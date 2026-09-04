@@ -1,6 +1,6 @@
 [project]
 name = "portview"
-version = "1.0.0"
+version = "1.0.1"
 description = "PortView - Docker 容器与主机端口监控与可视化工具"
 readme = "README.md"
 requires-python = ">=3.12"
