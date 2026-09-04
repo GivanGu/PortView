@@ -1,0 +1,49 @@
+{
+  "app": {
+    "name": "PortView",
+    "tagline": "端口监控与可视化"
+  },
+  "nav": {
+    "overview": "概览",
+    "ports": "端口",
+    "notes": "备注",
+    "hidden": "隐藏",
+    "settings": "设置"
+  },
+  "topbar": {
+    "searchPlaceholder": "搜索端口、服务、容器…",
+    "searchKbd": "⌘K",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeToggle": "切换主题",
+    "langToggle": "切换语言"
+  },
+  "statusbar": {
+    "refreshManual": "手动刷新",
+    "refreshAuto": "自动刷新",
+    "occupancy": "占用率",
+    "containers": "容器"
+  },
+  "common": {
+    "loading": "加载中…",
+    "refresh": "刷新",
+    "search": "搜索",
+    "save": "保存",
+    "cancel": "取消",
+    "close": "关闭",
+    "delete": "删除",
+    "add": "添加",
+    "exportCsv": "导出 CSV",
+    "exportJson": "导出 JSON",
+    "empty": "暂无数据",
+    "noResult": "没有匹配的结果"
+  },
+  "placeholder": {
+    "comingSoon": "该视图正在建设中",
+    "comingSoonDesc": "这是 P1/P2 阶段的视图，骨架已就绪，敬请期待。"
+  },
+  "overview": {
+    "title": "概览",
+    "subtitle": "端口使用概况"
+  }
+}

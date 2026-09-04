@@ -1,0 +1,49 @@
+{
+  "app": {
+    "name": "PortView",
+    "tagline": "Port monitor & visualization"
+  },
+  "nav": {
+    "overview": "Overview",
+    "ports": "Ports",
+    "notes": "Notes",
+    "hidden": "Hidden",
+    "settings": "Settings"
+  },
+  "topbar": {
+    "searchPlaceholder": "Search ports, services, containers…",
+    "searchKbd": "⌘K",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeToggle": "Toggle theme",
+    "langToggle": "Toggle language"
+  },
+  "statusbar": {
+    "refreshManual": "Manual refresh",
+    "refreshAuto": "Auto refresh",
+    "occupancy": "Occupancy",
+    "containers": "Containers"
+  },
+  "common": {
+    "loading": "Loading…",
+    "refresh": "Refresh",
+    "search": "Search",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "add": "Add",
+    "exportCsv": "Export CSV",
+    "exportJson": "Export JSON",
+    "empty": "No data",
+    "noResult": "No matching results"
+  },
+  "placeholder": {
+    "comingSoon": "This view is under construction",
+    "comingSoonDesc": "This is a P1/P2 view. The shell is ready — stay tuned."
+  },
+  "overview": {
+    "title": "Overview",
+    "subtitle": "Port usage summary"
+  }
+}

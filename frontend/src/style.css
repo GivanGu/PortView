@@ -47,6 +47,9 @@
 
   /* 间距 */
   --sidebar-width: 240px;
+  --rail-width: 200px;
+  --topbar-height: 56px;
+  --statusbar-height: 32px;
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -1104,4 +1107,321 @@ html, body {
 
 .proto-bar-fill.udp {
   background: var(--orange);
+}
+
+
+/* ============================================================
+   App Shell（顶栏 + 图标导航轨 + 状态栏）— P0
+   ============================================================ */
+.app-shell {
+  display: grid;
+  grid-template-rows: var(--topbar-height) 1fr var(--statusbar-height);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* ── 顶栏 ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 8px;
+  border-right: 1px solid var(--border);
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.topbar-search {
+  position: relative;
+  flex: 1;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.topbar-search .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.topbar-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 64px 0 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.topbar-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.topbar-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.topbar-search .kbd {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.icon-btn .lang-code {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* ── 主体：左侧图标轨 + 右侧内容 ── */
+.app-body {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rail {
+  width: var(--rail-width);
+  min-width: var(--rail-width);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.rail-item svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.rail-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.rail-item:hover svg {
+  color: var(--text-secondary);
+}
+
+.rail-item.active {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.rail-item.active svg {
+  color: var(--accent);
+}
+
+.rail-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  padding: 0;
+}
+
+/* ── 状态栏 ── */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 16px;
+  height: var(--statusbar-height);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-right {
+  margin-left: auto;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.status-label {
+  color: var(--text-muted);
+}
+
+.status-occ {
+  color: var(--text-secondary);
+}
+
+.status-occ b,
+.status-item b {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.status-sep {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ── 占位视图 ── */
+.placeholder-view {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.placeholder-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
+  text-align: center;
+  padding: 40px 32px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  animation: fadeIn 0.3s ease;
+}
+
+.placeholder-icon {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.placeholder-card h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 8px 0 0;
+}
+
+.placeholder-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.placeholder-card .badge {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-card-hover);
+  color: var(--text-muted);
+  font-size: 12px;
 }
