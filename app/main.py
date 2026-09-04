@@ -16,17 +16,20 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.config import init_config
+from app.routers.auth import get_current_user, init_db
+from app.routers import auth as auth_router
 from app.routers import config as config_router
 from app.routers import notifications as notifications_router
 from app.routers import ports as ports_router
 from app.routers import ranges as ranges_router
+from app.utils.errors import PortViewError
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +67,25 @@ def create_app() -> FastAPI:
     )
 
     # API 路由
-    app.include_router(ports_router.router)
-    app.include_router(config_router.router)
-    app.include_router(ranges_router.router)
-    app.include_router(notifications_router.router)
+    app.include_router(auth_router.router)
+    # 受保护的路由需要认证
+    app.include_router(ports_router.router, dependencies=[Depends(get_current_user)])
+    app.include_router(config_router.router, dependencies=[Depends(get_current_user)])
+    app.include_router(ranges_router.router, dependencies=[Depends(get_current_user)])
+    app.include_router(notifications_router.router, dependencies=[Depends(get_current_user)])
 
-    # 健康检查
+    # 初始化 SQLite 用户数据库
+    init_db()
+
+    # 统一错误处理
+    @app.exception_handler(PortViewError)
+    async def handle_portview_error(request, exc: PortViewError):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_dict(),
+        )
+
     @app.get("/api/health", tags=["meta"])
     def health() -> dict:
         return {"status": "ok", "version": __version__}

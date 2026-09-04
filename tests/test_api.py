@@ -9,6 +9,16 @@ from fastapi.testclient import TestClient
 os.environ["PORTVIEW_CONFIG_DIR"] = "/tmp/portview_api_test_config"
 
 from app.main import app  # noqa: E402
+from app.routers.auth import get_current_user  # noqa: E402
+
+
+def _skip_auth():
+    """测试环境跳过认证 —— 返回虚拟用户。"""
+    return "admin"
+
+
+# 覆盖认证依赖（测试环境不需登录）
+app.dependency_overrides[get_current_user] = _skip_auth
 
 
 @pytest.fixture
@@ -129,3 +139,72 @@ class TestRefresh:
         data = resp.json()
         assert data["success"] is True
         assert "port_cards" in data["data"]
+
+
+class TestAuth:
+    def test_login_default(self, client: TestClient):
+        resp = client.post("/api/auth/login", json={"password": "portview123"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "token" in data["data"]
+        assert data["data"]["user"]["username"] == "admin"
+
+    def test_login_wrong_password(self, client: TestClient):
+        resp = client.post("/api/auth/login", json={"password": "wrong"})
+        assert resp.status_code == 401
+
+    def test_me(self, client: TestClient):
+        resp = client.get("/api/auth/me")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["username"] == "admin"
+
+
+class TestRanges:
+    def test_ranges_crud(self, client: TestClient):
+        # 查询 (返回数组)
+        resp = client.get("/api/config/ranges")
+        assert resp.status_code == 200
+        initial = resp.json()
+        assert isinstance(initial, list)
+
+        # 创建
+        resp = client.post(
+            "/api/config/ranges",
+            json={"name": "游戏服务器", "start_port": 22500, "end_port": 22600},
+        )
+        assert resp.status_code == 201
+
+        # 查询
+        resp = client.get("/api/config/ranges")
+        ranges = resp.json()
+        assert isinstance(ranges, list)
+        assert any(r["name"] == "游戏服务器" for r in ranges)
+
+        # 删除
+        new_range = next(r for r in ranges if r["name"] == "游戏服务器")
+        resp = client.delete(f"/api/config/ranges/{new_range['id']}")
+        assert resp.status_code == 200
+        assert not any(
+            r["name"] == "游戏服务器"
+            for r in resp.json()
+        )
+
+
+class TestNotifications:
+    def test_notifications(self, client: TestClient):
+        resp = client.get("/api/notifications")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "notifications" in data["data"]
+        assert "unread_count" in data["data"]
+
+
+class TestPortsConflict:
+    def test_ports_has_conflict_field(self, client: TestClient):
+        resp = client.get("/api/ports", params={"start_port": 1, "end_port": 65535})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        # 验证 port_cards 可能包含 conflict 字段（即使为 False / None）
+        for card in data["port_cards"][:100]:
+            assert "conflict" in card or card["type"] in ("gap", "unknown_range")

@@ -8,7 +8,6 @@ export type PortCardType = 'used' | 'gap' | 'unknown_range'
 
 export interface PortCard {
   type: PortCardType
-  // used
   port?: number
   source?: string
   protocol?: string
@@ -20,11 +19,12 @@ export interface PortCard {
   is_running?: boolean
   container_status?: string
   is_host_network?: boolean
-  // gap / unknown_range
   start_port?: number
   end_port?: number
   available_count?: number
   port_count?: number
+  conflict?: boolean
+  conflict_sources?: string[]
 }
 
 export interface PortAnalysis {
@@ -36,6 +36,10 @@ export interface PortAnalysis {
   docker_containers: number
   hidden_ports: number[]
   protocol_filter: string | null
+  start_port: number
+  end_port: number
+  next_cursor: string | null
+  has_more: boolean
 }
 
 export interface ApiResponse<T = unknown> {
@@ -46,7 +50,26 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ConfigEntry {
-  [key: string]: string
+  [key: string]: any
+}
+
+export interface CustomRange {
+  id: string
+  name: string
+  start_port: number
+  end_port: number
+  color: string
+  created_at: string
+}
+
+export interface NotificationItem {
+  id: string
+  type: string
+  level: 'info' | 'warning' | 'error'
+  title: string
+  message: string
+  timestamp: number
+  read: boolean
 }
 
 // ── 通用请求 ──────────────────────────────────────────
@@ -69,6 +92,9 @@ export interface PortsParams {
   start_port?: number
   end_port?: number
   search?: string
+  cursor?: string
+  limit?: number
+  range_id?: string
 }
 
 export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAnalysis>> {
@@ -77,6 +103,9 @@ export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAn
   if (params.start_port) qs.set('start_port', String(params.start_port))
   if (params.end_port) qs.set('end_port', String(params.end_port))
   if (params.search) qs.set('search', params.search)
+  if (params.cursor) qs.set('cursor', params.cursor)
+  if (params.limit) qs.set('limit', String(params.limit))
+  if (params.range_id) qs.set('range_id', params.range_id)
   const query = qs.toString()
   return request<PortAnalysis>(`/api/ports${query ? `?${query}` : ''}`)
 }
@@ -122,6 +151,60 @@ export function batchHidePorts(ports: number[]): Promise<ApiResponse> {
 
 export function batchUnhidePorts(ports: number[]): Promise<ApiResponse> {
   return request('/api/config/hidden/unhide/batch', { method: 'POST', body: JSON.stringify({ ports }) })
+}
+
+// ── 自定义区间 (NEW) ──────────────────────────────────
+
+export function fetchCustomRanges(): Promise<ApiResponse<CustomRange[]>> {
+  return request<CustomRange[]>('/api/config/ranges')
+}
+
+export function createCustomRange(range: Omit<CustomRange, 'id' | 'created_at'>): Promise<ApiResponse<CustomRange[]>> {
+  return request<CustomRange[]>('/api/config/ranges', {
+    method: 'POST',
+    body: JSON.stringify(range),
+  })
+}
+
+export function updateCustomRange(id: string, range: Partial<Omit<CustomRange, 'id' | 'created_at'>>): Promise<ApiResponse<CustomRange[]>> {
+  return request<CustomRange[]>(`/api/config/ranges/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(range),
+  })
+}
+
+export function deleteCustomRange(id: string): Promise<ApiResponse<CustomRange[]>> {
+  return request<CustomRange[]>(`/api/config/ranges/${id}`, { method: 'DELETE' })
+}
+
+// ── 通知 (NEW) ────────────────────────────────────────
+
+export function fetchNotifications(limit = 50, unreadOnly = false): Promise<ApiResponse<{ notifications: NotificationItem[]; unread_count: number }>> {
+  const qs = new URLSearchParams()
+  qs.set('limit', String(limit))
+  if (unreadOnly) qs.set('unread_only', 'true')
+  return request(`/api/notifications?${qs.toString()}`)
+}
+
+export function markAllNotificationsRead(): Promise<ApiResponse<{ marked: number }>> {
+  return request('/api/notifications/read-all', { method: 'POST' })
+}
+
+export function clearReadNotifications(): Promise<ApiResponse<{ deleted: number }>> {
+  return request('/api/notifications/clear-read', { method: 'DELETE' })
+}
+
+// ── 认证 (NEW) ────────────────────────────────────────
+
+export function login(password: string): Promise<ApiResponse<{ token: string; user: { username: string } }>> {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+export function fetchMe(): Promise<ApiResponse<{ username: string }>> {
+  return request('/api/auth/me')
 }
 
 // ── 健康检查 ──────────────────────────────────────────
