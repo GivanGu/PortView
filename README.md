@@ -48,17 +48,17 @@ docker compose up -d
 ### 方式二：拉取 ACR 镜像
 
 ```bash
-docker login crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com \
-  --username=810086218@qq.com
+# 登录 ACR（交互式输入用户名和密码）
+docker login crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com
 
-docker pull crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:dev
+docker pull crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:latest
 
 docker run -d --name portview \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v $(pwd)/config:/app/config \
   -e PORTVIEW_PORT=7577 \
-  crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:dev
+  crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:latest
 ```
 
 ### 方式三：本地开发
