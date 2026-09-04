@@ -18,6 +18,15 @@
     "themeToggle": "切换主题",
     "langToggle": "切换语言"
   },
+  "accent": {
+    "title": "强调色",
+    "indigo": "靛蓝",
+    "blue": "深蓝",
+    "teal": "青绿",
+    "rose": "玫红",
+    "amber": "琥珀",
+    "violet": "紫罗兰"
+  },
   "statusbar": {
     "refreshManual": "手动刷新",
     "refreshAuto": "自动刷新",

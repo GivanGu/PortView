@@ -1425,3 +1425,144 @@ html, body {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+
+/* ============================================================
+   P0 收尾 — Lucide 图标微调 + 强调色预设
+   ============================================================ */
+/* 刷新按钮旋转动画 */
+@keyframes pv-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spinning {
+  animation: pv-spin 0.9s linear infinite;
+}
+
+/* 端口来源图标 + 内联对齐 */
+.port-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.port-source-icon {
+  flex-shrink: 0;
+}
+.port-source.docker .port-source-icon {
+  color: var(--blue);
+}
+.port-source.system .port-source-icon {
+  color: var(--text-secondary);
+}
+.port-source.host .port-source-icon,
+.port-source-icon {
+  color: var(--text-secondary);
+}
+
+/* 可用徽标内联 icon 对齐 */
+.gap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.gap-badge-icon {
+  flex-shrink: 0;
+}
+
+/* 搜索图标容器内 Lucide 图标垂直居中 */
+.search-box .search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-box .search-icon svg {
+  display: block;
+}
+
+/* ── 强调色预设（data-accent 驱动）— 5 预设 + 1 默认 ── */
+[data-accent="indigo"] {
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-light: rgba(99, 102, 241, 0.12);
+}
+[data-accent="blue"] {
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-light: rgba(37, 99, 235, 0.12);
+}
+[data-accent="teal"] {
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-light: rgba(13, 148, 136, 0.12);
+}
+[data-accent="rose"] {
+  --accent: #e11d48;
+  --accent-hover: #be123c;
+  --accent-light: rgba(225, 29, 72, 0.12);
+}
+[data-accent="amber"] {
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-light: rgba(217, 119, 6, 0.14);
+}
+[data-accent="violet"] {
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-light: rgba(139, 92, 246, 0.12);
+}
+
+/* 顶栏强调色选色器 */
+.accent-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-primary);
+}
+.accent-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.accent-swatch:hover {
+  transform: scale(1.15);
+}
+.accent-swatch.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-secondary) inset;
+}
+
+.accent-picker-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.accent-picker-wrap .accent-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  animation: fadeIn 0.15s ease;
+}
+
+.accent-trigger {
+  border: 1px solid var(--border);
+}
+.accent-trigger svg {
+  color: var(--accent);
+}

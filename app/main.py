@@ -25,6 +25,7 @@ from app import __version__
 from app.config import init_config
 from app.routers import config as config_router
 from app.routers import ports as ports_router
+from app.services import db as _db_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,15 @@ _FRONTEND_DIST = os.path.join(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """应用生命周期：启动时初始化配置。"""
+    """应用生命周期：启动时初始化配置 + SQLite 数据库。"""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     init_config()
-    logger.info("PortView v%s 启动完成", __version__)
-    yield
+    async with _db_service.init_db():
+        logger.info("PortView v%s 启动完成（SQLite ready）", __version__)
+        yield
 
 
 def create_app() -> FastAPI:

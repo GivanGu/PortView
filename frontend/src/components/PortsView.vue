@@ -9,6 +9,7 @@ import {
   type PortCard,
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
+import { RefreshCw, Search, Container, Cog, Server, CircleCheck } from 'lucide-vue-next'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -119,7 +120,7 @@ onMounted(() => {
           </button>
         </div>
         <button class="btn btn-primary" @click="handleRefresh" :disabled="loading">
-          🔄 刷新
+          <RefreshCw :size="14" :class="{ spinning: loading }" /> 刷新
         </button>
       </div>
     </div>
@@ -128,7 +129,7 @@ onMounted(() => {
       <!-- 工具栏 -->
       <div class="toolbar">
         <div class="search-box">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><Search :size="15" /></span>
           <input
             v-model="searchQuery"
             type="text"
@@ -230,7 +231,10 @@ onMounted(() => {
                 class="port-source"
                 :class="card.source"
               >
-                {{ card.source === 'docker' ? '🐳 Docker' : card.source === 'system' ? '⚙️ 系统' : '🖥️ 主机' }}
+                <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
+                <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
+                <Server v-else :size="13" class="port-source-icon" />
+                <span>{{ card.source === 'docker' ? 'Docker' : card.source === 'system' ? '系统' : '主机' }}</span>
               </span>
 
               <span
@@ -273,7 +277,7 @@ onMounted(() => {
               <span class="gap-range">{{ card.start_port }} — {{ card.end_port }}</span>
               <span class="gap-count">{{ card.available_count }} 个可用端口</span>
             </div>
-            <span class="gap-badge">✓ 可用</span>
+            <span class="gap-badge"><CircleCheck :size="12" class="gap-badge-icon" /> 可用</span>
           </div>
         </div>
 

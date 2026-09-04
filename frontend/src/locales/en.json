@@ -18,6 +18,15 @@
     "themeToggle": "Toggle theme",
     "langToggle": "Toggle language"
   },
+  "accent": {
+    "title": "Accent color",
+    "indigo": "Indigo",
+    "blue": "Blue",
+    "teal": "Teal",
+    "rose": "Rose",
+    "amber": "Amber",
+    "violet": "Violet"
+  },
   "statusbar": {
     "refreshManual": "Manual refresh",
     "refreshAuto": "Auto refresh",

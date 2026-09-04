@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import {
   LayoutDashboard,
   Network,
@@ -11,6 +11,7 @@ import {
   Search,
   Languages,
   Activity,
+  Palette,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -27,11 +28,25 @@ type Lang = 'zh' | 'en'
 const { t, locale } = useI18n()
 
 const THEME_KEY = 'portview.theme'
+const ACCENT_KEY = 'portview.accent'
+
+const ACCENTS = [
+  { id: 'indigo', color: '#6366f1' },
+  { id: 'blue',   color: '#2563eb' },
+  { id: 'teal',   color: '#0d9488' },
+  { id: 'rose',   color: '#e11d48' },
+  { id: 'amber',  color: '#d97706' },
+  { id: 'violet', color: '#8b5cf6' },
+] as const
+
+type AccentId = (typeof ACCENTS)[number]['id']
 
 const activeTab = ref<Tab>('overview')
 const theme = ref<Theme>('dark')
+const accent = ref<AccentId>('indigo')
 const version = ref('')
 const loading = ref(true)
+const showAccentPicker = ref(false)
 
 // 状态栏实时指标
 const stats = ref<{ used: number; available: number; containers: number }>({
@@ -67,6 +82,25 @@ function applyTheme(t: Theme) {
   }
 }
 
+function applyAccent(a: AccentId) {
+  document.documentElement.setAttribute('data-accent', a)
+  try {
+    localStorage.setItem(ACCENT_KEY, a)
+  } catch {
+    /* ignore */
+  }
+}
+
+function initialAccent(): AccentId {
+  try {
+    const saved = localStorage.getItem(ACCENT_KEY)
+    if (saved && ACCENTS.some(x => x.id === saved)) return saved as AccentId
+  } catch {
+    /* ignore */
+  }
+  return 'indigo'
+}
+
 function toggleTheme() {
   const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
   theme.value = next
@@ -77,6 +111,12 @@ function toggleLang() {
   const next: Lang = locale.value === 'zh' ? 'en' : 'zh'
   locale.value = next
   setLocale(next)
+}
+
+function pickAccent(a: AccentId) {
+  accent.value = a
+  applyAccent(a)
+  showAccentPicker.value = false
 }
 
 const occupancyPct = computed(() => {
@@ -109,9 +149,18 @@ function switchTab(tab: Tab) {
   }
 }
 
+function onDocClick(e: MouseEvent) {
+  if (showAccentPicker.value && !(e.target as HTMLElement).closest('.accent-picker-wrap')) {
+    showAccentPicker.value = false
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener('click', onDocClick)
   theme.value = initialTheme()
   applyTheme(theme.value)
+  accent.value = initialAccent()
+  applyAccent(accent.value)
   try {
     const health = await healthCheck()
     version.value = health.version
@@ -120,6 +169,10 @@ onMounted(async () => {
   }
   loading.value = false
   loadStats()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
 })
 </script>
 
@@ -143,6 +196,36 @@ onMounted(async () => {
           <Sun v-if="theme === 'dark'" :size="18" />
           <Moon v-else :size="18" />
         </button>
+
+        <!-- 强调色选色器 -->
+        <div class="accent-picker-wrap">
+          <button
+            class="icon-btn accent-trigger"
+            :title="t('accent.title')"
+            @click="showAccentPicker = !showAccentPicker"
+          >
+            <Palette :size="18" />
+          </button>
+          <div
+            v-if="showAccentPicker"
+            class="accent-picker"
+            role="listbox"
+            :aria-label="t('accent.title')"
+          >
+            <button
+              v-for="a in ACCENTS"
+              :key="a.id"
+              class="accent-swatch"
+              :class="{ active: accent === a.id }"
+              :style="{ background: a.color }"
+              :title="a.id"
+              :aria-label="a.id"
+              :aria-selected="accent === a.id"
+              @click="pickAccent(a.id)"
+            />
+          </div>
+        </div>
+
         <button class="icon-btn" :title="t('topbar.langToggle')" @click="toggleLang">
           <Languages :size="18" />
           <span class="lang-code">{{ locale === 'zh' ? '中' : 'EN' }}</span>

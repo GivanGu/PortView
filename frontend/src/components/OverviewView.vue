@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { fetchPorts } from '@/api'
+import { RefreshCw } from 'lucide-vue-next'
 
 interface OverviewStats {
   totalUsed: number
@@ -77,7 +78,7 @@ onMounted(load)
       <div class="view-header-right">
         <span v-if="loadedAt" class="updated-at">更新于 {{ formatTime(loadedAt) }}</span>
         <button class="btn btn-primary" :disabled="loading" @click="load">
-          <span class="btn-icon">🔄</span>
+          <RefreshCw :size="14" class="btn-icon" :class="{ spinning: loading }" />
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
       </div>

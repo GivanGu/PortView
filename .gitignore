@@ -20,6 +20,12 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# SQLite data
+.data/
+*.db
+*.db-wal
+*.db-shm
+
 # Env
 .env
 .env.local
