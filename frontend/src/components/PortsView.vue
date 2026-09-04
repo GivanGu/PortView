@@ -8,6 +8,7 @@ import {
   type PortAnalysis,
   type PortCard,
 } from '@/api'
+import { exportPorts, type ExportFormat } from '@/utils/export'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -47,6 +48,11 @@ async function handleRefresh() {
   } finally {
     loading.value = false
   }
+}
+
+function handleExport(format: ExportFormat) {
+  if (!analysis.value) return
+  exportPorts(analysis.value.port_cards, format)
 }
 
 // ── 搜索防抖 ──
@@ -103,9 +109,19 @@ onMounted(() => {
     <!-- 头部 -->
     <div class="main-header">
       <h1>端口监控</h1>
-      <button class="btn btn-primary" @click="handleRefresh" :disabled="loading">
-        🔄 刷新
-      </button>
+      <div class="header-actions">
+        <div class="export-group">
+          <button class="btn" :disabled="!analysis || loading" @click="handleExport('csv')">
+            ⬇ CSV
+          </button>
+          <button class="btn" :disabled="!analysis || loading" @click="handleExport('json')">
+            ⬇ JSON
+          </button>
+        </div>
+        <button class="btn btn-primary" @click="handleRefresh" :disabled="loading">
+          🔄 刷新
+        </button>
+      </div>
     </div>
 
     <div class="main-body">
