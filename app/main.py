@@ -24,7 +24,9 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.config import init_config
 from app.routers import config as config_router
+from app.routers import notes as notes_router
 from app.routers import ports as ports_router
+from app.routers import prefs as prefs_router
 from app.services import db as _db_service
 
 logger = logging.getLogger(__name__)
@@ -71,6 +73,8 @@ def create_app() -> FastAPI:
     # API 路由
     app.include_router(ports_router.router)
     app.include_router(config_router.router)
+    app.include_router(notes_router.router)   # P1-1
+    app.include_router(prefs_router.router)   # P1-2
 
     # 健康检查
     @app.get("/api/health", tags=["meta"])

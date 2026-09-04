@@ -54,5 +54,51 @@
   "overview": {
     "title": "Overview",
     "subtitle": "Port usage summary"
+  },
+  "hidden": {
+    "total": "{n} total",
+    "unhideAll": "Unhide all",
+    "unhide": "Unhide",
+    "unhideAllConfirm": "Unhide all {n} ports?",
+    "empty": "No hidden ports"
+  },
+  "notes": {
+    "title": "Notes",
+    "total": "{n} total",
+    "add": "Add note",
+    "addTitle": "New port note",
+    "editTitle": "Edit port note",
+    "searchPlaceholder": "Search port / service / remark…",
+    "empty": "No notes yet",
+    "updated": "Updated",
+    "edit": "Edit",
+    "portLabel": "Port",
+    "serviceLabel": "Service name",
+    "servicePlaceholder": "e.g. postgres, nacos",
+    "protocolLabel": "Protocol",
+    "protocolBoth": "Any",
+    "remarkLabel": "Remark",
+    "remarkPlaceholder": "A note about this port (optional)",
+    "saveFailed": "Save failed",
+    "deleteConfirm": "Delete the note for port {port}?"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Appearance & localization, optionally synced to a server-side backup.",
+    "theme": "Theme",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "accent": "Accent color",
+    "language": "Language",
+    "langZh": "简体中文",
+    "langEn": "English",
+    "about": "About",
+    "storageHint": "Preferences are stored in this browser and can be synced to the backend.",
+    "reset": "Reset to defaults",
+    "resetConfirm": "Reset theme / accent / language to defaults?",
+    "resetDone": "Defaults restored",
+    "saving": "Saving…",
+    "saveFailed": "Sync failed",
+    "offlineSaved": "Saved locally (backend offline; will sync later)"
   }
 }

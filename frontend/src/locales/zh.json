@@ -54,5 +54,51 @@
   "overview": {
     "title": "概览",
     "subtitle": "端口使用概况"
+  },
+  "hidden": {
+    "total": "共 {n} 个",
+    "unhideAll": "全部取消隐藏",
+    "unhide": "取消隐藏",
+    "unhideAllConfirm": "确定取消隐藏所有 {n} 个端口？",
+    "empty": "没有隐藏的端口"
+  },
+  "notes": {
+    "title": "备注",
+    "total": "共 {n} 条",
+    "add": "添加备注",
+    "addTitle": "新增端口备注",
+    "editTitle": "编辑端口备注",
+    "searchPlaceholder": "搜索端口 / 服务名 / 备注…",
+    "empty": "还没有备注",
+    "updated": "更新于",
+    "edit": "编辑",
+    "portLabel": "端口",
+    "serviceLabel": "服务名",
+    "servicePlaceholder": "例如：postgres、nacos",
+    "protocolLabel": "协议",
+    "protocolBoth": "不限",
+    "remarkLabel": "备注",
+    "remarkPlaceholder": "关于这个端口的说明（可选）",
+    "saveFailed": "保存失败",
+    "deleteConfirm": "删除端口 {port} 的备注？"
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "外观与本地化偏好，会同步到服务端备份。",
+    "theme": "主题",
+    "themeDark": "深色",
+    "themeLight": "浅色",
+    "accent": "强调色",
+    "language": "语言",
+    "langZh": "简体中文",
+    "langEn": "English",
+    "about": "关于",
+    "storageHint": "偏好保存在浏览器本地，并可选同步到后端。",
+    "reset": "恢复默认",
+    "resetConfirm": "把主题 / 强调色 / 语言都恢复为默认？",
+    "resetDone": "已恢复默认",
+    "saving": "保存中…",
+    "saveFailed": "同步失败",
+    "offlineSaved": "已本地保存（后端离线，稍后可同步）"
   }
 }

@@ -88,3 +88,43 @@ class HiddenPortsBatchRequest(BaseModel):
     """批量隐藏 / 取消隐藏请求。"""
 
     ports: list[int]
+
+
+# ── P1-1 端口备注 ─────────────────────────────────────────
+
+class NoteCreateRequest(BaseModel):
+    """新建 / 更新一条端口备注。``port`` 唯一，存在则 upsert。"""
+
+    port: int = Field(ge=0, le=65535)
+    service_name: str = ""
+    protocol: Literal["", "tcp", "udp", "both"] = ""
+    remark: str = Field(default="", max_length=1024, description="用户备注，自由文本")
+
+
+class NoteRead(BaseModel):
+    """返回给前端的备注记录。"""
+
+    port: int
+    service_name: str
+    protocol: Literal["", "tcp", "udp", "both"]
+    remark: str
+    created_at: int
+    updated_at: int
+
+
+# ── P1-2 用户偏好 ─────────────────────────────────────────
+
+class UserPrefsRead(BaseModel):
+    """读取用户偏好（主题 / 强调色 / 语言）。"""
+
+    theme: Literal["dark", "light"]
+    accent: str
+    lang: Literal["zh", "en"]
+
+
+class UserPrefsPatch(BaseModel):
+    """局部更新用户偏好，未提供的字段不修改。"""
+
+    theme: Literal["dark", "light"] | None = None
+    accent: str | None = None
+    lang: Literal["zh", "en"] | None = None

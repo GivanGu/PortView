@@ -129,3 +129,62 @@ export function batchUnhidePorts(ports: number[]): Promise<ApiResponse> {
 export function healthCheck(): Promise<{ status: string; version: string }> {
   return fetch('/api/health').then(r => r.json())
 }
+
+// ── P1-1 端口备注 ─────────────────────────────────────────
+
+export type NoteProtocol = '' | 'tcp' | 'udp' | 'both'
+
+export interface NoteRead {
+  port: number
+  service_name: string
+  protocol: NoteProtocol
+  remark: string
+  created_at: number
+  updated_at: number
+}
+
+export interface NotePayload {
+  port: number
+  service_name: string
+  protocol: NoteProtocol
+  remark: string
+}
+
+export function listNotes(search = ''): Promise<ApiResponse<NoteRead[]>> {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : ''
+  return request<NoteRead[]>(`/api/notes${qs}`)
+}
+
+export function upsertNote(payload: NotePayload): Promise<ApiResponse> {
+  return request('/api/notes', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function deleteNote(port: number): Promise<ApiResponse> {
+  return request(`/api/notes/${port}`, { method: 'DELETE' })
+}
+
+// ── P1-2 用户偏好 ─────────────────────────────────────────
+
+export interface UserPrefs {
+  theme: 'dark' | 'light'
+  accent: string
+  lang: 'zh' | 'en'
+}
+
+export interface UserPrefsPatch {
+  theme?: 'dark' | 'light'
+  accent?: string
+  lang?: 'zh' | 'en'
+}
+
+export function getPrefs(): Promise<ApiResponse<UserPrefs>> {
+  return request<UserPrefs>('/api/prefs')
+}
+
+export function patchPrefs(patch: UserPrefsPatch): Promise<ApiResponse> {
+  return request('/api/prefs', { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export function resetPrefs(): Promise<ApiResponse> {
+  return request('/api/prefs/reset', { method: 'POST' })
+}

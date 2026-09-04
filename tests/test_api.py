@@ -129,3 +129,74 @@ class TestRefresh:
         data = resp.json()
         assert data["success"] is True
         assert "port_cards" in data["data"]
+
+
+class TestNotes:
+    """P1-1 端口备注端点。"""
+
+    def test_upsert_and_list(self, client: TestClient):
+        # 新建
+        r = client.post("/api/notes", json={
+            "port": 8080, "service_name": "http-svc", "protocol": "tcp", "remark": "web",
+        })
+        assert r.status_code == 200 and r.json()["success"] is True
+
+        # upsert（修改 remark）
+        r = client.post("/api/notes", json={
+            "port": 8080, "service_name": "http-svc", "protocol": "tcp", "remark": "web v2",
+        })
+        assert r.json()["success"] is True
+
+        # 列表应包含且只有一条 8080，remark 为 v2
+        lst = client.get("/api/notes").json()["data"]
+        mine = [n for n in lst if n["port"] == 8080]
+        assert len(mine) == 1
+        assert mine[0]["remark"] == "web v2"
+        assert mine[0]["protocol"] == "tcp"
+
+        # 清理
+        assert client.delete("/api/notes/8080").json()["success"] is True
+
+    def test_port_range_validation(self, client: TestClient):
+        # pydantic Field(ge=0, le=65535) 在请求层直接拦 422
+        r = client.post("/api/notes", json={"port": 99999, "service_name": "x"})
+        assert r.status_code == 422
+
+    def test_protocol_validation(self, client: TestClient):
+        # Literal['', 'tcp', 'udp', 'both'] 也在请求层拦
+        r = client.post("/api/notes", json={"port": 100, "protocol": "sctp"})
+        assert r.status_code == 422
+
+    def test_search(self, client: TestClient):
+        client.post("/api/notes", json={"port": 5432, "service_name": "postgres", "protocol": "both", "remark": "db"})
+        data = client.get("/api/notes", params={"search": "postgres"}).json()["data"]
+        assert any(n["port"] == 5432 for n in data)
+        client.delete("/api/notes/5432")
+
+
+class TestPrefs:
+    """P1-2 用户偏好端点。"""
+
+    def test_get_defaults(self, client: TestClient):
+        r = client.get("/api/prefs")
+        assert r.status_code == 200 and r.json()["success"] is True
+        d = r.json()["data"]
+        assert d["theme"] in ("dark", "light")
+        assert d["lang"] in ("zh", "en")
+
+    def test_patch_and_readback(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"theme": "light", "accent": "rose"})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["theme"] == "light" and d["accent"] == "rose"
+
+    def test_bad_accent_rejected(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"accent": "magenta"})
+        assert r.json()["success"] is False
+
+    def test_reset(self, client: TestClient):
+        client.patch("/api/prefs", json={"theme": "light", "lang": "en"})
+        r = client.post("/api/prefs/reset")
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["theme"] == "dark" and d["accent"] == "indigo" and d["lang"] == "zh"

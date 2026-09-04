@@ -119,6 +119,14 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
             "INSERT INTO user_prefs (id, theme, accent, lang, updated_at) VALUES (1, 'dark', 'indigo', 'zh', 0)"
         )
 
+    # P1 迁移：port_notes 表在 0.7 阶段定义时未含 `remark` 自由文本列，
+    # 在此做幂等补列（老库也安全），避免旧库访问 /api/notes 时报 `no such column: remark`。
+    cur = await conn.execute("PRAGMA table_info(port_notes)")
+    cols = {row[1] for row in await cur.fetchall()}
+    if "remark" not in cols:
+        await conn.execute("ALTER TABLE port_notes ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
+        logger.info("migration: port_notes.remark added")
+
     await conn.commit()
     if _db is not None:
         await _db.close()

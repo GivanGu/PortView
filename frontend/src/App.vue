@@ -19,7 +19,9 @@ import { fetchPorts, healthCheck } from '@/api'
 import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
+import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
+import SettingsView from '@/components/SettingsView.vue'
 
 type Tab = 'overview' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
@@ -255,20 +257,9 @@ onBeforeUnmount(() => {
       <main class="main-content">
         <OverviewView v-if="activeTab === 'overview'" />
         <PortsView v-else-if="activeTab === 'ports'" />
+        <NotesView v-else-if="activeTab === 'notes'" />
         <HiddenPortsView v-else-if="activeTab === 'hidden'" />
-
-        <section v-else class="placeholder-view">
-          <div class="placeholder-card">
-            <component
-              :is="activeTab === 'notes' ? StickyNote : Settings"
-              :size="44"
-              class="placeholder-icon"
-            />
-            <h2>{{ t('placeholder.comingSoon') }}</h2>
-            <p class="placeholder-sub">{{ t('nav.' + activeTab) }}</p>
-            <span class="badge">{{ t('placeholder.comingSoonDesc') }}</span>
-          </div>
-        </section>
+        <SettingsView v-else-if="activeTab === 'settings'" />
       </main>
     </div>
 
