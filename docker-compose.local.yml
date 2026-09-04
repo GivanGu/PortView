@@ -1,0 +1,20 @@
+# PortView 本地构建测试专用（与发布版的 docker-compose.yml 相互独立）
+#
+# 用法:
+#   docker compose -f docker-compose.local.yml up -d --build --force-recreate
+#   docker compose -f docker-compose.local.yml logs -f
+#
+version: '3.8'
+
+services:
+  portview:
+    build: .
+    image: portview:dev
+    container_name: portview
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config:/app/config
+    environment:
+      - PORTVIEW_PORT=7577
+    restart: unless-stopped

@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  portview:
+    image: crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:dev
+    container_name: portview
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config:/app/config
+    environment:
+      - PORTVIEW_PORT=7577  # 可修改此端口以避免冲突
+    restart: unless-stopped
