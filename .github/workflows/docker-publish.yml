@@ -43,14 +43,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Alibaba Cloud ACR
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.ACR_REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -81,8 +73,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Sync versioned copy to Alibaba Cloud ACR
+      - name: Login to Alibaba Cloud ACR
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        id: acr_login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Sync versioned copy to Alibaba Cloud ACR
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && steps.acr_login.outcome == 'success' }}
         uses: docker/build-push-action@v5
         with:
           context: .
