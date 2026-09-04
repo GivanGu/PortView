@@ -24,7 +24,9 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.config import init_config
 from app.routers import config as config_router
+from app.routers import notifications as notifications_router
 from app.routers import ports as ports_router
+from app.routers import ranges as ranges_router
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +41,7 @@ _FRONTEND_DIST = os.path.join(
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """应用生命周期：启动时初始化配置。"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
     init_config()
-    logger.info("PortView v%s 启动完成", __version__)
     yield
 
 
@@ -69,6 +66,8 @@ def create_app() -> FastAPI:
     # API 路由
     app.include_router(ports_router.router)
     app.include_router(config_router.router)
+    app.include_router(ranges_router.router)
+    app.include_router(notifications_router.router)
 
     # 健康检查
     @app.get("/api/health", tags=["meta"])

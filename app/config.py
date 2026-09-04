@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = os.environ.get("PORTVIEW_CONFIG_DIR", "/app/config")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 HIDDEN_PORTS_FILE = os.path.join(CONFIG_DIR, "hidden_ports.json")
+CUSTOM_RANGES_FILE = os.path.join(CONFIG_DIR, "custom_ranges.json")
 
 # 仓库内自带的示例配置（首次启动时复制）
 _EXAMPLE_CONFIG_FILE = os.path.join(
@@ -71,6 +72,14 @@ def init_config() -> None:
         logger.info("隐藏端口配置文件已创建: %s", HIDDEN_PORTS_FILE)
     else:
         logger.info("隐藏端口配置文件已存在: %s", HIDDEN_PORTS_FILE)
+
+    # 自定义监控区间 (NEW)
+    if not os.path.exists(CUSTOM_RANGES_FILE):
+        with open(CUSTOM_RANGES_FILE, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=2, ensure_ascii=False)
+        logger.info("自定义区间配置文件已创建: %s", CUSTOM_RANGES_FILE)
+    else:
+        logger.info("自定义区间配置文件已存在: %s", CUSTOM_RANGES_FILE)
 
 
 def load_config() -> dict[str, Any]:
@@ -164,6 +173,41 @@ def load_hidden_ports() -> list[int]:
 def save_hidden_ports(hidden_ports: list[int]) -> bool:
     """保存隐藏端口列表。"""
     return _write_json(HIDDEN_PORTS_FILE, hidden_ports)
+
+
+# ------------------------------------------------------------------ #
+# 自定义监控区间 (NEW)
+# ------------------------------------------------------------------ #
+def load_custom_ranges() -> list[dict[str, Any]]:
+    """加载自定义监控区间列表。"""
+    try:
+        if os.path.exists(CUSTOM_RANGES_FILE):
+            with open(CUSTOM_RANGES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("加载自定义区间配置失败: %s", e)
+    return []
+
+
+def save_custom_ranges(ranges: list[dict[str, Any]]) -> bool:
+    """保存自定义监控区间列表。"""
+    return _write_json(CUSTOM_RANGES_FILE, ranges)
+
+
+def add_custom_range(range_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """添加一条自定义区间。"""
+    ranges = load_custom_ranges()
+    ranges.append(range_data)
+    save_custom_ranges(ranges)
+    return ranges
+
+
+def remove_custom_range(range_id: str) -> list[dict[str, Any]]:
+    """删除指定 ID 的自定义区间。"""
+    ranges = load_custom_ranges()
+    ranges = [r for r in ranges if r.get("id") != range_id]
+    save_custom_ranges(ranges)
+    return ranges
 
 
 def _write_json(path: str, data: Any) -> bool:
