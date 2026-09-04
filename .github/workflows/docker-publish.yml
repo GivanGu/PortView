@@ -85,20 +85,20 @@ jobs:
 
       - name: Sync versioned copy to Alibaba Cloud ACR
         if: ${{ startsWith(github.ref, 'refs/tags/v') && steps.acr_login.outcome == 'success' }}
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.ACR_REPO }}:${{ steps.ver.outputs.version }}
-            ${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.ACR_REPO }}:latest
-          labels: |
-            maintainer="${{ github.repository_owner }}"
-            org.opencontainers.image.title="PortView"
-            org.opencontainers.image.description="Docker 容器与主机端口监控和可视化工具"
-            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        env:
+          ACR_TAG_VERSION: ${{ steps.ver.outputs.version }}
+          DOCKER_BUILDKIT: "0"
+        run: |
+          set -euo pipefail
+          ACR_REF="${ACR_REGISTRY}/${ACR_NAMESPACE}/${ACR_REPO}"
+          # 用经典构建器（DOCKER_BUILDKIT=0）产出普通 image manifest。
+          # buildx 指定 platforms 会生成镜像索引，其中含 BuildKit 特有的
+          # application/vnd.oci.empty.v1+json 占位 manifest，ACR 个人版不识别
+          # 该 media type 会直接拒绝推送（denied: unknown manifest class）。
+          # 经典构建器单架构构建产出扁平 manifest，ACR 可正常接受。
+          docker build \
+            -t "${ACR_REF}:${ACR_TAG_VERSION}" \
+            -t "${ACR_REF}:latest" \
+            -f ./Dockerfile .
+          docker push "${ACR_REF}:${ACR_TAG_VERSION}"
+          docker push "${ACR_REF}:latest"
