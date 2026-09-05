@@ -10,9 +10,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  # 替换为你的仓库 owner
   OWNER: ${{ github.repository_owner }}
-  # ACR 配置 (参考 main 分支 docker-publish.yml)
   ACR_REGISTRY: crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com
   ACR_NAMESPACE: selfwarehouse
   ACR_REPO: portview
@@ -32,7 +30,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── GHCR 推送 (主要) ──────────────────────────────
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -51,6 +48,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push to GHCR
+        id: build_ghcr
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -62,7 +60,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── ACR 同步 (Best-effort，凭证缺失不影响 GHCR) ──
       - name: Login to Alibaba Cloud ACR
         continue-on-error: true
         id: acr_login
@@ -73,23 +70,23 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Sync to Alibaba Cloud ACR
-        # 使用经典构建器 (DOCKER_BUILDKIT=0) 规避 ACR 对 BuildKit 空 manifest 的拒绝
         if: ${{ steps.acr_login.outcome == 'success' }}
         env:
           DOCKER_BUILDKIT: "0"
+          SHORT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ACR_REF="${ACR_REGISTRY}/${ACR_NAMESPACE}/${ACR_REPO}"
+          ACR_REF="${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.ACR_REPO }}"
           BRANCH="${{ github.ref_name }}"
-          # 构建分支镜像
+          SHORT_SHA="${SHORT_SHA:0:12}"
           docker build \
             -t "${ACR_REF}:${BRANCH}" \
             -t "${ACR_REF}:${BRANCH}-latest" \
-            -t "${ACR_REF}:sha-${GITHUB_SHA::12}" \
+            -t "${ACR_REF}:sha-${SHORT_SHA}" \
             -f ./Dockerfile .
           docker push "${ACR_REF}:${BRANCH}"
           docker push "${ACR_REF}:${BRANCH}-latest"
-          docker push "${ACR_REF}:sha-${GITHUB_SHA::12}"
+          docker push "${ACR_REF}:sha-${SHORT_SHA}"
 
       - name: Image digest
-        run: echo "Image digest: ${{ steps.build.outputs.digest }}"
+        run: echo "GHCR digest: ${{ steps.build_ghcr.outputs.digest }}"
