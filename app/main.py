@@ -16,17 +16,20 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.config import init_config
+from app.routers import auth as auth_router
 from app.routers import config as config_router
 from app.routers import notes as notes_router
 from app.routers import ports as ports_router
 from app.routers import prefs as prefs_router
+from app.routers import ranges as ranges_router
+from app.services import auth as auth_service
 from app.services import db as _db_service
 
 logger = logging.getLogger(__name__)
@@ -70,11 +73,32 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 登录守卫：开启 auth 时，除 /api/auth/* 与 /api/health 外的所有 /api/* 都需有效会话。
+    # 中间件方式统一拦截，避免每个路由各自声明 Depends；关闭 auth 时全放行。
+    _AUTH_WHITELIST = ("/api/health", "/api/auth/login", "/api/auth/set_password",
+                       "/api/auth/me", "/api/auth/toggle")
+
+    @app.middleware("http")
+    async def _auth_guard(request: Request, call_next):
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+        if path in _AUTH_WHITELIST or path.startswith("/api/auth/"):
+            return await call_next(request)
+        if not await auth_service.is_auth_required():
+            return await call_next(request)
+        token = request.cookies.get("portview_session") or ""
+        if await auth_service.is_valid_session(token):
+            return await call_next(request)
+        return JSONResponse(status_code=401, content={"detail": "login required", "code": "login required"})
+
     # API 路由
+    app.include_router(auth_router.router)       # P1.1 登录
     app.include_router(ports_router.router)
     app.include_router(config_router.router)
     app.include_router(notes_router.router)   # P1-1
     app.include_router(prefs_router.router)   # P1-2
+    app.include_router(ranges_router.router)   # P1.1 监控区间
 
     # 健康检查
     @app.get("/api/health", tags=["meta"])

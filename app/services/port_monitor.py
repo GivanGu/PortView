@@ -355,9 +355,11 @@ class PortMonitor:
         end_port: int = 65535,
         protocol_filter: str | None = None,
         hidden_ports: list[int] | None = None,
+        notes_map: dict[int, str] | None = None,
     ) -> dict[str, Any]:
         """分析端口使用情况并生成可视化数据。"""
         hidden_ports = hidden_ports if hidden_ports is not None else []
+        notes_map = notes_map if notes_map is not None else {}
         docker_ports = self.get_docker_ports()
         host_ports_info = self.get_host_ports(config)
 
@@ -488,6 +490,26 @@ class PortMonitor:
             all_used_ports = tcp_ports.union(udp_ports)
             available_ports = total_ports_in_range - len(all_used_ports)
 
+        # A3：把用户备注（port_notes.remark）注入到"已使用"卡片的 remark 字段。
+        # 单端口 → 直接用；区间卡片 → 若区间内恰有 1 个备注端口则取，否则空串。
+        for card in port_cards:
+            if card["type"] == "used":
+                card["remark"] = notes_map.get(card.get("port"), "")
+            elif card["type"] == "unknown_range":
+                sp = card.get("start_port", 0)
+                ep = card.get("end_port", 0)
+                hit = next(
+                    (
+                        notes_map[p]
+                        for p in range(sp, ep + 1)
+                        if p in notes_map and notes_map[p]
+                    ),
+                    "",
+                )
+                card["remark"] = hit
+            else:  # gap
+                card["remark"] = ""
+
         return {
             "port_cards": port_cards,
             "total_used": len(filtered_ports),
@@ -497,6 +519,7 @@ class PortMonitor:
             "docker_containers": docker_container_count,
             "hidden_ports": hidden_ports,
             "protocol_filter": protocol_filter,
+            "notes_map": None,  # 占位，保持响应结构稳定
         }
 
     @staticmethod

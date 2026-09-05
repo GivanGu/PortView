@@ -81,6 +81,26 @@ _SCHEMA = [
     "  payload TEXT NOT NULL DEFAULT '{}',"
     "  created_at INTEGER NOT NULL DEFAULT 0"
     ")",
+
+    # 单行用户表：portview 是单用户本地工具，只存一条
+    # P1 阶段允许关闭 auth（env PORTVIEW_REQUIRE_AUTH=0 或 user_prefs.require_auth=0），
+    # 若开启则用户第一次调用 POST /api/auth/set_password 初始化，之后 POST /api/auth/login 拿到 token
+    "CREATE TABLE IF NOT EXISTS users ("
+    "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+    "  username TEXT NOT NULL DEFAULT 'admin',"
+    "  password_hash TEXT NOT NULL,"
+    "  created_at INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+
+    # 会话 token（支持「登出」= 删行；多标签页并存 = 多行）
+    "CREATE TABLE IF NOT EXISTS sessions ("
+    "  token TEXT PRIMARY KEY,"
+    "  user_id INTEGER NOT NULL REFERENCES users(id),"
+    "  created_at INTEGER NOT NULL DEFAULT 0,"
+    "  expires_at INTEGER NOT NULL DEFAULT 0,"
+    "  last_seen_at INTEGER NOT NULL DEFAULT 0"
+    ")",
 ]
 
 
@@ -126,6 +146,18 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
     if "remark" not in cols:
         await conn.execute("ALTER TABLE port_notes ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
         logger.info("migration: port_notes.remark added")
+
+    # P1.1 迁移：user_prefs 加 require_auth 列（0=关闭登录，1=开启，默认 0 以不破坏现有部署）
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols = {row[1] for row in await cur.fetchall()}
+    if "require_auth" not in pref_cols:
+        await conn.execute("ALTER TABLE user_prefs ADD COLUMN require_auth INTEGER NOT NULL DEFAULT 0")
+        # 若 PORTVIEW_REQUIRE_AUTH=1 显式要求登录，则初始化时打开
+        if os.environ.get("PORTVIEW_REQUIRE_AUTH", "0") == "1":
+            await conn.execute("UPDATE user_prefs SET require_auth = 1 WHERE id = 1")
+            logger.info("migration: user_prefs.require_auth = 1")
+        else:
+            logger.info("migration: user_prefs.require_auth added (default 0 = off)")
 
     await conn.commit()
     if _db is not None:
