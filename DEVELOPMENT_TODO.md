@@ -10,12 +10,12 @@
 
 | # | 任务 | 后端 | 前端 | 测试 | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| A1 | 密码登录（可关闭） | `app/services/auth.py` + `app/routers/auth.py` + `app/middleware.py`；`argon2id` 哈希；`httpOnly` cookie `portview_session`；关闭走 `PORTVIEW_REQUIRE_AUTH=0` 或 `user_prefs.require_auth=0` | `frontend/src/router.ts` 加 `/login` 路由；`AuthGate.vue` 判断 401 → redirect；`login.vue` 表单 | +6 用例（login ok / bad / disabled / expiry / logout / csrf） | [ ] | 依赖：`pyproject.toml` 加 `argon2-cffi>=23.1` |
-| A2 | 多段监控区间 | `app/routers/ranges.py` `GET/POST/PUT/DELETE /api/ranges`；从 `range_rules` 表读（已有 0.7 schema）；`port_monitor.get_port_analysis` 接受 `ranges` 参数并过滤 | `PortsView.vue` 顶部加「监控区间」下拉 + 新建对话框；改完驱动 get_port_analysis | +8 用例 | [ ] | 依赖 A1（登录后可见） |
-| A3 | 备注打通到卡片 | `port_monitor` 内 `JOIN port_notes`，`PortCard.remark` 字段；`_apply_search` 也搜 remark | `PortsView.vue` 卡片底部加 `.port-remark` 行（仅当非空渲染） | +6 用例（含搜索命中 remark） | [ ] | — |
+| A1 | 密码登录（可关闭） | `app/services/auth.py` + `app/routers/auth.py` + `app/middleware.py`；`argon2id` 哈希；`httpOnly` cookie `portview_session`；关闭走 `PORTVIEW_REQUIRE_AUTH=0` 或 `user_prefs.require_auth=0` | `frontend/src/router.ts` 加 `/login` 路由；`AuthGate.vue` 判断 401 → redirect；`login.vue` 表单 | +6 用例（login ok / bad / disabled / expiry / logout / csrf） | ✅ `44c5367`（后端）· 前端 `44c5367` | 依赖：`pyproject.toml` 加 `argon2-cffi>=23.1` |
+| A2 | 多段监控区间 | `app/routers/ranges.py` `GET/POST/PUT/DELETE /api/ranges`；从 `range_rules` 表读（已有 0.7 schema）；`port_monitor.get_port_analysis` 接受 `ranges` 参数并过滤 | `PortsView.vue` 顶部加「监控区间」下拉 + 新建对话框；改完驱动 get_port_analysis | +8 用例 | ✅ | 依赖 A1（登录后可见） |
+| A3 | 备注打通到卡片 | `port_monitor` 内 `JOIN port_notes`，`PortCard.remark` 字段；`_apply_search` 也搜 remark | `PortsView.vue` 卡片底部加 `.port-remark` 行（仅当非空渲染） | +6 用例（含搜索命中 remark） | ✅ | — |
 | A4 | 配置清理 | 改 `config/config.json.example`：`caddy:docker: 2019:tcp` → 建议改成 `caddy: 443:tcp`（或按真实服务名）；`dockports:docker: 7577:tcp` → `portview:docker: 7577:tcp`（PortView 本身） | README 同步 | 已有 api test 覆盖 | [ ] | 顺手 |
 | A5 | 凭证位规范化 | 把 `ghp_...` 从 `.venv` 里挪走；`.gitignore` 加 `.github/.secrets`；`docker-publish.yml` 改用 `${{ secrets.GITHUB_TOKEN }}`（GH Actions 自带） | — | — | [ ] | 本次发版直接靠 built-in token（见 v1.2.0 验证） |
-| A6 | 发版 v1.2.0 | `app/__init__.py` 1.1.1 → 1.2.0 | — | 全量 pytest + npm build | [ ] | 触发 docker-publish |
+| A6 | 发版 v1.2.0 | `app/__init__.py` 1.1.1 → 1.2.0 | — | 全量 pytest + npm build ✅ | ✅ | 触发 docker-publish |
 
 ## Sprint B — 体验（登录后可做，可合并进 A）
 

@@ -3,9 +3,43 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, type UserPrefs } from '@/api'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check } from 'lucide-vue-next'
+import useAuth from '@/store/auth'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
+
+// v1.2：登录/安全
+const auth = useAuth()
+const newPassword = ref('')
+const passwordBusy = ref(false)
+
+async function handleSetPassword() {
+  if (!newPassword.value || newPassword.value.length < 4) {
+    showToast('密码至少 4 位')
+    return
+  }
+  passwordBusy.value = true
+  try {
+    await auth.doSetPassword(newPassword.value)
+    newPassword.value = ''
+    showToast('密码已更新，请重新登录')
+    setTimeout(() => window.location.reload(), 1200)
+  } catch {
+    showToast('设置失败')
+  } finally {
+    passwordBusy.value = false
+  }
+}
+
+async function handleToggleAuth() {
+  await auth.doToggle(!auth.state.value.auth_required)
+  showToast(auth.state.value.auth_required ? '登录已开启' : '登录已关闭')
+}
+
+async function handleLogout() {
+  await auth.doLogout()
+  window.location.reload()
+}
 
 // App.vue 已经把这些放在 localStorage 里；SettingsView 只是编辑器。
 // 我们把当前值通过 DOM 属性 (data-theme / data-accent) 读出来作为"初始"，
@@ -141,6 +175,49 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
       <p class="view-desc">{{ t('settings.subtitle') }}</p>
 
       <div class="settings-grid">
+        <!-- v1.2：Login / Security -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <ShieldCheck :size="16" class="card-ico" />
+            <span>{{ t('settings.security') || '安全与登录' }}</span>
+          </header>
+          <p class="auth-hint">
+            <template v-if="auth.state.value.auth_required">
+              登录已开启 —
+              <button class="btn-link" @click="handleLogout">退出</button>
+              ·
+              <button class="btn-link" @click="handleToggleAuth">关闭</button>
+            </template>
+            <template v-else>
+              登录已关闭 —
+              <button class="btn-link" @click="handleToggleAuth">开启</button>
+            </template>
+          </p>
+          <label class="auth-label">
+            设置/修改密码（至少 4 位）
+            <input
+              v-model="newPassword"
+              class="auth-input"
+              type="password"
+              placeholder="新密码"
+              autocomplete="new-password"
+            />
+          </label>
+          <div class="auth-actions">
+            <button
+              class="btn btn-small"
+              :disabled="passwordBusy || newPassword.length < 4"
+              @click="handleSetPassword"
+            >
+              <ShieldCheck :size="13" />
+              保存密码
+            </button>
+            <span class="muted auth-status">
+              {{ auth.state.value.has_password ? '已有密码' : '尚未设置' }}
+            </span>
+          </div>
+        </section>
+
         <!-- Theme -->
         <section class="settings-card">
           <header class="settings-card-title">

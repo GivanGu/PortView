@@ -22,12 +22,19 @@ import PortsView from '@/components/PortsView.vue'
 import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
+import LoginView from '@/components/LoginView.vue'
+import useAuth from '@/store/auth'
 
 type Tab = 'overview' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
 type Lang = 'zh' | 'en'
 
 const { t, locale } = useI18n()
+
+// v1.2：登录门
+const { state: auth, refresh: refreshAuth } = useAuth()
+const authChecked = ref(false)
+const needsLogin = computed(() => auth.value.auth_required && !auth.value.logged_in)
 
 const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
@@ -163,6 +170,9 @@ onMounted(async () => {
   applyTheme(theme.value)
   accent.value = initialAccent()
   applyAccent(accent.value)
+  // v1.2：先查登录态
+  refreshAuth()
+  authChecked.value = true
   try {
     const health = await healthCheck()
     version.value = health.version
@@ -179,7 +189,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <LoginView v-if="needsLogin" />
+  <div v-else class="app-shell">
     <!-- 顶栏：logo + 搜索 + 主题/语言 -->
     <header class="topbar">
       <div class="topbar-brand">

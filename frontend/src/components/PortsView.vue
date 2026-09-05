@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   fetchPorts,
   refreshPorts,
   hidePort,
   editPort,
+  fetchRanges,
+  createRange,
+  deleteRange,
   type PortAnalysis,
   type PortCard,
+  type RangeRead,
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import { RefreshCw, Search, Container, Cog, Server, CircleCheck } from 'lucide-vue-next'
+import { RefreshCw, Search, Container, Cog, Server, CircleCheck, Plus, X, StickyNote } from 'lucide-vue-next'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -18,6 +22,47 @@ const searchQuery = ref('')
 const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
+
+// ── 监控区间状态 ──
+const ranges = ref<RangeRead[]>([])
+const selectedRangeId = ref<number>(0) // 0 = 全部
+const newRange = reactive({ name: '', start: 1, end: 65535 })
+const rangeBusy = ref(false)
+const rangeDialog = ref(false)
+
+async function reloadRanges(merge = false) {
+  const resp = await fetchRanges()
+  if (resp.success) {
+    if (merge) ranges.value = [...resp.data]
+    else ranges.value = resp.data
+  }
+}
+
+async function handleCreateRange() {
+  if (!newRange.name || !newRange.name.trim()) return
+  if (newRange.start > newRange.end) return
+  rangeBusy.value = true
+  try {
+    await createRange(newRange.name.trim(), newRange.start, newRange.end)
+    newRange.name = ''
+    newRange.start = 1
+    newRange.end = 65535
+    rangeDialog.value = false
+    await reloadRanges(true)
+  } catch (e) {
+    console.error('create range failed', e)
+  } finally {
+    rangeBusy.value = false
+  }
+}
+
+async function handleDeleteRange(id: number) {
+  await deleteRange(id)
+  if (selectedRangeId.value === id) selectedRangeId.value = 0
+  await reloadRanges()
+}
+
+watch(selectedRangeId, () => { loadData() })
 
 // ── 数据加载 ──
 async function loadData() {
@@ -28,6 +73,7 @@ async function loadData() {
       search: searchQuery.value || undefined,
       start_port: 1,
       end_port: 65535,
+      range_ids: selectedRangeId.value ? [selectedRangeId.value] : undefined,
     })
     if (resp.success) {
       analysis.value = resp.data
@@ -100,8 +146,19 @@ function startEdit(card: PortCard) {
 }
 
 // ── 初始化 ──
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(() => {
   loadData()
+  void reloadRanges()
+  // 每 30s 静默刷新（不打断用户搜索/输入）
+  pollTimer = setInterval(() => {
+    if (!document.hidden && !loading.value) loadData()
+  }, 30_000)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 
@@ -158,6 +215,31 @@ onMounted(() => {
             @click="protocolFilter = 'UDP'"
           >
             UDP
+          </button>
+        </div>
+
+        <!-- v1.2：监控区间选择器 -->
+        <div class="range-selector">
+          <span class="range-label">区间</span>
+          <select
+            v-model="selectedRangeId"
+            class="range-select"
+          >
+            <option :value="0">全部</option>
+            <option v-for="r in ranges" :key="r.id" :value="r.id">
+              {{ r.name }} ({{ r.start_port }}–{{ r.end_port }})
+            </option>
+          </select>
+          <button class="btn btn-tiny" :title="'新建区间'" :disabled="!newRange.name.trim()" @click="rangeDialog = true">
+            <Plus :size="13" />
+          </button>
+          <button
+            class="btn btn-tiny btn-danger"
+            :title="'删除所选区间'"
+            :disabled="selectedRangeId === 0"
+            @click="handleDeleteRange(selectedRangeId)"
+          >
+            <X :size="13" />
           </button>
         </div>
       </div>
@@ -224,6 +306,12 @@ onMounted(() => {
 
             <div class="port-service">
               {{ card.service_name || '未知服务' }}
+            </div>
+
+            <!-- v1.2：用户备注 -->
+            <div v-if="card.remark" class="port-remark" :title="card.remark">
+              <StickyNote :size="11" class="port-remark-icon" />
+              <span class="port-remark-text">{{ card.remark }}</span>
             </div>
 
             <div class="port-detail">
@@ -312,5 +400,33 @@ onMounted(() => {
         <div class="empty-text">暂无端口数据</div>
       </div>
     </div>
+
+    <!-- v1.2：新建监控区间对话框 -->
+    <Teleport to="body">
+      <div v-if="rangeDialog" class="range-overlay" @click.self="rangeDialog = false">
+        <div class="range-dialog">
+          <h3>新建监控区间</h3>
+          <label>名称
+            <input class="form-input" v-model="newRange.name" placeholder="如 80s / 高段" />
+          </label>
+          <label>起始端口
+            <input class="form-input" type="number" min="0" max="65535" v-model.number="newRange.start" />
+          </label>
+          <label>结束端口
+            <input class="form-input" type="number" min="0" max="65535" v-model.number="newRange.end" />
+          </label>
+          <div class="range-dialog-actions">
+            <button class="btn btn-sm" @click="rangeDialog = false">取消</button>
+            <button
+              class="btn btn-sm btn-primary"
+              :disabled="rangeBusy || !newRange.name.trim()"
+              @click="handleCreateRange"
+            >
+              <Plus :size="13" /> 创建
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

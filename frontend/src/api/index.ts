@@ -20,6 +20,7 @@ export interface PortCard {
   is_running?: boolean
   container_status?: string
   is_host_network?: boolean
+  remark?: string
   // gap / unknown_range
   start_port?: number
   end_port?: number
@@ -53,6 +54,7 @@ export interface ConfigEntry {
 
 async function request<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
   const resp = await fetch(url, {
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
@@ -69,6 +71,7 @@ export interface PortsParams {
   start_port?: number
   end_port?: number
   search?: string
+  range_ids?: number[]   // 非空时仅返回区间内的卡片
 }
 
 export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAnalysis>> {
@@ -77,6 +80,10 @@ export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAn
   if (params.start_port) qs.set('start_port', String(params.start_port))
   if (params.end_port) qs.set('end_port', String(params.end_port))
   if (params.search) qs.set('search', params.search)
+  if (params.range_ids && params.range_ids.length > 0) {
+    // FastAPI 期望重复 key
+    params.range_ids.forEach((id) => qs.append('range_ids', String(id)))
+  }
   const query = qs.toString()
   return request<PortAnalysis>(`/api/ports${query ? `?${query}` : ''}`)
 }
@@ -188,3 +195,63 @@ export function patchPrefs(patch: UserPrefsPatch): Promise<ApiResponse> {
 export function resetPrefs(): Promise<ApiResponse> {
   return request('/api/prefs/reset', { method: 'POST' })
 }
+
+// ── auth (v1.2) ─────────────────────────────────────
+
+export interface AuthMe {
+  auth_required: boolean
+  logged_in: boolean
+  has_password: boolean
+}
+
+export function authMe(): Promise<ApiResponse<AuthMe>> {
+  return request<AuthMe>('/api/auth/me')
+}
+
+export function setPassword(password: string): Promise<ApiResponse> {
+  return request('/api/auth/set_password', { method: 'POST', body: JSON.stringify({ password }) })
+}
+
+export function login(password: string): Promise<ApiResponse> {
+  return request('/api/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
+}
+
+export function logout(): Promise<ApiResponse> {
+  return request('/api/auth/logout', { method: 'POST' })
+}
+
+export function setAuthEnabled(enabled: boolean): Promise<ApiResponse> {
+  return request('/api/auth/toggle', { method: 'PATCH', body: JSON.stringify({ enabled }) })
+}
+
+// ── ranges (v1.2) ───────────────────────────────────
+
+export interface RangeRead {
+  id: number
+  name: string
+  start_port: number
+  end_port: number
+  created_at: number
+}
+
+export function fetchRanges(): Promise<ApiResponse<RangeRead[]>> {
+  return request<RangeRead[]>('/api/ranges')
+}
+
+export function createRange(name: string, start_port: number, end_port: number): Promise<ApiResponse> {
+  return request('/api/ranges', {
+    method: 'POST',
+    body: JSON.stringify({ name, start_port, end_port }),
+  })
+}
+
+export function updateRange(id: number, patch: { name?: string; start_port?: number; end_port?: number }): Promise<ApiResponse> {
+  return request(`/api/ranges/${id}`, { method: 'PUT', body: JSON.stringify(patch) })
+}
+
+export function deleteRange(id: number): Promise<ApiResponse> {
+  return request(`/api/ranges/${id}`, { method: 'DELETE' })
+}
+
+// ── notes (upsert with remark) ──────────────────────
+// NotePayload / upsertNote 已存在；此处仅确保 remark 字段被允许。
