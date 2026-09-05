@@ -1,41 +1,57 @@
-# ── Stage 1: Frontend build ──
-FROM node:20-alpine AS frontend
-WORKDIR /app/frontend
+# syntax=docker/dockerfile:1
+
+# ============================================================
+# Stage 1: Build frontend (Vue 3 + Vite)
+# ============================================================
+FROM node:22-alpine AS frontend
+WORKDIR /build
 COPY frontend/package.json ./
 RUN npm install --no-audit --no-fund
 COPY frontend/ ./
-# Skip vue-tsc type-check in Docker build; use vite build directly
-# (type errors in test files shouldn't block production image)
+# Use vite build directly in Docker (skip vue-tsc type-check for speed)
 RUN npx vite build
 
-# ── Stage 2: Backend runtime ──
-FROM python:3.12-slim AS backend
+# ============================================================
+# Stage 2: Python runtime (3.12 + uv + FastAPI)
+# ============================================================
+FROM python:3.12-slim AS runtime
+WORKDIR /app
 
-# 安装 docker 扫描依赖 (psutil)
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PORTVIEW_PORT=7577 \
+    PATH="/app/.venv/bin:$PATH"
+
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libffi-dev && \
+        curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install Docker CLI (for reading container ports)
+RUN set -eux; \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends docker-ce-cli; \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Python dependencies (uv installs pre-built wheels, no compilation needed)
 COPY pyproject.toml ./
+RUN uv venv /app/.venv --python 3.12 \
+    && uv pip install --python /app/.venv/bin/python \
+        fastapi "uvicorn[standard]" docker psutil pydantic bcrypt "python-jose[cryptography]"
+
+# App code + frontend build artifact
 COPY app/ ./app/
-COPY --from=frontend /app/frontend/dist/ ./frontend/dist/
-
-# 安装 Python 依赖 (生产模式)
-RUN pip install --no-cache-dir -e .
-
-# 环境
-ENV PYTHONUNBUFFERED=1
-ENV PORTVIEW_CONFIG_DIR=/app/config
-ENV PORTVIEW_HOST=0.0.0.0
-ENV PORTVIEW_PORT=7577
+COPY --from=frontend /build/dist ./frontend/dist
 
 EXPOSE 7577
 
-# 创建 config 目录
-RUN mkdir -p /app/config
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f "http://localhost:${PORTVIEW_PORT}/api/health" || exit 1
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7577/api/health', timeout=3).read()" || exit 1
-
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7577"]
+ENTRYPOINT ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORTVIEW_PORT:-7577}"]
