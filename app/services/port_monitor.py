@@ -193,11 +193,14 @@ class PortMonitor:
                     continue
                 try:
                     port = conn.laddr.port
-                    address = conn.laddr.address
+                    # psutil >= 7.x 用 ``.ip``；旧版才有 ``.address``（已弃用）
+                    address = getattr(conn.laddr, "ip", None) or getattr(conn.laddr, "address", "")
                 except Exception:  # noqa: BLE001
                     continue
 
-                proto_type = "UDP" if conn.proto == 17 else "TCP"
+                # psutil 7.x 不再暴露 ``.proto``；用 socket ``.type`` 判定：
+                # SOCK_STREAM -> TCP，SOCK_DGRAM -> UDP
+                proto_type = "UDP" if conn.type == socket.SOCK_DGRAM else "TCP"
                 ip_version = "IPv6" if conn.family == socket.AF_INET6 else "IPv4"
 
                 entry = port_protocols.setdefault(port, {"protocols": set(), "ip_versions": set()})
@@ -447,6 +450,10 @@ class PortMonitor:
                     source = "docker"
                 else:
                     source = "system"
+                # 主机分支：只要这个端口还在 host_ports_info 里，就说明此刻有进程
+                # 在监听，判定为「在线」；反之（比如某个已停止容器的 host-network
+                # 映射残留）判定为「离线」。前端据此显式显示在线/离线状态。
+                actively_listening = port in host_ports_info
                 card_data = {
                     "port": port,
                     "type": "used",
@@ -454,7 +461,9 @@ class PortMonitor:
                     "protocol": protocol,
                     "service_name": config_service_name or host_info.get("service_name", "未知服务"),
                     "container": host_info.get("container_name"),
+                    "container_status": "running" if actively_listening else "exited",
                     "is_host_network": is_host_container,
+                    "is_running": actively_listening,
                 }
             port_data_list.append(card_data)
 

@@ -237,18 +237,23 @@ onMounted(() => {
                 <span>{{ card.source === 'docker' ? 'Docker' : card.source === 'system' ? '系统' : '主机' }}</span>
               </span>
 
+              <!-- 状态芯片：在线（绿）/ 离线（红）。所有 used 卡片都渲染，
+                   不再依赖 card.container 是否存在，保证主机端口也有状态点。 -->
               <span
-                v-if="card.container"
                 class="port-status"
-                :class="card.is_running ? 'running' : 'stopped'"
+                :class="card.is_running === false ? 'stopped' : 'running'"
+                :title="card.is_running === false ? '离线' : '在线'"
               >
                 <span class="status-dot"></span>
-                {{ card.container }}
+                <span class="port-status-text">{{ card.is_running === false ? '离线' : '在线' }}</span>
+                <span v-if="card.container" class="port-status-container">{{ card.container }}</span>
               </span>
+            </div>
 
-              <span v-if="card.image" style="color: var(--text-muted)">
-                {{ card.image }}
-              </span>
+            <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
+            <div v-if="card.image" class="port-image">
+              <span class="port-image-label">镜像</span>
+              <span class="port-image-value">{{ card.image }}</span>
             </div>
 
             <!-- 编辑模式 -->

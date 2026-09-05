@@ -465,6 +465,10 @@ html, body {
   padding: 14px 16px;
   transition: all 0.15s;
   position: relative;
+  /* 卡片等高：固定最小高度 + 弹性列布局，让"有无镜像"两种情况视觉一致 */
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
 }
 
 .port-card:hover {
@@ -522,8 +526,38 @@ html, body {
   color: var(--text-muted);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin-top: auto; /* 把状态行推到卡片底部，配合 min-height 形成稳定布局 */
+}
+
+/* 镜像行：独立一行，截断显示，防止撑高卡片 */
+.port-image {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.port-image-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.port-image-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .port-source {
@@ -553,22 +587,26 @@ html, body {
 .port-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 11px;
+  max-width: 60%;
+  min-width: 0;
 }
 
 .port-status.running {
   color: var(--green);
 }
 
+/* 离线：用红色 + 空心点 + 斜体文本，明显区别于在线（绿 + 实心点） */
 .port-status.stopped {
-  color: var(--text-muted);
+  color: var(--red, #e11d48);
 }
 
 .port-status .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .port-status.running .status-dot {
@@ -577,7 +615,24 @@ html, body {
 }
 
 .port-status.stopped .status-dot {
-  background: var(--text-muted);
+  background: transparent;
+  border: 2px solid var(--red, #e11d48);
+}
+
+.port-status-text {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.port-status-container {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
 }
 
 .port-actions {
@@ -592,6 +647,14 @@ html, body {
 
 .port-card:hover .port-actions {
   opacity: 1;
+}
+
+/* unknown-card 里的 port-actions 已 inline 改成 static 布局，
+   直接常显（否则被上面的 opacity:0 一直藏住按钮） */
+.unknown-card .port-actions {
+  opacity: 1;
+  position: static;
+  margin-bottom: 8px;
 }
 
 .port-action-btn {
@@ -630,6 +693,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* 与 port-card / unknown-card 等高，避免网格内视觉抖动 */
+  min-height: 118px;
 }
 
 .gap-info {
@@ -666,6 +731,11 @@ html, body {
   border-left: 3px solid var(--yellow);
   border-radius: var(--radius);
   padding: 14px 16px;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
 }
 
 .unknown-range {
