@@ -25,7 +25,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates \
+        curl ca-certificates gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
