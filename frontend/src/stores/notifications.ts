@@ -1,20 +1,15 @@
 /**
  * 通知状态管理。
- * 前端从 /api/notifications 拉取，支持标记已读、清除。
+ * 前端从 /api/notifications 拉取，支持标记已读、清除已读。
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchNotifications, markAllRead, clearRead } from '@/api'
-
-export interface NotificationItem {
-  id: string
-  type: string
-  level: 'info' | 'warning' | 'error'
-  title: string
-  message: string
-  timestamp: number
-  read: boolean
-}
+import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  clearReadNotifications,
+  type NotificationItem,
+} from '@/api'
 
 export const useNotificationStore = defineStore('notifications', () => {
   const items = ref<NotificationItem[]>([])
@@ -29,22 +24,27 @@ export const useNotificationStore = defineStore('notifications', () => {
       if (res.success) {
         items.value = res.data.notifications || []
       }
-    } catch (e) {
+    } catch {
       // 静默失败 — 通知非关键
     } finally {
       loading.value = false
     }
   }
 
+  function markRead(id: string) {
+    const n = items.value.find(x => x.id === id)
+    if (n) n.read = true
+  }
+
   async function markAllReadAction() {
-    const res = await markAllRead()
+    const res = await markAllNotificationsRead()
     if (res.success) {
       items.value.forEach(n => (n.read = true))
     }
   }
 
   async function clearReadAction() {
-    const res = await clearRead()
+    const res = await clearReadNotifications()
     if (res.success) {
       items.value = items.value.filter(n => !n.read)
     }
@@ -55,6 +55,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     loading,
     unreadCount,
     load,
+    markRead,
     markAllRead: markAllReadAction,
     clearRead: clearReadAction,
   }

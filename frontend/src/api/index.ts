@@ -75,8 +75,12 @@ export interface NotificationItem {
 // ── 通用请求 ──────────────────────────────────────────
 
 async function request<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
+  const token = localStorage.getItem('portview.token')
   const resp = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   })
   if (!resp.ok) {
@@ -205,6 +209,16 @@ export function login(password: string): Promise<ApiResponse<{ token: string; us
 
 export function fetchMe(): Promise<ApiResponse<{ username: string }>> {
   return request('/api/auth/me')
+}
+
+// ── 统计 (NEW) ────────────────────────────────────────
+
+export function fetchPortStats(): Promise<ApiResponse<Record<string, number>>> {
+  return request('/api/stats')
+}
+
+export function fetchPortHistory(): Promise<ApiResponse<Array<{ timestamp: number; count: number }>>> {
+  return request('/api/stats/history')
 }
 
 // ── 健康检查 ──────────────────────────────────────────

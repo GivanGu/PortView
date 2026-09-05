@@ -26,4 +26,14 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+docs/.vitepress/dist/
+docs/node_modules/
+
+# Docker
+*.pid
 tests/

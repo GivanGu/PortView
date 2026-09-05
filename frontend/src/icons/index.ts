@@ -1,19 +1,19 @@
 /**
  * PortView 图标注册中心
- *
- * 统一从 @lucide/vue 导入图标，便于树摇优化（仅打包使用到的图标）。
- * 在组件中这样用：
- *   import { Search, Server } from '@/icons'
- *   <template><search-icon /></template>  // 小驼峰 -> kebab-case 自动生效
+ * 统一从 @lucide/vue 导出图标。
  */
 
 export {
   Search,
+  LayoutDashboard,
+  Pencil,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
+  Menu,
   Server,
-  Docker,
+  Container,
+  Package,
   Database,
   Monitor,
   Laptop,
@@ -52,6 +52,7 @@ export {
   Unlink,
   Filter,
   FilterX,
+  Keyboard,
   SortAsc,
   SortDesc,
   SearchX,
@@ -91,26 +92,21 @@ export {
   FileSpreadsheet,
   Code,
   Terminal,
+  TerminalSquare,
   Zap,
   Cpu,
   HardDrive,
   MemoryStick,
   GitBranch,
   GitCommit,
-  Database as DatabaseAlt,
   Layers,
   Grid,
   List,
   Table,
-  Package,
-  Package2,
-  Box,
   Archive,
-  TerminalSquare,
-  // 新增
+  Box,
   Target,
   Flag,
-  FlagPlus,
   BarChart,
   LineChart,
   ClipboardList,

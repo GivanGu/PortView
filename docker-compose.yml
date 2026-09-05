@@ -1,13 +1,26 @@
-version: '3.8'
-
+name: portview
 services:
   portview:
-    image: crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:dev
+    build: .
     container_name: portview
-    network_mode: host
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config:/app/config
-    environment:
-      - PORTVIEW_PORT=7577  # 可修改此端口以避免冲突
     restart: unless-stopped
+    ports:
+      - "7577:7577"
+    environment:
+      - PORTVIEW_CONFIG_DIR=/app/config
+      - PORTVIEW_JWT_SECRET=${PORTVIEW_JWT_SECRET:-change-me-in-production}
+      - PORTVIEW_DEFAULT_PASSWORD=${PORTVIEW_DEFAULT_PASSWORD:-portview123}
+    volumes:
+      # 配置 + 用户数据库持久化
+      - ./config:/app/config
+      # Docker socket 供容器扫描
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # 主机网络命名空间（用于主机端口扫描）
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:7577/api/health',timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
