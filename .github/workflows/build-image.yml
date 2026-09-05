@@ -70,15 +70,16 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Sync to Alibaba Cloud ACR
-        if: ${{ steps.acr_login.outcome == 'success' }}
+        if: always() && steps.acr_login.outcome == 'success'
         env:
           DOCKER_BUILDKIT: "0"
-          SHORT_SHA: ${{ github.sha }}
+          DOCKER_DEFAULT_PLATFORM: linux/amd64
         run: |
           set -euo pipefail
           ACR_REF="${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.ACR_REPO }}"
           BRANCH="${{ github.ref_name }}"
-          SHORT_SHA="${SHORT_SHA:0:12}"
+          SHORT_SHA="${GITHUB_SHA:0:12}"
+          # Use classic builder to avoid BuildKit empty manifest issue on ACR
           docker build \
             -t "${ACR_REF}:${BRANCH}" \
             -t "${ACR_REF}:${BRANCH}-latest" \
@@ -87,8 +88,3 @@ jobs:
           docker push "${ACR_REF}:${BRANCH}"
           docker push "${ACR_REF}:${BRANCH}-latest"
           docker push "${ACR_REF}:sha-${SHORT_SHA}"
-
-      - name: Image digest
-        run: |
-          echo "GHCR digest: ${{ steps.build_ghcr.outputs.digest }}"
-

@@ -26,9 +26,9 @@
     "@vue/tsconfig": "^0.9.1",
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
-    "vitest": "^3.0.0",
+    "vitest": "^2.1.0",
     "vue-tsc": "^3.3.11",
     "@vue/test-utils": "^2.5.0",
-    "happy-dom": "^0.28.0"
+    "happy-dom": "^13.0.0"
   }
 }

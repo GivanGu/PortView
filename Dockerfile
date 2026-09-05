@@ -4,8 +4,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json ./
 RUN npm install --no-audit --no-fund
 COPY frontend/ ./
-# Use vite build directly (skip vue-tsc type-check for production speed)
-RUN npx vite build
+RUN npm run build
 
 # ── Stage 2: Backend runtime ──
 FROM python:3.12-slim AS backend
@@ -23,7 +22,7 @@ COPY --from=frontend /app/frontend/dist/ ./frontend/dist/
 # 安装 Python 依赖 (生产模式)
 RUN pip install --no-cache-dir -e .
 
-# 不需要 dev 依赖
+# 环境
 ENV PYTHONUNBUFFERED=1
 ENV PORTVIEW_CONFIG_DIR=/app/config
 ENV PORTVIEW_HOST=0.0.0.0
