@@ -89,4 +89,6 @@ jobs:
           docker push "${ACR_REF}:sha-${SHORT_SHA}"
 
       - name: Image digest
-        run: echo "GHCR digest: ${{ steps.build_ghcr.outputs.digest }}"
+        run: |
+          echo "GHCR digest: ${{ steps.build_ghcr.outputs.digest }}"
+
