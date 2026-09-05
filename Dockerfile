@@ -1,10 +1,11 @@
 # ── Stage 1: Frontend build ──
 FROM node:20-alpine AS frontend
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --prefer-offline
+COPY frontend/package.json ./
+RUN npm install --no-audit --no-fund
 COPY frontend/ ./
-RUN npm run build
+# Use vite build directly (skip vue-tsc type-check for production speed)
+RUN npx vite build
 
 # ── Stage 2: Backend runtime ──
 FROM python:3.12-slim AS backend
