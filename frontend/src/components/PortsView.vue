@@ -20,6 +20,7 @@ const analysis = ref<PortAnalysis | null>(null)
 const loading = ref(false)
 const searchQuery = ref('')
 const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
+const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
 
@@ -112,6 +113,21 @@ watch(searchQuery, () => {
 watch(protocolFilter, () => {
   loadData()
 })
+
+// ── 源类型过滤（本地 / Docker）──────────────
+// 后端已把卡片分好：`source === 'docker'` 是 Docker 端；
+// `source ∈ {'host','system'}` 是主机/本地端。
+// 这里纯前端侧 v-show 即可，无需往返 API。
+function cardVisible(card: PortCard): boolean {
+  if (!sourceFilter.value) return true
+  // gap / unknown_range 卡片没有 source —— 归类筛选时一并隐藏，
+  // 让视图聚焦「本地/Docker 端」这一组。
+  if (card.type !== 'used') return false
+  const s = (card.source || '').toLowerCase()
+  if (sourceFilter.value === 'docker') return s === 'docker'
+  if (sourceFilter.value === 'local') return s === 'host' || s === 'system'
+  return true
+}
 
 // ── 端口操作 ──
 async function handleHide(card: PortCard) {
@@ -216,6 +232,31 @@ onBeforeUnmount(() => {
           >
             UDP
           </button>
+          <span class="filter-divider" aria-hidden="true"></span>
+          <button
+            class="filter-btn"
+            :class="{ active: sourceFilter === '' }"
+            @click="sourceFilter = ''"
+            title="全部"
+          >
+            端口
+          </button>
+          <button
+            class="filter-btn"
+            :class="{ active: sourceFilter === 'local' }"
+            @click="sourceFilter = 'local'"
+            title="只看主机/本地源端口"
+          >
+            本地
+          </button>
+          <button
+            class="filter-btn"
+            :class="{ active: sourceFilter === 'docker' }"
+            @click="sourceFilter = 'docker'"
+            title="只看 Docker 源端口"
+          >
+            Docker
+          </button>
         </div>
 
         <!-- v1.2：监控区间选择器 -->
@@ -280,9 +321,13 @@ onBeforeUnmount(() => {
         <div
           v-for="(card, idx) in analysis.port_cards"
           :key="idx"
-          v-show="card.type === 'used'"
+          v-show="card.type === 'used' && cardVisible(card)"
         >
-          <div class="port-card" v-if="card.type === 'used'">
+          <div
+            class="port-card"
+            :class="{ offline: card.is_running === false }"
+            v-if="card.type === 'used'"
+          >
             <div class="port-actions">
               <button
                 class="port-action-btn"
@@ -297,7 +342,16 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="port-card-header">
-              <span class="port-number">{{ card.port }}</span>
+              <span class="port-header-left">
+                <span
+                  class="port-status-dot"
+                  :class="card.is_running === false ? 'is-offline' : 'is-online'"
+                  :title="card.is_running === false ? '离线' : '在线'"
+                  :aria-label="card.is_running === false ? '离线' : '在线'"
+                  role="img"
+                ></span>
+                <span class="port-number">{{ card.port }}</span>
+              </span>
               <span
                 class="port-protocol"
                 :class="(card.protocol || '').toLowerCase()"
@@ -325,16 +379,14 @@ onBeforeUnmount(() => {
                 <span>{{ card.source === 'docker' ? 'Docker' : card.source === 'system' ? '系统' : '主机' }}</span>
               </span>
 
-              <!-- 状态芯片：在线（绿）/ 离线（红）。所有 used 卡片都渲染，
-                   不再依赖 card.container 是否存在，保证主机端口也有状态点。 -->
+              <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
+                   底行不再重复「在线/离线」文字，避免两处信号打架）。 -->
               <span
+                v-if="card.container"
                 class="port-status"
-                :class="card.is_running === false ? 'stopped' : 'running'"
-                :title="card.is_running === false ? '离线' : '在线'"
+                :title="card.container"
               >
-                <span class="status-dot"></span>
-                <span class="port-status-text">{{ card.is_running === false ? '离线' : '在线' }}</span>
-                <span v-if="card.container" class="port-status-container">{{ card.container }}</span>
+                <span class="port-status-container">{{ card.container }}</span>
               </span>
             </div>
 

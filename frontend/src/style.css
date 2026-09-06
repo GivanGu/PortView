@@ -363,6 +363,111 @@ html, body {
   color: white;
 }
 
+/* ── 备注页：未备注端口分区（v1.3）────────────────
+   独立卡片，用黄色系（预警/待办）区别于已备注的白卡，
+   让用户一眼识别"这些端口还欠一条备注"。 */
+.unremarked-panel {
+  background: var(--yellow-light);
+  border: 1px solid var(--yellow);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.unremarked-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.unremarked-icon {
+  flex-shrink: 0;
+}
+
+.unremarked-title {
+  font-size: 13px;
+}
+
+.unremarked-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: var(--yellow);
+  color: #1a1d27;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.unremarked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unremarked-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.unremarked-row .btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.unremarked-port {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  min-width: 40px;
+}
+
+.unremarked-src {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.unremarked-src.docker { background: var(--blue-light); color: var(--blue); }
+.unremarked-src.system { background: var(--green-light); color: var(--green); }
+.unremarked-src.host { background: var(--orange-light); color: var(--orange); }
+
+.unremarked-svc {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.unremarked-protocol {
+  font-size: 10px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* 源类型过滤（本地 / Docker）— 与协议组共用 filter-btn 样式，
+   仅在 filter-group 内用竖分隔符区分，避免视觉粘连。 */
+.filter-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 6px;
+  background: var(--border-light);
+}
+
 /* ── 按钮 ── */
 .btn {
   display: inline-flex;
@@ -597,9 +702,11 @@ html, body {
   color: var(--green);
 }
 
-/* 离线：用红色 + 空心点 + 斜体文本，明显区别于在线（绿 + 实心点） */
+/* 离线：灰色 + 空心点（在线则是绿实心）。
+   用「灰」而非「红」——离线是常见状态，不必刺眼；
+   红保留给 error/失败。 */
 .port-status.stopped {
-  color: var(--red, #e11d48);
+  color: var(--text-muted);
 }
 
 .port-status .status-dot {
@@ -616,7 +723,59 @@ html, body {
 
 .port-status.stopped .status-dot {
   background: transparent;
-  border: 2px solid var(--red, #e11d48);
+  border: 2px solid var(--text-muted);
+}
+
+/* ── 卡片头部左上角圆点（在线绿 / 离线灰） ──────────
+   放在 port-number 左侧，一眼可辨；
+   配合 .port-card.offline 的浅色背景形成双重信号。 */
+.port-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.port-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.port-status-dot.is-online {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.port-status-dot.is-offline {
+  background: transparent;
+  border: 2px solid var(--text-muted);
+}
+
+/* 离线卡：调浅背景 + 弱边/弱文字。
+   - 暗色主题：card 从 #1e2231 提到 #161824（更暗，视觉上"退后"）
+   - 亮色主题：card 从 #ffffff 放到 #f1f3f9（更浅，与在线卡对比）
+   两条路径都指向 "离在线卡有明确对比"。 */
+/* 保持 border-style solid，避免 dashed 引起 1px 抖动 */
+:root .port-card.offline {
+  background: color-mix(in srgb, var(--bg-card) 78%, var(--bg-primary));
+}
+[data-theme="light"] .port-card.offline {
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--bg-primary));
+}
+.port-card.offline:hover {
+  background: color-mix(in srgb, var(--bg-card-hover) 78%, var(--bg-primary));
+}
+.port-card.offline .port-number {
+  color: var(--text-secondary);
+}
+.port-card.offline .port-service {
+  color: var(--text-muted);
+}
+.port-card.offline .port-source,
+.port-card.offline .port-source * {
+  opacity: 0.75;
 }
 
 .port-status-text {

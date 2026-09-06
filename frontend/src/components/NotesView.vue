@@ -5,10 +5,12 @@ import {
   listNotes,
   upsertNote,
   deleteNote,
+  fetchPorts,
   type NoteRead,
   type NotePayload,
+  type PortCard,
 } from '@/api'
-import { Search, StickyNote, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
+import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -16,6 +18,10 @@ const notes = ref<NoteRead[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const searchQuery = ref('')
+
+// v1.3：未备注端口 —— 展示所有已用但无 note 记录的端口，
+// 方便用户「看到→点开→补备注」的一站式快速流。
+const allUsedPorts = ref<PortCard[]>([])
 
 // 编辑器状态（新建/编辑共用 modal）
 const editorOpen = ref(false)
@@ -29,6 +35,25 @@ const draft = ref<NotePayload>({
 
 const isEditing = computed(() => editingPort.value !== null)
 
+// v1.3：未备注端口 = 已用端口中有 port 但 notes 里没它的
+const unremarked = computed(() => {
+  const notedPorts = new Set(notes.value.map(n => n.port))
+  return allUsedPorts.value
+    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port))
+    .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
+})
+
+const shownUnremarked = computed(() => {
+  if (!searchQuery.value) return unremarked.value
+  const q = searchQuery.value.toLowerCase()
+  return unremarked.value.filter(c =>
+    String(c.port ?? '').includes(q) ||
+    (c.service_name ?? '').toLowerCase().includes(q) ||
+    (c.container ?? '').toLowerCase().includes(q) ||
+    (c.remark ?? '').toLowerCase().includes(q)
+  )
+})
+
 async function loadData() {
   loading.value = true
   try {
@@ -39,6 +64,33 @@ async function loadData() {
   } finally {
     loading.value = false
   }
+}
+
+// v1.3：加载所有已用端口（无搜索/无过滤），供"未备注"分区使用。
+// 独立于 notes.searchQuery —— 未备注区的搜索由前端侧 shownUnremarked 处理，
+// 避免每次输入都触发后端往返。
+async function loadAllPorts() {
+  try {
+    const resp = await fetchPorts({ start_port: 1, end_port: 65535 })
+    if (resp.success) {
+      allUsedPorts.value = (resp.data as { port_cards: PortCard[] }).port_cards ?? []
+    }
+  } catch (e) {
+    console.error('load all ports failed:', e)
+  }
+}
+
+function openEditByPort(port: number, preset?: string) {
+  editingPort.value = port
+  const match = allUsedPorts.value.find(c => c.port === port)
+  const rawProto = (match?.protocol ?? '').toString().toLowerCase()
+  draft.value = {
+    port,
+    service_name: match?.service_name ?? preset ?? '',
+    protocol: (rawProto === 'tcp' || rawProto === 'udp') ? rawProto : '',
+    remark: '',
+  }
+  editorOpen.value = true
 }
 
 let searchTimer: ReturnType<typeof setTimeout>
@@ -97,7 +149,11 @@ function fmtTime(ts: number): string {
 
 onMounted(() => {
   loadData()
+  loadAllPorts()
 })
+
+// 保存/删除 note 后，"未备注"分区需要即时反映 ——
+// unremarked 是 computed，notes 变化即自动重算，无需额外刷新。
 </script>
 
 <template>
@@ -128,43 +184,74 @@ onMounted(() => {
         {{ t('common.loading') }}
       </div>
 
-      <div v-else-if="notes.length === 0" class="empty-state">
-        <div class="empty-icon"><StickyNote :size="32" /></div>
-        <div class="empty-text">{{ t('notes.empty') }}</div>
-        <button class="btn btn-primary" :style="{ marginTop: '12px' }" @click="openCreate">
-          <Plus :size="14" class="btn-icon" />
-          {{ t('notes.add') }}
-        </button>
-      </div>
-
-      <div v-else class="notes-list">
-        <div v-for="n in notes" :key="n.port" class="note-item">
-          <div class="note-main">
-            <div class="note-port">{{ n.port }}</div>
-            <div class="note-title">
-              <span class="note-svc">{{ n.service_name || '—' }}</span>
-              <span v-if="n.protocol" class="note-protocol">{{ n.protocol.toUpperCase() }}</span>
-            </div>
-            <div v-if="n.remark" class="note-remark">{{ n.remark }}</div>
-            <div class="note-meta">
-              <span>{{ t('notes.updated') }}</span>
-              <span>{{ fmtTime(n.updated_at) }}</span>
-            </div>
+      <template v-else>
+        <!-- v1.3：未备注端口分区 —— 让"看到就补备注"成为一条主路径 -->
+        <div v-if="shownUnremarked.length" class="unremarked-panel" style="margin-bottom: 16px;">
+          <div class="unremarked-header">
+            <AlertCircle :size="15" class="unremarked-icon" />
+            <span class="unremarked-title">未备注端口 <span class="unremarked-count">{{ shownUnremarked.length }}</span></span>
           </div>
-          <div class="note-actions">
-            <button class="btn btn-sm" :title="t('notes.edit')" @click="openEdit(n)">
-              <Pencil :size="14" />
-            </button>
-            <button
-              class="btn btn-sm btn-danger"
-              :title="t('common.delete')"
-              @click="handleDelete(n)"
+          <div class="unremarked-list">
+            <div
+              v-for="c in shownUnremarked"
+              :key="'ur-' + c.port"
+              class="unremarked-row"
             >
-              <Trash2 :size="14" />
-            </button>
+              <span class="unremarked-port">{{ c.port }}</span>
+              <span class="unremarked-src" :class="(c.source || '').toLowerCase()">
+                {{ c.source === 'docker' ? 'Docker' : c.source === 'system' ? '系统' : (c.source === 'host' ? '主机' : '未知') }}
+              </span>
+              <span class="unremarked-svc">{{ c.service_name || (c.container || '—') }}</span>
+              <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
+              <button
+                class="btn btn-sm btn-primary"
+                @click="openEditByPort(c.port!)"
+                title="为这个端口写一条备注"
+              >
+                <Plus :size="13" /> 备注
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+
+        <div v-if="notes.length === 0 && shownUnremarked.length === 0" class="empty-state">
+          <div class="empty-icon"><StickyNote :size="32" /></div>
+          <div class="empty-text">{{ t('notes.empty') }}</div>
+          <button class="btn btn-primary" :style="{ marginTop: '12px' }" @click="openCreate">
+            <Plus :size="14" class="btn-icon" />
+            {{ t('notes.add') }}
+          </button>
+        </div>
+
+        <div v-if="notes.length" class="notes-list">
+          <div v-for="n in notes" :key="n.port" class="note-item">
+            <div class="note-main">
+              <div class="note-port">{{ n.port }}</div>
+              <div class="note-title">
+                <span class="note-svc">{{ n.service_name || '—' }}</span>
+                <span v-if="n.protocol" class="note-protocol">{{ n.protocol.toUpperCase() }}</span>
+              </div>
+              <div v-if="n.remark" class="note-remark">{{ n.remark }}</div>
+              <div class="note-meta">
+                <span>{{ t('notes.updated') }}</span>
+                <span>{{ fmtTime(n.updated_at) }}</span>
+              </div>
+            </div>
+            <div class="note-actions">
+              <button class="btn btn-sm" :title="t('notes.edit')" @click="openEdit(n)">
+                <Pencil :size="14" />
+              </button>
+              <button
+                class="btn btn-sm btn-danger"
+                :title="t('common.delete')"
+                @click="handleDelete(n)"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Editor Modal -->
