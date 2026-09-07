@@ -411,11 +411,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 间隙 -->
+        <!-- 间隙：仅在无源类型过滤时显示 —— 归类视图聚焦已用端口 -->
         <div
           v-for="(card, idx) in analysis.port_cards"
           :key="'gap-' + idx"
-          v-show="card.type === 'gap'"
+          v-show="card.type === 'gap' && sourceFilter === ''"
         >
           <div class="gap-card" v-if="card.type === 'gap'">
             <div class="gap-info">
@@ -426,11 +426,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 未知范围 -->
+        <!-- 未知范围：仅在无源类型过滤时显示 -->
         <div
           v-for="(card, idx) in analysis.port_cards"
           :key="'unk-' + idx"
-          v-show="card.type === 'unknown_range'"
+          v-show="card.type === 'unknown_range' && sourceFilter === ''"
         >
           <div class="unknown-card" v-if="card.type === 'unknown_range'">
             <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
