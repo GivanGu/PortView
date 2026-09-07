@@ -570,8 +570,10 @@ html, body {
   padding: 14px 16px;
   transition: all 0.15s;
   position: relative;
-  /* 卡片等高：固定最小高度 + 弹性列布局，让"有无镜像"两种情况视觉一致 */
-  min-height: 118px;
+  /* 卡片等高：min-height 精确覆盖最富 4 行场景（header+service+image+detail=135px），
+     信息齐全(135)与不全(≤135)视觉完全一致；
+     避免 grid stretch 在混合行把矮卡拉起来产生 ~17px 底部留白。 */
+  min-height: 135px;
   display: flex;
   flex-direction: column;
 }
@@ -852,8 +854,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 与 port-card / unknown-card 等高，避免网格内视觉抖动 */
-  min-height: 118px;
+  /* 与 port-card / unknown-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
+  min-height: 135px;
 }
 
 .gap-info {
@@ -890,7 +892,8 @@ html, body {
   border-left: 3px solid var(--yellow);
   border-radius: var(--radius);
   padding: 14px 16px;
-  min-height: 118px;
+  /* 与 port-card 同步（135px = 最富 4 行场景） */
+  min-height: 135px;
   display: flex;
   flex-direction: column;
   justify-content: center;
