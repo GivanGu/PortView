@@ -60,8 +60,11 @@ docker run -d --name portview \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v $(pwd)/config:/app/config \
+  -v portview-data:/app/.data \
   -e PORTVIEW_PORT=7577 \
   crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:latest
+# 上面 -v portview-data:/app/.data 命名卷用于持久化密码/备注/区间/登录态，
+# 详见上方「首次使用与数据持久化」。
 ```
 
 ### 方式三：本地开发
@@ -84,6 +87,23 @@ npm run dev   # http://localhost:3000（proxy 到 :7577）
 |---|---|---|
 | `PORTVIEW_PORT` | `7577` | Web 服务监听端口 |
 | `PORTVIEW_CONFIG_DIR` | `/app/config` | 配置文件目录 |
+| `PORTVIEW_REQUIRE_AUTH` | 未设 | `1` 强制开启登录门；`0`/`off` 强制关闭；未设则读数据库 `user_prefs.require_auth`（默认关闭） |
+| `PORTVIEW_DB` | `/app/.data/portview.db` | 运行时数据（SQLite）文件路径。生产建议用命名卷挂载 `/app/.data`，见下节 |
+
+## 首次使用与数据持久化
+
+**运行时数据**（密码、端口备注、监控区间、登录开关、主题/强调色、审计日志）都存在 SQLite，默认落在容器内 **`/app/.data/portview.db`**。`.dockerignore` 已把 `.data` 排除出镜像，所以**数据不会随镜像烘焙**，必须由卷挂载来持久化——否则每次 `docker compose up --force-recreate` / 换 tag 重建，都会重置为全新空库，UI 回到"设置密码 + 空卡片"首屏。
+
+- **Docker Compose（推荐）**：`docker-compose.yml` 已用命名卷 `portview-data:/app/.data` 持久化，直接 `docker compose up -d` 即可，密码/备注/区间跨重建保留。
+- **裸 `docker run`**：自行加 `-v portview-data:/app/.data`（命名卷）或 `-v <host>/.data:/app/.data`（宿主目录）。
+- **备份 / 迁移**（命名卷）：
+  ```bash
+  docker run --rm \
+    -v portview-data:/src -v "$(pwd)/.data:./dst" alpine \
+    cp -a /src/. ./dst/
+  ```
+
+**首次进入**：新用户（`users` 表为空）访问时首屏是"设置密码"。设一次即可，之后即为登录态。若只想开放本机、不想要登录门，可设 `PORTVIEW_REQUIRE_AUTH=0`（或在设置页"安全与登录"关闭）。
 
 ## 配置
 
@@ -150,6 +170,13 @@ portview/
 ```
 
 ## 版本历史
+
+### v1.3.0（2026-09-07）
+- 新增：端口归类筛选（本地 / Docker 归类视图）+ 未备注快补
+- 新增：在线 / 离线视觉强化
+- 优化：端口卡片等高（port / gap / unknown 全部 135px）；归类视图聚焦已用端口、隐藏间隙与未知范围卡
+- 部署：`/app/.data` 以命名卷持久化（密码 / 备注 / 监控区间跨重建保留；README 与 compose 同步更新）
+- 镜像：`v1.3.0` 同 digest 推送到 GHCR + ACR（`:1.3.0` / `:1.3` / `:1` / `:latest`）
 
 ### v1.2.0（2026-09-05）
 - 新增：多段监控区间（`/api/ranges` CRUD + `/api/ports?range_ids=` 收窄卡片）

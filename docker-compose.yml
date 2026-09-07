@@ -8,6 +8,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config:/app/config
+      # 持久化运行时数据（密码 / 端口备注 / 监控区间 / 登录开关 / 主题）。
+      # 之前没挂 → 每次 up -d --force-recreate / 换 tag 重建都重置为全新空库，
+      # 导致 UI 首屏回到“设置密码 + 空卡片”。挂上命名卷后跨重建保留。
+      - portview-data:/app/.data
     environment:
       - PORTVIEW_PORT=7577  # 可修改此端口以避免冲突
     restart: unless-stopped
+
+volumes:
+  portview-data:    # 命名卷；如需备份：docker run --rm -v portview-data:/src -v $(pwd)/.data:/dst alpine cp -a /src/. /dst/
