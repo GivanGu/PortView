@@ -42,13 +42,41 @@ class TestMergeUnknownAndGaps:
              "service_name": "HTTP", "container": None},
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
-        # 应该有: 80(used), gap(81-100)
+        # 应该有: gap(1-79), 80(used), gap(81-100)
         types = [c["type"] for c in result]
         assert "used" in types
-        assert "gap" in types
-        gap = [c for c in result if c["type"] == "gap"][0]
-        assert gap["start_port"] == 81
-        assert gap["end_port"] == 100
+        gaps = [c for c in result if c["type"] == "gap"]
+        assert len(gaps) == 2
+        assert gaps[0]["start_port"] == 1
+        assert gaps[0]["end_port"] == 79
+        assert gaps[0]["available_count"] == 79
+        assert gaps[1]["start_port"] == 81
+        assert gaps[1]["end_port"] == 100
+
+    def test_head_gap(self):
+        """区间起始到第一个已用端口之间的可用端口应生成头部 gap 卡片。"""
+        monitor = _make_monitor()
+        cards = [
+            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
+             "service_name": "HTTP", "container": None},
+        ]
+        result = monitor._merge_unknown_and_gaps(cards, 1, 100)
+        head = result[0]
+        assert head["type"] == "gap"
+        assert head["start_port"] == 1
+        assert head["end_port"] == 79
+        assert head["available_count"] == 79
+
+    def test_no_head_gap_when_first_port_is_start(self):
+        """第一个已用端口恰为区间起始时，不应生成头部 gap。"""
+        monitor = _make_monitor()
+        cards = [
+            {"port": 1, "type": "used", "source": "system", "protocol": "TCP",
+             "service_name": "HTTP", "container": None},
+        ]
+        result = monitor._merge_unknown_and_gaps(cards, 1, 100)
+        assert result[0]["type"] == "used"
+        assert result[0]["port"] == 1
 
     def test_consecutive_unknown_merges(self):
         monitor = _make_monitor()
@@ -87,13 +115,12 @@ class TestMergeUnknownAndGaps:
              "service_name": "App", "container": None},
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 10000)
-        # 应该有 gap 81-8079
+        # 应该有 head gap(1-79)、中间 gap(81-8079)、尾部 gap(8081-10000)
         gaps = [c for c in result if c["type"] == "gap"]
-        assert len(gaps) >= 1
-        first_gap = gaps[0]
-        assert first_gap["start_port"] == 81
-        assert first_gap["end_port"] == 8079
-        assert first_gap["available_count"] == 8079 - 81 + 1
+        assert len(gaps) == 3
+        mid = next(g for g in gaps if g["start_port"] == 81)
+        assert mid["end_port"] == 8079
+        assert mid["available_count"] == 8079 - 81 + 1
 
     def test_empty_cards(self):
         monitor = _make_monitor()
@@ -143,7 +170,6 @@ class TestPortAnalysis:
 
     def test_hidden_ports_filter(self):
         monitor = _make_monitor()
-        config = {}
         # 模拟：手动构造一个有已用端口的场景
         # 由于没有 Docker 和主机端口，用 config 里的端口来测试
         config_with_port = {"test": {"port": 80, "protocol": "TCP"}}

@@ -113,6 +113,9 @@ async def me(
 
 @router.patch("/toggle")
 async def toggle(body: TogglePayload, response: Response) -> APIResponse:
+    # 开启登录保护前必须先设置密码，否则开启后无人能登录
+    if body.enabled and not await auth_svc.has_password():
+        raise HTTPException(status_code=400, detail="set password first")
     await auth_svc.set_auth_required(body.enabled)
     if not body.enabled:
         # 关闭时清 cookie，保持前端体验一致

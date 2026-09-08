@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
+import usePrefs from '@/store/prefs'
 import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -11,6 +12,7 @@ const { t, locale } = useI18n()
 // v1.2：登录/安全
 const auth = useAuth()
 const newPassword = ref('')
+const confirmPassword = ref('')
 const passwordBusy = ref(false)
 
 async function handleSetPassword() {
@@ -18,10 +20,20 @@ async function handleSetPassword() {
     showToast('密码至少 4 位')
     return
   }
+  if (newPassword.value !== confirmPassword.value) {
+    showToast('两次输入的密码不一致')
+    return
+  }
+  // v1.4.3：设置前确认 + 警示（忘记密码无法恢复）
+  const ok = confirm(
+    `新密码已设置（${newPassword.value.length} 位）。\n设置后需重新登录。\n\n请牢记密码，忘记密码将无法恢复。\n确认保存？`
+  )
+  if (!ok) return
   passwordBusy.value = true
   try {
     await auth.doSetPassword(newPassword.value)
     newPassword.value = ''
+    confirmPassword.value = ''
     showToast('密码已更新，请重新登录')
     setTimeout(() => window.location.reload(), 1200)
   } catch {
@@ -32,8 +44,18 @@ async function handleSetPassword() {
 }
 
 async function handleToggleAuth() {
-  await auth.doToggle(!auth.state.value.auth_required)
-  showToast(auth.state.value.auth_required ? '登录已开启' : '登录已关闭')
+  const next = !auth.state.value.auth_required
+  // 开启登录保护前必须先设置密码，否则开启后无人能登录
+  if (next && !auth.state.value.has_password) {
+    showToast('请先设置密码，再开启登录保护')
+    return
+  }
+  try {
+    await auth.doToggle(next)
+    showToast(next ? '登录已开启' : '登录已关闭')
+  } catch {
+    showToast(next ? '开启失败：请先设置密码' : '关闭失败')
+  }
 }
 
 async function handleLogout() {
@@ -63,7 +85,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const refreshInterval = ref<number>(0)
+const { refreshInterval, setRefreshInterval } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -128,7 +150,7 @@ function onLangChange(v: 'zh' | 'en') {
 }
 
 function onRefreshIntervalChange(v: number) {
-  refreshInterval.value = v
+  setRefreshInterval(v)
   void persistPartial({ refresh_interval: v })
 }
 
@@ -156,7 +178,7 @@ onMounted(async () => {
       if (p.theme) applyTheme(p.theme)
       if (p.accent && ACCENTS.some(a => a.id === p.accent)) applyAccent(p.accent)
       if (p.lang) applyLang(p.lang)
-      refreshInterval.value = p.refresh_interval ?? 0
+      setRefreshInterval(p.refresh_interval ?? 0)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -197,7 +219,14 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
             </template>
             <template v-else>
               登录已关闭 —
-              <button class="btn-link" @click="handleToggleAuth">开启</button>
+              <button
+                class="btn-link"
+                :disabled="!auth.state.value.has_password"
+                :title="auth.state.value.has_password ? '' : '请先设置密码'"
+                @click="handleToggleAuth"
+              >
+                开启
+              </button>
             </template>
           </p>
           <label class="auth-label">
@@ -210,10 +239,24 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
               autocomplete="new-password"
             />
           </label>
+          <label class="auth-label">
+            确认密码
+            <input
+              v-model="confirmPassword"
+              class="auth-input"
+              type="password"
+              placeholder="再次输入密码"
+              autocomplete="new-password"
+            />
+          </label>
+          <p class="auth-warning">
+            <AlertTriangle :size="13" class="auth-warning-ico" />
+            请牢记密码，忘记密码将无法恢复。
+          </p>
           <div class="auth-actions">
             <button
               class="btn btn-small"
-              :disabled="passwordBusy || newPassword.length < 4"
+              :disabled="passwordBusy || newPassword.length < 4 || newPassword !== confirmPassword"
               @click="handleSetPassword"
             >
               <ShieldCheck :size="13" />

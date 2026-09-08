@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   LayoutDashboard,
   Network,
@@ -12,6 +12,7 @@ import {
   Languages,
   Activity,
   Palette,
+  ShieldAlert,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -23,7 +24,9 @@ import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
 import LoginView from '@/components/LoginView.vue'
+import PasswordPrompt from '@/components/PasswordPrompt.vue'
 import useAuth from '@/store/auth'
+import usePrefs from '@/store/prefs'
 
 type Tab = 'overview' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
@@ -35,6 +38,31 @@ const { t, locale } = useI18n()
 const { state: auth, refresh: refreshAuth } = useAuth()
 const authChecked = ref(false)
 const needsLogin = computed(() => auth.value.auth_required && !auth.value.logged_in)
+
+// v1.4.3：首次启动密码提示（无密码 + 未点过「暂不设置」时弹一次）
+const PW_DISMISS_KEY = 'portview.pwPromptDismissed'
+const showPwPrompt = ref(false)
+
+function pwDismissed(): boolean {
+  try {
+    return localStorage.getItem(PW_DISMISS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function onPwSaved() {
+  showPwPrompt.value = false
+}
+
+function onPwDismissed() {
+  try {
+    localStorage.setItem(PW_DISMISS_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+  showPwPrompt.value = false
+}
 
 const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
@@ -64,7 +92,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const refreshInterval = ref(0)
+const { refreshInterval, setRefreshInterval } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -168,6 +196,11 @@ function applyStatsTimer() {
   }
 }
 
+// 刷新间隔在设置页修改后实时生效（无需刷新页面）
+watch(refreshInterval, () => {
+  applyStatsTimer()
+})
+
 function switchTab(tab: Tab) {
   activeTab.value = tab
   if (tab === 'overview' || tab === 'ports') {
@@ -188,8 +221,12 @@ onMounted(async () => {
   accent.value = initialAccent()
   applyAccent(accent.value)
   // v1.2：先查登录态
-  refreshAuth()
+  await refreshAuth()
   authChecked.value = true
+  // v1.4.3：首次启动密码提示（无密码 + 未点过「暂不设置」）
+  if (!auth.value.has_password && !pwDismissed()) {
+    showPwPrompt.value = true
+  }
   try {
     const health = await healthCheck()
     version.value = health.version
@@ -198,7 +235,7 @@ onMounted(async () => {
   }
   try {
     const prefs = await getPrefs()
-    if (prefs.success) refreshInterval.value = prefs.data.refresh_interval ?? 0
+    if (prefs.success) setRefreshInterval(prefs.data.refresh_interval ?? 0)
   } catch { /* ignore */ }
   applyStatsTimer()
   loading.value = false
@@ -309,6 +346,15 @@ onBeforeUnmount(() => {
         </span>
       </div>
       <div class="status-item status-right">
+        <button
+          v-if="!auth.has_password"
+          class="pw-chip"
+          :title="'点击设置访问密码'"
+          @click="showPwPrompt = true"
+        >
+          <ShieldAlert :size="13" />
+          未设密码
+        </button>
         <span class="status-occ" :title="t('statusbar.occupancy')">
           {{ t('statusbar.occupancy') }} <b>{{ occupancyPct }}%</b>
         </span>
@@ -316,5 +362,12 @@ onBeforeUnmount(() => {
         <span>{{ t('statusbar.containers') }} <b>{{ stats.containers }}</b></span>
       </div>
     </footer>
+
+    <!-- v1.4.3：首次启动密码提示 -->
+    <PasswordPrompt
+      v-if="showPwPrompt"
+      @saved="onPwSaved"
+      @dismissed="onPwDismissed"
+    />
   </div>
 </template>

@@ -36,10 +36,14 @@ const draft = ref<NotePayload>({
 const isEditing = computed(() => editingPort.value !== null)
 
 // v1.3：未备注端口 = 已用端口中有 port 但 notes 里没它的，且服务名未知
+// v1.4.3：同时覆盖后端标记为「未知服务」的端口（service_name === '未知服务'），
+// 让「看到未知服务→补备注」成为一条主路径。
+const UNKNOWN_SVC = '未知服务'
 const unremarked = computed(() => {
   const notedPorts = new Set(notes.value.map(n => n.port))
   return allUsedPorts.value
-    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port) && !c.service_name)
+    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port) &&
+      (!c.service_name || c.service_name === UNKNOWN_SVC))
     .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
 })
 
@@ -84,9 +88,11 @@ function openEditByPort(port: number, preset?: string) {
   editingPort.value = port
   const match = allUsedPorts.value.find(c => c.port === port)
   const rawProto = (match?.protocol ?? '').toString().toLowerCase()
+  const rawSvc = match?.service_name ?? preset ?? ''
   draft.value = {
     port,
-    service_name: match?.service_name ?? preset ?? '',
+    // 「未知服务」是占位符，打开编辑器时清空，让用户直接填真实服务名
+    service_name: rawSvc === UNKNOWN_SVC ? '' : rawSvc,
     protocol: (rawProto === 'tcp' || rawProto === 'udp') ? rawProto : '',
     remark: '',
   }

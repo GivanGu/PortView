@@ -76,6 +76,26 @@ class TestAuth:
         assert "logged_in" in data
         assert "has_password" in data
 
+    def test_toggle_requires_password(self, client: TestClient):
+        """未设置密码时开启登录保护应返回 400；有密码则可开启。"""
+        from unittest.mock import AsyncMock, patch
+
+        with patch(
+            "app.routers.auth.auth_svc.has_password",
+            new=AsyncMock(return_value=False),
+        ):
+            resp = client.patch("/api/auth/toggle", json={"enabled": True})
+            assert resp.status_code == 400
+
+        with patch(
+            "app.routers.auth.auth_svc.has_password",
+            new=AsyncMock(return_value=True),
+        ):
+            resp2 = client.patch("/api/auth/toggle", json={"enabled": True})
+            assert resp2.status_code == 200
+        # 收尾：关闭，避免影响后续测试
+        client.patch("/api/auth/toggle", json={"enabled": False})
+
 
 # --------------------- ranges CRUD ---------------------
 

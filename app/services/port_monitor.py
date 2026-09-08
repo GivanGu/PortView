@@ -539,6 +539,20 @@ class PortMonitor:
     ) -> list[dict[str, Any]]:
         """合并连续未知端口，并插入可用端口间隙卡片。"""
         port_cards: list[dict[str, Any]] = []
+
+        # 头部间隙：区间起始端口到第一个已用端口之间的可用端口
+        # （port_data_list 已按端口升序，首元素即最小端口）
+        if port_data_list and port_data_list[0]["port"] > start_port:
+            head_gap = port_data_list[0]["port"] - start_port
+            port_cards.append(
+                {
+                    "type": "gap",
+                    "start_port": start_port,
+                    "end_port": port_data_list[0]["port"] - 1,
+                    "available_count": head_gap,
+                }
+            )
+
         i = 0
         while i < len(port_data_list):
             current = port_data_list[i]

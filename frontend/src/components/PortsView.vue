@@ -14,7 +14,7 @@ import {
   type RangeRead,
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import { Search, Container, Cog, Server, Plus, X, StickyNote } from 'lucide-vue-next'
+import { Search, Container, Cog, Server, Plus, X, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -62,6 +62,78 @@ async function handleDeleteRange(id: number) {
   await deleteRange(id)
   if (selectedRangeId.value === id) selectedRangeId.value = 0
   await reloadRanges()
+}
+
+// ── 监控区间：醒目入口 + 批量添加 ──
+const quickAddDialog = ref(false)
+const rangeInput = ref('')
+const addRangeBusy = ref(false)
+const toast = ref('')
+const toastVisible = ref(false)
+
+function showToast(msg: string) {
+  toast.value = msg
+  toastVisible.value = true
+  setTimeout(() => (toastVisible.value = false), 2200)
+}
+
+interface ParsedRange {
+  name: string
+  start: number
+  end: number
+}
+
+function parseRangeInput(input: string): ParsedRange[] {
+  const tokens = input
+    .split(/[,，\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const result: ParsedRange[] = []
+  for (const tok of tokens) {
+    if (tok.includes('-')) {
+      const [a, b] = tok.split('-').map((s) => parseInt(s.trim(), 10))
+      if (Number.isNaN(a) || Number.isNaN(b)) throw new Error(`无效区间：${tok}`)
+      if (a < 0 || b > 65535 || a > b) throw new Error(`无效区间：${tok}`)
+      result.push({ name: `${a}-${b}`, start: a, end: b })
+    } else {
+      const p = parseInt(tok, 10)
+      if (Number.isNaN(p) || p < 0 || p > 65535) throw new Error(`无效端口：${tok}`)
+      result.push({ name: String(p), start: p, end: p })
+    }
+  }
+  return result
+}
+
+async function handleQuickAdd() {
+  const text = rangeInput.value.trim()
+  if (!text) return
+  let parsed: ParsedRange[]
+  try {
+    parsed = parseRangeInput(text)
+  } catch (e) {
+    showToast((e as Error).message)
+    return
+  }
+  if (!parsed.length) return
+  const total = parsed.reduce((s, r) => s + (r.end - r.start + 1), 0)
+  if (total > 100) {
+    showToast('一次最多添加 100 个端口')
+    return
+  }
+  addRangeBusy.value = true
+  try {
+    for (const r of parsed) {
+      await createRange(r.name, r.start, r.end)
+    }
+    rangeInput.value = ''
+    quickAddDialog.value = false
+    await reloadRanges(true)
+    showToast(`已添加 ${parsed.length} 个区间`)
+  } catch (e) {
+    console.error('quick add range failed', e)
+  } finally {
+    addRangeBusy.value = false
+  }
 }
 
 watch(selectedRangeId, () => { loadData() })
@@ -178,6 +250,10 @@ onBeforeUnmount(() => {
     <div class="main-header">
       <h1>端口监控</h1>
       <div class="header-actions">
+        <button class="btn btn-primary range-entry" @click="quickAddDialog = true">
+          <SlidersHorizontal :size="15" />
+          监控区间
+        </button>
         <div class="export-group">
           <button class="btn" :disabled="!analysis || loading" @click="handleExport('csv')">
             ⬇ CSV
@@ -402,6 +478,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- 可用端口间隙：仅在无源类型过滤时显示 -->
+        <div
+          v-for="(card, idx) in analysis.port_cards"
+          :key="'gap-' + idx"
+          v-show="card.type === 'gap' && sourceFilter === ''"
+        >
+          <div class="gap-card" v-if="card.type === 'gap'">
+            <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
+            <div class="gap-count">{{ card.available_count }} 个可用端口</div>
+          </div>
+        </div>
+
         <!-- 未知范围：仅在无源类型过滤时显示 -->
         <div
           v-for="(card, idx) in analysis.port_cards"
@@ -455,6 +543,40 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+    </Teleport>
+
+    <!-- v1.4.3：监控区间批量添加对话框 -->
+    <Teleport to="body">
+      <div v-if="quickAddDialog" class="range-overlay" @click.self="quickAddDialog = false">
+        <div class="range-dialog">
+          <h3>添加监控区间</h3>
+          <p class="range-hint">
+            支持单端口（<code>80</code>）或区间（<code>22500-22600</code>），
+            多个用逗号分隔，一次最多 100 个端口。
+          </p>
+          <textarea
+            class="form-input range-textarea"
+            v-model="rangeInput"
+            rows="4"
+            placeholder="如：80, 443, 22500-22600"
+          ></textarea>
+          <div class="range-dialog-actions">
+            <button class="btn btn-sm" @click="quickAddDialog = false">取消</button>
+            <button
+              class="btn btn-sm btn-primary"
+              :disabled="addRangeBusy || !rangeInput.trim()"
+              @click="handleQuickAdd"
+            >
+              <Plus :size="13" /> 添加
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 轻提示 -->
+    <Teleport to="body">
+      <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
     </Teleport>
   </div>
 </template>
