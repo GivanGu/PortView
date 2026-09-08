@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   fetchHiddenPorts,
@@ -35,6 +35,10 @@ async function loadData() {
 function getDetail(port: number): HiddenPortDetail | undefined {
   return details.value.find(d => d.port === port)
 }
+
+const hiddenItems = computed(() =>
+  hiddenPorts.value.map(port => ({ port, detail: getDetail(port) })),
+)
 
 async function handleUnhide(port: number) {
   await unhidePort(port)
@@ -76,30 +80,30 @@ onMounted(() => loadData())
 
       <div v-else-if="hiddenPorts.length > 0" class="hidden-list">
         <div
-          v-for="port in hiddenPorts"
-          :key="port"
+          v-for="item in hiddenItems"
+          :key="item.port"
           class="hidden-item hidden-item-detail"
         >
           <div class="hidden-detail-main">
-            <span class="port-label">{{ port }}</span>
-            <span v-if="getDetail(port)?.service_name" class="hidden-detail-svc">
-              {{ getDetail(port)!.service_name }}
+            <span class="port-label">{{ item.port }}</span>
+            <span v-if="item.detail?.service_name" class="hidden-detail-svc">
+              {{ item.detail.service_name }}
             </span>
-            <span v-if="getDetail(port)?.protocol" class="hidden-detail-proto">
-              {{ getDetail(port)!.protocol.toUpperCase() }}
+            <span v-if="item.detail?.protocol" class="hidden-detail-proto">
+              {{ item.detail.protocol.toUpperCase() }}
             </span>
-            <span v-if="getDetail(port)?.source" class="hidden-detail-src" :class="getDetail(port)!.source">
-              <Container v-if="getDetail(port)!.source === 'docker'" :size="12" />
+            <span v-if="item.detail?.source" class="hidden-detail-src" :class="item.detail.source">
+              <Container v-if="item.detail.source === 'docker'" :size="12" />
               <Server v-else :size="12" />
-              {{ getDetail(port)!.source === 'docker' ? 'Docker' : '主机' }}
+              {{ item.detail.source === 'docker' ? 'Docker' : '主机' }}
             </span>
-            <span v-if="getDetail(port)?.container" class="hidden-detail-container">
-              {{ getDetail(port)!.container }}
+            <span v-if="item.detail?.container" class="hidden-detail-container">
+              {{ item.detail.container }}
             </span>
-            <span v-if="getDetail(port)?.remark" class="hidden-detail-remark">
-              {{ getDetail(port)!.remark }}
+            <span v-if="item.detail?.remark" class="hidden-detail-remark">
+              {{ item.detail.remark }}
             </span>
-            <span v-if="getDetail(port) && !getDetail(port)!.is_running" class="hidden-detail-offline">
+            <span v-if="item.detail && !item.detail.is_running" class="hidden-detail-offline">
               离线
             </span>
           </div>
@@ -107,7 +111,7 @@ onMounted(() => loadData())
             <button
               class="btn btn-sm"
               :title="t('hidden.unhide')"
-              @click="handleUnhide(port)"
+              @click="handleUnhide(item.port)"
             >
               <Eye :size="14" />
               {{ t('hidden.unhide') }}
