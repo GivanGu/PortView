@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   fetchPorts,
   hidePort,
+  batchHidePorts,
   editPort,
   fetchRanges,
   createRange,
@@ -120,11 +121,11 @@ function cardVisible(card: PortCard): boolean {
 // ── 端口操作 ──
 async function handleHide(card: PortCard) {
   if (card.type === 'unknown_range') {
-    // 隐藏整个范围
+    // 隐藏整个范围：把区间内所有端口都记入 hidden_ports
     if (card.start_port && card.end_port) {
-      const ports = []
+      const ports: number[] = []
       for (let p = card.start_port; p <= card.end_port; p++) ports.push(p)
-      await hidePort(ports[0]) // 简化：只隐藏第一个
+      await batchHidePorts(ports)
     }
   } else if (card.port) {
     await hidePort(card.port)

@@ -77,8 +77,8 @@ export interface PortsParams {
 export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAnalysis>> {
   const qs = new URLSearchParams()
   if (params.protocol) qs.set('protocol', params.protocol)
-  if (params.start_port) qs.set('start_port', String(params.start_port))
-  if (params.end_port) qs.set('end_port', String(params.end_port))
+  if (params.start_port != null) qs.set('start_port', String(params.start_port))
+  if (params.end_port != null) qs.set('end_port', String(params.end_port))
   if (params.search) qs.set('search', params.search)
   if (params.range_ids && params.range_ids.length > 0) {
     // FastAPI 期望重复 key

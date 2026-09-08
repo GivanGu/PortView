@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { fetchPorts, type PortCard } from '@/api'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { fetchPorts, getPrefs, type PortCard } from '@/api'
 
 interface OverviewStats {
   totalUsed: number
@@ -51,9 +51,9 @@ function countBySource(cards: PortCard[], sources: string[]): number {
   return cards.filter((c) => c.type === 'used' && c.source && sources.includes(c.source)).length
 }
 
-async function load() {
-  loading.value = true
-  error.value = ''
+async function load(silent = false) {
+  if (!silent) loading.value = true
+  if (!silent) error.value = ''
   try {
     const res = await fetchPorts()
     const data = res.data
@@ -69,13 +69,30 @@ async function load() {
     }
     loadedAt.value = new Date()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+    if (!silent) error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
-onMounted(load)
+// 自动刷新（与设置里的「刷新间隔」保持一致；0=手动）
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(async () => {
+  load()
+  try {
+    const res = await getPrefs()
+    if (res.success && res.data.refresh_interval > 0) {
+      pollTimer = setInterval(() => {
+        if (!document.hidden && !loading.value) load(true)
+      }, res.data.refresh_interval * 1000)
+    }
+  } catch { /* ignore */ }
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <template>

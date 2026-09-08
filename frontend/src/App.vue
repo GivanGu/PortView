@@ -153,6 +153,21 @@ async function loadStats() {
   }
 }
 
+// 状态栏指标自动刷新（与设置里的「刷新间隔」保持一致；0=手动）
+let statsTimer: ReturnType<typeof setInterval> | null = null
+
+function applyStatsTimer() {
+  if (statsTimer) {
+    clearInterval(statsTimer)
+    statsTimer = null
+  }
+  if (refreshInterval.value > 0) {
+    statsTimer = setInterval(() => {
+      if (!document.hidden) loadStats()
+    }, refreshInterval.value * 1000)
+  }
+}
+
 function switchTab(tab: Tab) {
   activeTab.value = tab
   if (tab === 'overview' || tab === 'ports') {
@@ -185,12 +200,14 @@ onMounted(async () => {
     const prefs = await getPrefs()
     if (prefs.success) refreshInterval.value = prefs.data.refresh_interval ?? 0
   } catch { /* ignore */ }
+  applyStatsTimer()
   loading.value = false
   loadStats()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
+  if (statsTimer) clearInterval(statsTimer)
 })
 </script>
 

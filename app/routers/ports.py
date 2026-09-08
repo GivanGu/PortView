@@ -148,7 +148,6 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
 
 def _apply_search(port_data: dict, search_term: str) -> dict:
     """按关键词过滤端口卡片（移植自旧版前端/后端搜索逻辑）。"""
-    original_total_used = port_data["total_used"]
     filtered: list[dict] = []
 
     for card in port_data["port_cards"]:
@@ -190,5 +189,7 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
 
     port_data["port_cards"] = filtered
     port_data["total_used"] = filtered_used
-    port_data["total_available"] = max(0, 65535 - original_total_used)
+    # total_available 是「区间内可用端口」，属于区间属性，不随搜索词变化；
+    # 保留 get_port_analysis 计算出的原值（此前误用硬编码 65535 重算，
+    # 在协议过滤 / 自定义区间下会与 total_used 口径不一致）。
     return port_data
