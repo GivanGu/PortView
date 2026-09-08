@@ -2107,16 +2107,19 @@ html, body {
 }
 
 /* ── 饼图 ──────────────────────────────────────────────── */
-.pie-chart-wrap {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 16px;
+.pie-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 16px;
 }
-.pie-chart {
-  width: 120px;
-  height: 120px;
-  flex-shrink: 0;
+.pie-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.pie-svg circle {
+  transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease;
 }
 .pie-legend {
   display: flex;
@@ -2130,19 +2133,20 @@ html, body {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.pie-legend-dot {
+.pie-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.pie-legend-count {
+.pie-legend-label {
+  color: var(--text-secondary);
+}
+.pie-legend-val {
+  margin-left: auto;
   font-weight: 600;
   color: var(--text-primary);
-}
-.pie-legend-pct {
-  color: var(--text-muted);
-  font-size: 12px;
+  font-family: var(--font-mono);
 }
 
 /* ── 设置：刷新间隔 ────────────────────────────────────── */
