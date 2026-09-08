@@ -35,11 +35,11 @@ const draft = ref<NotePayload>({
 
 const isEditing = computed(() => editingPort.value !== null)
 
-// v1.3：未备注端口 = 已用端口中有 port 但 notes 里没它的
+// v1.3：未备注端口 = 已用端口中有 port 但 notes 里没它的，且服务名未知
 const unremarked = computed(() => {
   const notedPorts = new Set(notes.value.map(n => n.port))
   return allUsedPorts.value
-    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port))
+    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port) && !c.service_name)
     .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
 })
 
@@ -147,6 +147,23 @@ function fmtTime(ts: number): string {
   return d.toLocaleString()
 }
 
+function exportNotesJson() {
+  const data = notes.value.map(n => ({
+    port: n.port,
+    service_name: n.service_name,
+    protocol: n.protocol,
+    remark: n.remark,
+    updated_at: new Date(n.updated_at * 1000).toISOString(),
+  }))
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `portview-notes-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
   loadData()
   loadAllPorts()
@@ -162,6 +179,9 @@ onMounted(() => {
       <h1>{{ t('notes.title') }}</h1>
       <div class="header-actions">
         <span class="meta">{{ t('notes.total', { n: notes.length }) }}</span>
+        <button class="btn" :disabled="notes.length === 0" @click="exportNotesJson">
+          ⬇ JSON
+        </button>
         <button class="btn btn-primary" @click="openCreate">
           <Plus :size="14" class="btn-icon" />
           {{ t('notes.add') }}

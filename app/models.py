@@ -115,11 +115,12 @@ class NoteRead(BaseModel):
 # ── P1-2 用户偏好 ─────────────────────────────────────────
 
 class UserPrefsRead(BaseModel):
-    """读取用户偏好（主题 / 强调色 / 语言）。"""
+    """读取用户偏好（主题 / 强调色 / 语言 / 刷新间隔）。"""
 
     theme: Literal["dark", "light"]
     accent: str
     lang: Literal["zh", "en"]
+    refresh_interval: int = 0
 
 
 class UserPrefsPatch(BaseModel):
@@ -128,3 +129,4 @@ class UserPrefsPatch(BaseModel):
     theme: Literal["dark", "light"] | None = None
     accent: str | None = None
     lang: Literal["zh", "en"] | None = None
+    refresh_interval: int | None = Field(default=None, ge=0, le=300)

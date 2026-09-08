@@ -2042,3 +2042,125 @@ html, body {
   color: var(--text-primary);
 }
 .port-actions-inline { display: flex; gap: 6px; }
+
+/* ── Hidden 详情卡片 ───────────────────────────────────── */
+.hidden-item-detail {
+  flex-wrap: wrap;
+}
+.hidden-detail-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.hidden-detail-svc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.hidden-detail-proto {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.hidden-detail-src {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.hidden-detail-container {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.hidden-detail-remark {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hidden-detail-offline {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ── 离线端口卡片 ──────────────────────────────────────── */
+.port-card.offline {
+  opacity: 0.7;
+  border-left: 3px solid #f59e0b;
+}
+.port-card.offline .port-card-source {
+  color: #f59e0b;
+}
+
+/* ── 饼图 ──────────────────────────────────────────────── */
+.pie-chart-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+}
+.pie-chart {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pie-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pie-legend-count {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pie-legend-pct {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── 设置：刷新间隔 ────────────────────────────────────── */
+.settings-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+/* ── 设置：密码警告 ────────────────────────────────────── */
+.auth-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #f59e0b;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 6px;
+}

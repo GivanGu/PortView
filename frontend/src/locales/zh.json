@@ -29,7 +29,7 @@
   },
   "statusbar": {
     "refreshManual": "手动刷新",
-    "refreshAuto": "自动刷新",
+    "refreshAuto": "每 {s} 秒自动刷新",
     "occupancy": "占用率",
     "containers": "容器"
   },

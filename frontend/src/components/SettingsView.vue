@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -63,6 +63,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
+const refreshInterval = ref<number>(0)
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -126,6 +127,11 @@ function onLangChange(v: 'zh' | 'en') {
   void persistPartial({ lang: v })
 }
 
+function onRefreshIntervalChange(v: number) {
+  refreshInterval.value = v
+  void persistPartial({ refresh_interval: v })
+}
+
 async function handleReset() {
   if (!confirm(t('settings.resetConfirm'))) return
   savingPref.value = true
@@ -150,6 +156,7 @@ onMounted(async () => {
       if (p.theme) applyTheme(p.theme)
       if (p.accent && ACCENTS.some(a => a.id === p.accent)) applyAccent(p.accent)
       if (p.lang) applyLang(p.lang)
+      refreshInterval.value = p.refresh_interval ?? 0
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -216,6 +223,10 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
               {{ auth.state.value.has_password ? '已有密码' : '尚未设置' }}
             </span>
           </div>
+          <p v-if="auth.state.value.auth_required && !auth.state.value.has_password" class="auth-warning">
+            <AlertTriangle :size="13" />
+            登录已开启但尚未设置密码，当前任何人都可以访问
+          </p>
         </section>
 
         <!-- Theme -->
@@ -298,6 +309,57 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 @change="() => onLangChange('en')"
               />
               <span>{{ t('settings.langEn') }}</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Refresh Interval -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <Timer :size="16" class="card-ico" />
+            <span>刷新间隔</span>
+          </header>
+          <p class="settings-hint">端口数据自动刷新频率（设为手动则需手动刷新）</p>
+          <div class="radio-2col">
+            <label class="radio-pill" :class="{ active: refreshInterval === 0 }">
+              <input
+                type="radio"
+                name="pv-refresh"
+                :value="0"
+                :checked="refreshInterval === 0"
+                @change="() => onRefreshIntervalChange(0)"
+              />
+              <span>手动</span>
+            </label>
+            <label class="radio-pill" :class="{ active: refreshInterval === 10 }">
+              <input
+                type="radio"
+                name="pv-refresh"
+                :value="10"
+                :checked="refreshInterval === 10"
+                @change="() => onRefreshIntervalChange(10)"
+              />
+              <span>10 秒</span>
+            </label>
+            <label class="radio-pill" :class="{ active: refreshInterval === 15 }">
+              <input
+                type="radio"
+                name="pv-refresh"
+                :value="15"
+                :checked="refreshInterval === 15"
+                @change="() => onRefreshIntervalChange(15)"
+              />
+              <span>15 秒</span>
+            </label>
+            <label class="radio-pill" :class="{ active: refreshInterval === 30 }">
+              <input
+                type="radio"
+                name="pv-refresh"
+                :value="30"
+                :checked="refreshInterval === 30"
+                @change="() => onRefreshIntervalChange(30)"
+              />
+              <span>30 秒</span>
             </label>
           </div>
         </section>

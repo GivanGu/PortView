@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.config import (
     load_config,
@@ -14,7 +14,10 @@ from app.config import (
     save_hidden_ports,
     save_raw_config,
 )
+from app.dependencies import get_monitor
 from app.models import APIResponse, HiddenPortRequest, HiddenPortsBatchRequest, PortEditRequest
+from app.routers.ports import _load_notes_map
+from app.services.port_monitor import PortMonitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -109,6 +112,68 @@ def api_get_hidden() -> APIResponse:
         return APIResponse(success=True, data=hidden)
     except Exception as e:  # noqa: BLE001
         logger.error("获取隐藏端口失败: %s", e)
+        return APIResponse(success=False, error=str(e))
+
+
+@router.get("/hidden/details", response_model=APIResponse)
+async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) -> APIResponse:
+    """获取隐藏端口的详细信息（服务名 / 协议 / 来源 / 容器）。
+
+    隐藏端口只存了端口号；这里重新跑一次分析（不过滤隐藏），
+    把每个隐藏端口能还原出的字段都带出来。当前未监听的端口，
+    仅能从配置 / 默认映射推断服务名。
+    """
+    try:
+        hidden = load_hidden_ports()
+        if not hidden:
+            return APIResponse(success=True, data=[])
+
+        config = load_config()
+        port_data = monitor.get_port_analysis(
+            config,
+            start_port=1,
+            end_port=65535,
+            hidden_ports=[],  # 不过滤，拿到全部卡片
+            notes_map=await _load_notes_map(),
+        )
+
+        card_by_port: dict[int, dict] = {}
+        for card in port_data["port_cards"]:
+            if card.get("type") == "used" and card.get("port"):
+                card_by_port[card["port"]] = card
+
+        details: list[dict] = []
+        for port in sorted(hidden):
+            card = card_by_port.get(port)
+            if card:
+                details.append(
+                    {
+                        "port": port,
+                        "service_name": card.get("service_name"),
+                        "protocol": card.get("protocol"),
+                        "source": card.get("source"),
+                        "container": card.get("container"),
+                        "image": card.get("image"),
+                        "is_running": card.get("is_running"),
+                        "remark": card.get("remark", ""),
+                    }
+                )
+            else:
+                details.append(
+                    {
+                        "port": port,
+                        "service_name": monitor.get_service_name(port, config),
+                        "protocol": None,
+                        "source": None,
+                        "container": None,
+                        "image": None,
+                        "is_running": False,
+                        "remark": "",
+                    }
+                )
+        return APIResponse(success=True, data=details)
+    except Exception as e:  # noqa: BLE001
+        logger.error("获取隐藏端口详情失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
 

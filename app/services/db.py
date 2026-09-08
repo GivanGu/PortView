@@ -60,6 +60,7 @@ _SCHEMA = [
     "  theme TEXT NOT NULL DEFAULT 'dark',"
     "  accent TEXT NOT NULL DEFAULT 'indigo',"
     "  lang TEXT NOT NULL DEFAULT 'zh',"
+    "  refresh_interval INTEGER NOT NULL DEFAULT 0,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
 
@@ -158,6 +159,13 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
             logger.info("migration: user_prefs.require_auth = 1")
         else:
             logger.info("migration: user_prefs.require_auth added (default 0 = off)")
+
+    # P1.2 迁移：user_prefs 加 refresh_interval 列（0=手动，10/15/30=自动刷新秒数）
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols2 = {row[1] for row in await cur.fetchall()}
+    if "refresh_interval" not in pref_cols2:
+        await conn.execute("ALTER TABLE user_prefs ADD COLUMN refresh_interval INTEGER NOT NULL DEFAULT 0")
+        logger.info("migration: user_prefs.refresh_interval added (default 0 = manual)")
 
     await conn.commit()
     if _db is not None:

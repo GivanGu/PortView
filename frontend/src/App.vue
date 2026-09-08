@@ -15,7 +15,7 @@ import {
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { fetchPorts, healthCheck } from '@/api'
+import { fetchPorts, healthCheck, getPrefs } from '@/api'
 import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
@@ -63,6 +63,8 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   available: 0,
   containers: 0,
 })
+
+const refreshInterval = ref(0)
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -179,6 +181,10 @@ onMounted(async () => {
   } catch {
     version.value = 'unknown'
   }
+  try {
+    const prefs = await getPrefs()
+    if (prefs.success) refreshInterval.value = prefs.data.refresh_interval ?? 0
+  } catch { /* ignore */ }
   loading.value = false
   loadStats()
 })
@@ -281,7 +287,9 @@ onBeforeUnmount(() => {
         <span>PortView v{{ version }}</span>
       </div>
       <div class="status-item">
-        <span class="status-label">{{ t('statusbar.refreshManual') }}</span>
+        <span class="status-label">
+          {{ refreshInterval > 0 ? t('statusbar.refreshAuto', { s: refreshInterval }) : t('statusbar.refreshManual') }}
+        </span>
       </div>
       <div class="status-item status-right">
         <span class="status-occ" :title="t('statusbar.occupancy')">

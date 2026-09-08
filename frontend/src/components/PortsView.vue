@@ -2,18 +2,18 @@
 import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   fetchPorts,
-  refreshPorts,
   hidePort,
   editPort,
   fetchRanges,
   createRange,
   deleteRange,
+  getPrefs,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import { RefreshCw, Search, Container, Cog, Server, CircleCheck, Plus, X, StickyNote } from 'lucide-vue-next'
+import { Search, Container, Cog, Server, Plus, X, StickyNote } from 'lucide-vue-next'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -66,8 +66,8 @@ async function handleDeleteRange(id: number) {
 watch(selectedRangeId, () => { loadData() })
 
 // ── 数据加载 ──
-async function loadData() {
-  loading.value = true
+async function loadData(silent = false) {
+  if (!silent) loading.value = true
   try {
     const resp = await fetchPorts({
       protocol: protocolFilter.value || undefined,
@@ -82,19 +82,7 @@ async function loadData() {
   } catch (e) {
     console.error('加载端口数据失败:', e)
   } finally {
-    loading.value = false
-  }
-}
-
-async function handleRefresh() {
-  loading.value = true
-  try {
-    const resp = await refreshPorts()
-    if (resp.success) {
-      analysis.value = resp.data
-    }
-  } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -164,13 +152,18 @@ function startEdit(card: PortCard) {
 // ── 初始化 ──
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(() => {
+onMounted(async () => {
   loadData()
   void reloadRanges()
-  // 每 30s 静默刷新（不打断用户搜索/输入）
-  pollTimer = setInterval(() => {
-    if (!document.hidden && !loading.value) loadData()
-  }, 30_000)
+  // 从偏好读取刷新间隔（0=手动，10/15/30=秒）
+  try {
+    const res = await getPrefs()
+    if (res.success && res.data.refresh_interval > 0) {
+      pollTimer = setInterval(() => {
+        if (!document.hidden && !loading.value) loadData(true)
+      }, res.data.refresh_interval * 1000)
+    }
+  } catch { /* ignore */ }
 })
 
 onBeforeUnmount(() => {
@@ -192,9 +185,6 @@ onBeforeUnmount(() => {
             ⬇ JSON
           </button>
         </div>
-        <button class="btn btn-primary" @click="handleRefresh" :disabled="loading">
-          <RefreshCw :size="14" :class="{ spinning: loading }" /> 刷新
-        </button>
       </div>
     </div>
 
@@ -271,7 +261,7 @@ onBeforeUnmount(() => {
               {{ r.name }} ({{ r.start_port }}–{{ r.end_port }})
             </option>
           </select>
-          <button class="btn btn-tiny" :title="'新建区间'" :disabled="!newRange.name.trim()" @click="rangeDialog = true">
+          <button class="btn btn-tiny" :title="'新建区间'" @click="rangeDialog = true">
             <Plus :size="13" />
           </button>
           <button
@@ -408,21 +398,6 @@ onBeforeUnmount(() => {
               <button class="btn btn-sm btn-primary" @click="handleEditSave">保存</button>
               <button class="btn btn-sm" @click="editingPort = null">取消</button>
             </div>
-          </div>
-        </div>
-
-        <!-- 间隙：仅在无源类型过滤时显示 —— 归类视图聚焦已用端口 -->
-        <div
-          v-for="(card, idx) in analysis.port_cards"
-          :key="'gap-' + idx"
-          v-show="card.type === 'gap' && sourceFilter === ''"
-        >
-          <div class="gap-card" v-if="card.type === 'gap'">
-            <div class="gap-info">
-              <span class="gap-range">{{ card.start_port }} — {{ card.end_port }}</span>
-              <span class="gap-count">{{ card.available_count }} 个可用端口</span>
-            </div>
-            <span class="gap-badge"><CircleCheck :size="12" class="gap-badge-icon" /> 可用</span>
           </div>
         </div>
 

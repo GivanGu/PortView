@@ -3,26 +3,37 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   fetchHiddenPorts,
+  fetchHiddenPortDetails,
   unhidePort,
   batchUnhidePorts,
+  type HiddenPortDetail,
 } from '@/api'
-import { EyeOff, Eye } from 'lucide-vue-next'
+import { EyeOff, Eye, Container, Server } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
 const hiddenPorts = ref<number[]>([])
+const details = ref<HiddenPortDetail[]>([])
 const loading = ref(false)
 
 async function loadData() {
   loading.value = true
   try {
-    const resp = await fetchHiddenPorts()
-    if (resp.success) hiddenPorts.value = resp.data
+    const [portsResp, detailsResp] = await Promise.all([
+      fetchHiddenPorts(),
+      fetchHiddenPortDetails(),
+    ])
+    if (portsResp.success) hiddenPorts.value = portsResp.data
+    if (detailsResp.success) details.value = detailsResp.data
   } catch (e) {
     console.error('加载隐藏端口失败:', e)
   } finally {
     loading.value = false
   }
+}
+
+function getDetail(port: number): HiddenPortDetail | undefined {
+  return details.value.find(d => d.port === port)
 }
 
 async function handleUnhide(port: number) {
@@ -67,9 +78,31 @@ onMounted(() => loadData())
         <div
           v-for="port in hiddenPorts"
           :key="port"
-          class="hidden-item"
+          class="hidden-item hidden-item-detail"
         >
-          <span class="port-label">{{ port }}</span>
+          <div class="hidden-detail-main">
+            <span class="port-label">{{ port }}</span>
+            <span v-if="getDetail(port)?.service_name" class="hidden-detail-svc">
+              {{ getDetail(port)!.service_name }}
+            </span>
+            <span v-if="getDetail(port)?.protocol" class="hidden-detail-proto">
+              {{ getDetail(port)!.protocol.toUpperCase() }}
+            </span>
+            <span v-if="getDetail(port)?.source" class="hidden-detail-src" :class="getDetail(port)!.source">
+              <Container v-if="getDetail(port)!.source === 'docker'" :size="12" />
+              <Server v-else :size="12" />
+              {{ getDetail(port)!.source === 'docker' ? 'Docker' : '主机' }}
+            </span>
+            <span v-if="getDetail(port)?.container" class="hidden-detail-container">
+              {{ getDetail(port)!.container }}
+            </span>
+            <span v-if="getDetail(port)?.remark" class="hidden-detail-remark">
+              {{ getDetail(port)!.remark }}
+            </span>
+            <span v-if="getDetail(port) && !getDetail(port)!.is_running" class="hidden-detail-offline">
+              离线
+            </span>
+          </div>
           <div class="port-actions-inline">
             <button
               class="btn btn-sm"

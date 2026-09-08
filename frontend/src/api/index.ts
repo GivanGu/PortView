@@ -131,6 +131,21 @@ export function batchUnhidePorts(ports: number[]): Promise<ApiResponse> {
   return request('/api/config/hidden/unhide/batch', { method: 'POST', body: JSON.stringify({ ports }) })
 }
 
+export interface HiddenPortDetail {
+  port: number
+  service_name: string | null
+  protocol: string | null
+  source: string | null
+  container: string | null
+  image: string | null
+  is_running: boolean
+  remark: string
+}
+
+export function fetchHiddenPortDetails(): Promise<ApiResponse<HiddenPortDetail[]>> {
+  return request<HiddenPortDetail[]>('/api/config/hidden/details')
+}
+
 // ── 健康检查 ──────────────────────────────────────────
 
 export function healthCheck(): Promise<{ status: string; version: string }> {
@@ -176,12 +191,14 @@ export interface UserPrefs {
   theme: 'dark' | 'light'
   accent: string
   lang: 'zh' | 'en'
+  refresh_interval: number
 }
 
 export interface UserPrefsPatch {
   theme?: 'dark' | 'light'
   accent?: string
   lang?: 'zh' | 'en'
+  refresh_interval?: number
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {

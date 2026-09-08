@@ -4,8 +4,8 @@
 
 端点：
 - GET   ``/api/prefs``       读取当前用户（单行）
-- PATCH ``/api/prefs``       局部更新（theme / accent / lang），未提供字段不修改
-- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh）
+- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval），未提供字段不修改
+- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0）
 
 说明：
 - 前端 App.vue 已经在 localStorage 中保留了偏好；这里的持久化是**服务端备份**，
@@ -35,14 +35,19 @@ async def api_get_prefs() -> APIResponse:
         return APIResponse(success=False, error="db not ready")
     conn = db_service._db
     cur = await conn.execute(
-        "SELECT theme, accent, lang FROM user_prefs WHERE id = 1"
+        "SELECT theme, accent, lang, refresh_interval FROM user_prefs WHERE id = 1"
     )
     row = await cur.fetchone()
     if row is None:
         return APIResponse(success=False, error="prefs not seeded")
     return APIResponse(
         success=True,
-        data=UserPrefsRead(theme=row["theme"], accent=row["accent"], lang=row["lang"]),
+        data=UserPrefsRead(
+            theme=row["theme"],
+            accent=row["accent"],
+            lang=row["lang"],
+            refresh_interval=row["refresh_interval"] or 0,
+        ),
     )
 
 
@@ -67,6 +72,9 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     if patch.lang is not None:
         sets.append("lang = ?")
         params.append(patch.lang)
+    if patch.refresh_interval is not None:
+        sets.append("refresh_interval = ?")
+        params.append(patch.refresh_interval)
     if not sets:
         return APIResponse(success=True, message="no-op")
     sets.append("updated_at = ?")
@@ -90,7 +98,7 @@ async def api_reset_prefs() -> APIResponse:
 
     conn = db_service._db
     await conn.execute(
-        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', updated_at = ? WHERE id = 1",
+        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, updated_at = ? WHERE id = 1",
         (int(time.time()),),
     )
     await conn.commit()

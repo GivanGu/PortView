@@ -29,7 +29,7 @@
   },
   "statusbar": {
     "refreshManual": "Manual refresh",
-    "refreshAuto": "Auto refresh",
+    "refreshAuto": "Auto refresh every {s}s",
     "occupancy": "Occupancy",
     "containers": "Containers"
   },
