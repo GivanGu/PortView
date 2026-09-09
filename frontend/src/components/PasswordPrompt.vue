@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuth } from '@/store/auth'
 import { ShieldCheck, ShieldAlert } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'saved'): void
@@ -17,11 +20,11 @@ const error = ref('')
 
 async function save() {
   if (password.value.length < 4) {
-    error.value = '密码至少 4 位'
+    error.value = t('pwPrompt.minLength')
     return
   }
   if (password.value !== confirm.value) {
-    error.value = '两次输入的密码不一致'
+    error.value = t('pwPrompt.mismatch')
     return
   }
   busy.value = true
@@ -33,7 +36,7 @@ async function save() {
     await doLogin(password.value)
     emit('saved')
   } catch {
-    error.value = '保存失败，请重试'
+    error.value = t('pwPrompt.saveFailed')
   } finally {
     busy.value = false
   }
@@ -49,49 +52,46 @@ function skip() {
     <div class="pw-prompt-card">
       <div class="pw-prompt-head">
         <ShieldCheck :size="22" class="pw-prompt-ico" />
-        <h2>设置访问密码</h2>
+        <h2>{{ t('pwPrompt.title') }}</h2>
       </div>
-      <p class="pw-prompt-desc">
-        为 PortView 设置一个访问密码，可防止他人查看你的端口信息。
-        设置后会自动开启登录保护，需重新登录。
-      </p>
+      <p class="pw-prompt-desc">{{ t('pwPrompt.desc') }}</p>
       <form @submit.prevent="save">
         <label class="pw-field">
-          <span>新密码（至少 4 位）</span>
+          <span>{{ t('pwPrompt.pwLabel') }}</span>
           <input
             v-model="password"
             type="password"
             class="pw-input"
-            placeholder="新密码"
+            :placeholder="t('pwPrompt.pwPlaceholder')"
             autocomplete="new-password"
             autofocus
           />
         </label>
         <label class="pw-field">
-          <span>确认密码</span>
+          <span>{{ t('pwPrompt.confirmLabel') }}</span>
           <input
             v-model="confirm"
             type="password"
             class="pw-input"
-            placeholder="再次输入密码"
+            :placeholder="t('pwPrompt.confirmPlaceholder')"
             autocomplete="new-password"
           />
         </label>
         <p class="pw-warning">
           <ShieldAlert :size="13" />
-          请牢记密码，忘记密码将无法恢复。
+          {{ t('pwPrompt.warning') }}
         </p>
         <p v-if="error" class="pw-error">{{ error }}</p>
         <div class="pw-actions">
           <button type="button" class="pw-btn-ghost" :disabled="busy" @click="skip">
-            暂不设置
+            {{ t('pwPrompt.skip') }}
           </button>
           <button
             type="submit"
             class="pw-btn-primary"
             :disabled="busy || password.length < 4 || password !== confirm"
           >
-            {{ busy ? '保存中…' : '保存' }}
+            {{ busy ? t('pwPrompt.saving') : t('pwPrompt.save') }}
           </button>
         </div>
       </form>

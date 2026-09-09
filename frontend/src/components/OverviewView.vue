@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchPorts, type PortCard } from '@/api'
 import usePrefs from '@/store/prefs'
+
+const { t, locale } = useI18n()
 
 interface OverviewStats {
   totalUsed: number
@@ -49,7 +52,7 @@ function dashoffset(pct: number) {
 }
 
 function formatTime(d: Date) {
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return d.toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function countBySource(cards: PortCard[], sources: string[]): number {
@@ -87,7 +90,7 @@ async function load(silent = false) {
     }
     loadedAt.value = new Date()
   } catch (e) {
-    if (!silent) error.value = e instanceof Error ? e.message : '加载失败'
+    if (!silent) error.value = e instanceof Error ? e.message : t('overview.loadFailed')
   } finally {
     if (!silent) loading.value = false
   }
@@ -129,11 +132,11 @@ onBeforeUnmount(() => {
   <div class="view">
     <div class="view-header">
       <div>
-        <h2>概览</h2>
-        <p class="view-desc">端口使用状态总览</p>
+        <h2>{{ t('overview.title') }}</h2>
+        <p class="view-desc">{{ t('overview.subtitle') }}</p>
       </div>
       <div class="view-header-right">
-        <span v-if="loadedAt" class="updated-at">更新于 {{ formatTime(loadedAt) }}</span>
+        <span v-if="loadedAt" class="updated-at">{{ t('overview.updated') }} {{ formatTime(loadedAt) }}</span>
       </div>
     </div>
 
@@ -143,46 +146,46 @@ onBeforeUnmount(() => {
     <div class="stat-cards">
       <div class="stat-card">
         <div class="stat-value">{{ total }}</div>
-        <div class="stat-label">总端口</div>
+        <div class="stat-label">{{ t('overview.totalPorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--green)">{{ stats.totalUsed }}</div>
-        <div class="stat-label">已用端口</div>
+        <div class="stat-label">{{ t('overview.usedPorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--blue)">{{ stats.totalAvailable }}</div>
-        <div class="stat-label">可用端口</div>
+        <div class="stat-label">{{ t('overview.availablePorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--cyan)">{{ stats.hostPorts }}</div>
-        <div class="stat-label">主机端口</div>
+        <div class="stat-label">{{ t('overview.hostPorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--purple)">{{ stats.dockerPorts }}</div>
-        <div class="stat-label">Docker 端口</div>
+        <div class="stat-label">{{ t('overview.dockerPorts') }}</div>
         <div class="stat-sub">
-          <span class="stat-sub-item online"><span class="sub-dot"></span>{{ stats.dockerOnline }} 在线</span>
-          <span class="stat-sub-item offline"><span class="sub-dot"></span>{{ stats.dockerOffline }} 离线</span>
+          <span class="stat-sub-item online"><span class="sub-dot"></span>{{ stats.dockerOnline }} {{ t('overview.dockerOnline') }}</span>
+          <span class="stat-sub-item offline"><span class="sub-dot"></span>{{ stats.dockerOffline }} {{ t('overview.dockerOffline') }}</span>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--yellow)">{{ stats.hiddenPorts.length }}</div>
-        <div class="stat-label">隐藏端口</div>
+        <div class="stat-label">{{ t('overview.hiddenPorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--accent)">{{ stats.tcpUsed }}</div>
-        <div class="stat-label">TCP 端口</div>
+        <div class="stat-label">{{ t('overview.tcpPorts') }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--orange)">{{ stats.udpUsed }}</div>
-        <div class="stat-label">UDP 端口</div>
+        <div class="stat-label">{{ t('overview.udpPorts') }}</div>
       </div>
     </div>
 
     <!-- 图表区 -->
     <div class="chart-row">
       <div class="chart-card">
-        <div class="chart-title">端口占用率</div>
+        <div class="chart-title">{{ t('overview.usageRate') }}</div>
         <div class="ring-wrap">
           <svg viewBox="0 0 120 120" class="ring-svg">
             <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="12" />
@@ -207,7 +210,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="chart-card">
-        <div class="chart-title">协议分布</div>
+        <div class="chart-title">{{ t('overview.protocolDist') }}</div>
         <div class="pie-wrap">
           <svg viewBox="0 0 120 120" class="pie-svg">
             <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="12" />

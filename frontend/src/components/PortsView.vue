@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   fetchPorts,
   hidePort,
@@ -15,6 +16,8 @@ import {
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
 import { Search, Container, Cog, Server, Plus, Trash2, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -72,12 +75,12 @@ function parseRangeInput(input: string): ParsedRange[] {
   for (const tok of tokens) {
     if (tok.includes('-')) {
       const [a, b] = tok.split('-').map((s) => parseInt(s.trim(), 10))
-      if (Number.isNaN(a) || Number.isNaN(b)) throw new Error(`无效区间：${tok}`)
-      if (a < 0 || b > 65535 || a > b) throw new Error(`无效区间：${tok}`)
+      if (Number.isNaN(a) || Number.isNaN(b)) throw new Error(t('ports.invalidRange', { tok }))
+      if (a < 0 || b > 65535 || a > b) throw new Error(t('ports.invalidRange', { tok }))
       result.push({ name: `${a}-${b}`, start: a, end: b })
     } else {
       const p = parseInt(tok, 10)
-      if (Number.isNaN(p) || p < 0 || p > 65535) throw new Error(`无效端口：${tok}`)
+      if (Number.isNaN(p) || p < 0 || p > 65535) throw new Error(t('ports.invalidPort', { tok }))
       result.push({ name: String(p), start: p, end: p })
     }
   }
@@ -110,7 +113,7 @@ async function handleQuickAdd() {
     rangeName.value = ''
     quickAddDialog.value = false
     await reloadRanges(true)
-    showToast(`已添加 ${parsed.length} 个区间`)
+    showToast(t('ports.addedRanges', { n: parsed.length }))
   } catch (e) {
     console.error('quick add range failed', e)
   } finally {
@@ -242,20 +245,20 @@ onBeforeUnmount(() => {
   <div>
     <!-- 头部 -->
     <div class="main-header">
-      <h1>端口监控</h1>
+      <h1>{{ t('ports.title') }}</h1>
       <div class="header-actions">
         <button class="btn btn-primary range-entry" @click="quickAddDialog = true">
           <SlidersHorizontal :size="15" />
-          监控区间
+          {{ t('ports.monitorRange') }}
         </button>
         <button
           class="btn btn-danger range-delete"
-          :title="'删除所选区间'"
+          :title="t('ports.deleteRangeTitle')"
           :disabled="selectedRangeId === 0"
           @click="handleDeleteRange(selectedRangeId)"
         >
           <Trash2 :size="15" />
-          删除区间
+          {{ t('ports.deleteRange') }}
         </button>
         <div class="export-group">
           <button class="btn" :disabled="!analysis || loading" @click="handleExport('csv')">
@@ -276,7 +279,7 @@ onBeforeUnmount(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="搜索端口、服务名、容器名..."
+            :placeholder="t('ports.searchPlaceholder')"
           />
         </div>
 
@@ -286,7 +289,7 @@ onBeforeUnmount(() => {
             :class="{ active: protocolFilter === '' }"
             @click="protocolFilter = ''"
           >
-            全部
+            {{ t('ports.filterAll') }}
           </button>
           <button
             class="filter-btn"
@@ -307,36 +310,36 @@ onBeforeUnmount(() => {
             class="filter-btn"
             :class="{ active: sourceFilter === '' }"
             @click="sourceFilter = ''"
-            title="全部"
+            :title="t('ports.filterAll')"
           >
-            端口
+            {{ t('ports.filterPorts') }}
           </button>
           <button
             class="filter-btn"
             :class="{ active: sourceFilter === 'local' }"
             @click="sourceFilter = 'local'"
-            title="只看主机/本地源端口"
+            :title="t('common.sourceHost')"
           >
-            本地
+            {{ t('ports.filterLocal') }}
           </button>
           <button
             class="filter-btn"
             :class="{ active: sourceFilter === 'docker' }"
             @click="sourceFilter = 'docker'"
-            title="只看 Docker 源端口"
+            :title="t('common.sourceDocker')"
           >
-            Docker
+            {{ t('ports.filterDocker') }}
           </button>
         </div>
 
         <!-- v1.2：监控区间选择器 -->
         <div class="range-selector">
-          <span class="range-label">区间</span>
+          <span class="range-label">{{ t('ports.rangeLabel') }}</span>
           <select
             v-model="selectedRangeId"
             class="range-select"
           >
-            <option :value="0">全部</option>
+            <option :value="0">{{ t('ports.rangeAll') }}</option>
             <option v-for="r in ranges" :key="r.id" :value="r.id">
               {{ r.name }} ({{ r.start_port }}–{{ r.end_port }})
             </option>
@@ -347,23 +350,23 @@ onBeforeUnmount(() => {
       <!-- 统计栏 -->
       <div v-if="analysis" class="stats-bar">
         <div class="stat-card">
-          <div class="stat-label">已用端口</div>
+          <div class="stat-label">{{ t('ports.statUsed') }}</div>
           <div class="stat-value green">{{ analysis.total_used }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">可用端口</div>
+          <div class="stat-label">{{ t('ports.statAvailable') }}</div>
           <div class="stat-value blue">{{ analysis.total_available }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">TCP</div>
+          <div class="stat-label">{{ t('ports.statTcp') }}</div>
           <div class="stat-value yellow">{{ analysis.tcp_used }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">UDP</div>
+          <div class="stat-label">{{ t('ports.statUdp') }}</div>
           <div class="stat-value purple">{{ analysis.udp_used }}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Docker 容器</div>
+          <div class="stat-label">{{ t('ports.statDocker') }}</div>
           <div class="stat-value">{{ analysis.docker_containers }}</div>
         </div>
       </div>
@@ -371,7 +374,7 @@ onBeforeUnmount(() => {
       <!-- 加载中 -->
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
-        加载端口数据...
+        {{ t('ports.loading') }}
       </div>
 
       <!-- 端口卡片网格 -->
@@ -385,12 +388,12 @@ onBeforeUnmount(() => {
               <div class="port-actions">
               <button
                 class="port-action-btn"
-                title="编辑服务名"
+                :title="t('ports.editService')"
                 @click="startEdit(card)"
               >✏️</button>
               <button
                 class="port-action-btn danger"
-                title="隐藏端口"
+                :title="t('ports.hidePort')"
                 @click="handleHide(card)"
               >🙈</button>
             </div>
@@ -400,8 +403,8 @@ onBeforeUnmount(() => {
                 <span
                   class="port-status-dot"
                   :class="card.is_running === false ? 'is-offline' : 'is-online'"
-                  :title="card.is_running === false ? '离线' : '在线'"
-                  :aria-label="card.is_running === false ? '离线' : '在线'"
+                  :title="card.is_running === false ? t('common.offline') : t('common.online')"
+                  :aria-label="card.is_running === false ? t('common.offline') : t('common.online')"
                   role="img"
                 ></span>
                 <span class="port-number">{{ card.port }}</span>
@@ -413,7 +416,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="port-service">
-              {{ card.service_name || '未知服务' }}
+              {{ card.service_name || t('ports.unknownService') }}
             </div>
 
             <!-- v1.2：用户备注 -->
@@ -430,7 +433,7 @@ onBeforeUnmount(() => {
                 <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
                 <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
                 <Server v-else :size="13" class="port-source-icon" />
-                <span>{{ card.source === 'docker' ? 'Docker' : card.source === 'system' ? '系统' : '主机' }}</span>
+                <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
               </span>
 
               <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
@@ -446,7 +449,7 @@ onBeforeUnmount(() => {
 
             <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
             <div v-if="card.image" class="port-image">
-              <span class="port-image-label">镜像</span>
+              <span class="port-image-label">{{ t('ports.image') }}</span>
               <span class="port-image-value">{{ card.image }}</span>
             </div>
 
@@ -456,11 +459,11 @@ onBeforeUnmount(() => {
                 class="form-input"
                 v-model="editServiceName"
                 @keyup.enter="handleEditSave"
-                placeholder="输入服务名"
+                :placeholder="t('ports.editPlaceholder')"
                 style="flex: 1; padding: 4px 8px; font-size: 12px;"
               />
-              <button class="btn btn-sm btn-primary" @click="handleEditSave">保存</button>
-              <button class="btn btn-sm" @click="editingPort = null">取消</button>
+              <button class="btn btn-sm btn-primary" @click="handleEditSave">{{ t('common.save') }}</button>
+              <button class="btn btn-sm" @click="editingPort = null">{{ t('common.cancel') }}</button>
             </div>
           </div>
         </div>
@@ -469,7 +472,7 @@ onBeforeUnmount(() => {
           <div v-else-if="card.type === 'gap'" v-show="sourceFilter === ''">
             <div class="gap-card">
               <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
-              <div class="gap-count">{{ card.available_count }} 个可用端口</div>
+              <div class="gap-count">{{ t('ports.gapCount', { n: card.available_count }) }}</div>
             </div>
           </div>
 
@@ -479,12 +482,12 @@ onBeforeUnmount(() => {
               <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
                 <button
                   class="port-action-btn danger"
-                  title="隐藏范围"
+                  :title="t('ports.hideRange')"
                   @click="handleHide(card)"
                 >🙈</button>
               </div>
               <div class="unknown-range">{{ card.start_port }} — {{ card.end_port }}</div>
-              <div class="unknown-count">{{ card.port_count }} 个未知服务端口</div>
+              <div class="unknown-count">{{ t('ports.unknownCount', { n: card.port_count }) }}</div>
             </div>
           </div>
         </template>
@@ -493,7 +496,7 @@ onBeforeUnmount(() => {
       <!-- 空状态 -->
       <div v-else class="empty-state">
         <div class="empty-icon">📡</div>
-        <div class="empty-text">暂无端口数据</div>
+        <div class="empty-text">{{ t('ports.empty') }}</div>
       </div>
     </div>
 
@@ -501,30 +504,27 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div v-if="quickAddDialog" class="range-overlay" @click.self="quickAddDialog = false">
         <div class="range-dialog">
-          <h3>添加监控区间</h3>
-          <p class="range-hint">
-            支持单端口（<code>80</code>）或区间（<code>22500-22600</code>），
-            多个用逗号分隔。
-          </p>
+          <h3>{{ t('ports.dialogTitle') }}</h3>
+          <p class="range-hint">{{ t('ports.dialogHint') }}</p>
           <input
             class="form-input"
             v-model="rangeName"
-            placeholder="名称（可选，如：业务端口段）"
+            :placeholder="t('ports.dialogNamePlaceholder')"
           />
           <textarea
             class="form-input range-textarea"
             v-model="rangeInput"
             rows="4"
-            placeholder="如：80, 443, 22500-22600"
+            :placeholder="t('ports.dialogInputPlaceholder')"
           ></textarea>
           <div class="range-dialog-actions">
-            <button class="btn btn-sm" @click="quickAddDialog = false">取消</button>
+            <button class="btn btn-sm" @click="quickAddDialog = false">{{ t('common.cancel') }}</button>
             <button
               class="btn btn-sm btn-primary"
               :disabled="addRangeBusy || !rangeInput.trim()"
               @click="handleQuickAdd"
             >
-              <Plus :size="13" /> 添加
+              <Plus :size="13" /> {{ t('common.add') }}
             </button>
           </div>
         </div>

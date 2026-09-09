@@ -4,6 +4,7 @@
  */
 
 import type { PortCard } from '@/api'
+import { i18n } from '@/i18n'
 
 export type ExportFormat = 'csv' | 'json'
 
@@ -38,7 +39,12 @@ function extractUsedPorts(cards: PortCard[]): UsedPort[] {
 }
 
 function toCsv(rows: UsedPort[]): string {
-  const headers = ['端口', '协议', '来源', '服务名', '进程', '容器', '镜像', '容器端口', '运行状态']
+  const t = i18n.global.t
+  const headers = [
+    t('export.colPort'), t('export.colProtocol'), t('export.colSource'),
+    t('export.colService'), t('export.colProcess'), t('export.colContainer'),
+    t('export.colImage'), t('export.colContainerPort'), t('export.colStatus'),
+  ]
   const escape = (v: string | number | boolean): string => {
     const s = String(v ?? '')
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -55,13 +61,12 @@ function toCsv(rows: UsedPort[]): string {
         r.container,
         r.image,
         r.container_port,
-        r.is_running ? '是' : '否',
+        r.is_running ? t('export.yes') : t('export.no'),
       ]
         .map(escape)
         .join(','),
     )
   }
-  // BOM 让 Excel 正确识别 UTF-8 中文
   return '\uFEFF' + lines.join('\r\n')
 }
 

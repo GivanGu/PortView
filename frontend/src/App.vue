@@ -368,11 +368,11 @@ onBeforeUnmount(() => {
         <button
           v-if="!auth.has_password"
           class="pw-chip"
-          :title="'点击设置访问密码'"
+          :title="t('app.noPasswordTitle')"
           @click="showPwPrompt = true"
         >
           <ShieldAlert :size="13" />
-          未设密码
+          {{ t('app.noPassword') }}
         </button>
         <span class="status-occ" :title="t('statusbar.occupancy')">
           {{ t('statusbar.occupancy') }} <b>{{ occupancyPct }}%</b>

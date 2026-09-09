@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuth } from '@/store/auth'
+
+const { t } = useI18n()
 
 const { state, doLogin } = useAuth()
 const password = ref('')
@@ -17,7 +20,7 @@ async function submit() {
       window.location.reload()
     }
   } catch {
-    error.value = '密码错误'
+    error.value = t('login.wrongPassword')
   } finally {
     busy.value = false
   }
@@ -29,18 +32,18 @@ async function submit() {
     <div class="login-card">
       <div class="login-logo">📡</div>
       <h1>PortView</h1>
-      <p class="login-sub">请输入密码以登录</p>
+      <p class="login-sub">{{ t('login.subtitle') }}</p>
       <form @submit.prevent="submit">
         <input
           v-model="password"
           type="password"
           class="login-input"
-          placeholder="密码"
+          :placeholder="t('login.placeholder')"
           autofocus
         />
         <p v-if="error" class="login-error">{{ error }}</p>
         <button type="submit" class="login-btn" :disabled="busy || !password">
-          {{ busy ? '登录中…' : '登录' }}
+          {{ busy ? t('login.buttonLoading') : t('login.button') }}
         </button>
       </form>
     </div>

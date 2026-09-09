@@ -95,7 +95,7 @@ onMounted(() => loadData())
             <span v-if="item.detail?.source" class="hidden-detail-src" :class="item.detail.source">
               <Container v-if="item.detail.source === 'docker'" :size="12" />
               <Server v-else :size="12" />
-              {{ item.detail.source === 'docker' ? 'Docker' : '主机' }}
+              {{ item.detail.source === 'docker' ? t('common.sourceDocker') : t('common.sourceHost') }}
             </span>
             <span v-if="item.detail?.container" class="hidden-detail-container">
               {{ item.detail.container }}
@@ -104,7 +104,7 @@ onMounted(() => loadData())
               {{ item.detail.remark }}
             </span>
             <span v-if="item.detail && !item.detail.is_running" class="hidden-detail-offline">
-              离线
+              {{ t('common.offline') }}
             </span>
           </div>
           <div class="port-actions-inline">

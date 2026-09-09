@@ -215,7 +215,7 @@ onMounted(() => {
         <div v-if="shownUnremarked.length" class="unremarked-panel" style="margin-bottom: 16px;">
           <div class="unremarked-header">
             <AlertCircle :size="15" class="unremarked-icon" />
-            <span class="unremarked-title">未备注端口 <span class="unremarked-count">{{ shownUnremarked.length }}</span></span>
+            <span class="unremarked-title">{{ t('notes.unremarked') }} <span class="unremarked-count">{{ shownUnremarked.length }}</span></span>
           </div>
           <div class="unremarked-list">
             <div
@@ -225,16 +225,16 @@ onMounted(() => {
             >
               <span class="unremarked-port">{{ c.port }}</span>
               <span class="unremarked-src" :class="(c.source || '').toLowerCase()">
-                {{ c.source === 'docker' ? 'Docker' : c.source === 'system' ? '系统' : (c.source === 'host' ? '主机' : '未知') }}
+                {{ c.source === 'docker' ? t('common.sourceDocker') : c.source === 'system' ? t('common.sourceSystem') : (c.source === 'host' ? t('common.sourceHost') : t('common.sourceUnknown')) }}
               </span>
               <span class="unremarked-svc">{{ c.service_name || (c.container || '—') }}</span>
               <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
               <button
                 class="btn btn-sm btn-primary"
                 @click="openEditByPort(c.port!)"
-                title="为这个端口写一条备注"
+                :title="t('notes.unremarkedHint')"
               >
-                <Plus :size="13" /> 备注
+                <Plus :size="13" /> {{ t('notes.unremarkedBtn') }}
               </button>
             </div>
           </div>

@@ -17,28 +17,24 @@ const passwordBusy = ref(false)
 
 async function handleSetPassword() {
   if (!newPassword.value || newPassword.value.length < 4) {
-    showToast('密码至少 4 位')
+    showToast(t('settings.pwMinLength'))
     return
   }
   if (newPassword.value !== confirmPassword.value) {
-    showToast('两次输入的密码不一致')
+    showToast(t('settings.pwMismatch'))
     return
   }
-  // v1.4.3：设置前确认 + 警示（忘记密码无法恢复）
-  // v1.4.5：设密码 = 自动开启登录保护，故设置后需重新登录
-  const ok = confirm(
-    `新密码（${newPassword.value.length} 位）将保存，并自动开启登录保护。\n设置后需重新登录。\n\n请牢记密码，忘记密码将无法恢复。\n确认保存？`
-  )
+  const ok = confirm(t('settings.pwConfirmMsg', { len: newPassword.value.length }))
   if (!ok) return
   passwordBusy.value = true
   try {
     await auth.doSetPassword(newPassword.value)
     newPassword.value = ''
     confirmPassword.value = ''
-    showToast('密码已更新，登录保护已开启')
+    showToast(t('settings.pwUpdated'))
     setTimeout(() => window.location.reload(), 1200)
   } catch {
-    showToast('设置失败')
+    showToast(t('settings.pwSetFailed'))
   } finally {
     passwordBusy.value = false
   }
@@ -48,14 +44,14 @@ async function handleToggleAuth() {
   const next = !auth.state.value.auth_required
   // 开启登录保护前必须先设置密码，否则开启后无人能登录
   if (next && !auth.state.value.has_password) {
-    showToast('请先设置密码，再开启登录保护')
+    showToast(t('settings.pwSetFirst'))
     return
   }
   try {
     await auth.doToggle(next)
-    showToast(next ? '登录已开启' : '登录已关闭')
+    showToast(next ? t('settings.authOn') : t('settings.authOff'))
   } catch {
-    showToast(next ? '开启失败：请先设置密码' : '关闭失败')
+    showToast(next ? t('settings.authOnFailed') : t('settings.authOffFailed'))
   }
 }
 
@@ -209,50 +205,50 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         <section class="settings-card">
           <header class="settings-card-title">
             <ShieldCheck :size="16" class="card-ico" />
-            <span>{{ t('settings.security') || '安全与登录' }}</span>
+            <span>{{ t('settings.security') }}</span>
           </header>
           <p class="auth-hint">
             <template v-if="auth.state.value.auth_required">
-              登录已开启 —
-              <button class="btn-link" @click="handleLogout">退出</button>
+              {{ t('settings.authEnabled') }} —
+              <button class="btn-link" @click="handleLogout">{{ t('settings.authLogout') }}</button>
               ·
-              <button class="btn-link" @click="handleToggleAuth">关闭</button>
+              <button class="btn-link" @click="handleToggleAuth">{{ t('settings.authClose') }}</button>
             </template>
             <template v-else>
-              登录已关闭 —
+              {{ t('settings.authDisabled') }} —
               <button
                 class="btn-link"
                 :disabled="!auth.state.value.has_password"
-                :title="auth.state.value.has_password ? '' : '请先设置密码'"
+                :title="auth.state.value.has_password ? '' : t('settings.authSetPasswordFirst')"
                 @click="handleToggleAuth"
               >
-                开启
+                {{ t('settings.authOpen') }}
               </button>
             </template>
           </p>
           <label class="auth-label">
-            设置/修改密码（至少 4 位）
+            {{ t('settings.pwLabel') }}
             <input
               v-model="newPassword"
               class="auth-input"
               type="password"
-              placeholder="新密码"
+              :placeholder="t('settings.pwPlaceholder')"
               autocomplete="new-password"
             />
           </label>
           <label class="auth-label">
-            确认密码
+            {{ t('settings.pwConfirmLabel') }}
             <input
               v-model="confirmPassword"
               class="auth-input"
               type="password"
-              placeholder="再次输入密码"
+              :placeholder="t('settings.pwConfirmPlaceholder')"
               autocomplete="new-password"
             />
           </label>
           <p class="auth-warning">
             <AlertTriangle :size="13" class="auth-warning-ico" />
-            请牢记密码，忘记密码将无法恢复。
+            {{ t('settings.pwWarning') }}
           </p>
           <div class="auth-actions">
             <button
@@ -261,15 +257,15 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
               @click="handleSetPassword"
             >
               <ShieldCheck :size="13" />
-              保存密码
+              {{ t('settings.pwSave') }}
             </button>
             <span class="muted auth-status">
-              {{ auth.state.value.has_password ? '已有密码' : '尚未设置' }}
+              {{ auth.state.value.has_password ? t('settings.pwHasPassword') : t('settings.pwNoPassword') }}
             </span>
           </div>
           <p v-if="auth.state.value.auth_required && !auth.state.value.has_password" class="auth-warning">
             <AlertTriangle :size="13" />
-            登录已开启但尚未设置密码，当前任何人都可以访问
+            {{ t('settings.authNoPwWarning') }}
           </p>
         </section>
 
@@ -361,9 +357,9 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         <section class="settings-card">
           <header class="settings-card-title">
             <Timer :size="16" class="card-ico" />
-            <span>刷新间隔</span>
+            <span>{{ t('settings.refreshInterval') }}</span>
           </header>
-          <p class="settings-hint">端口数据自动刷新频率（设为手动则需手动刷新）</p>
+          <p class="settings-hint">{{ t('settings.refreshIntervalHint') }}</p>
           <div class="radio-2col">
             <label class="radio-pill" :class="{ active: refreshInterval === 0 }">
               <input
@@ -373,7 +369,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 :checked="refreshInterval === 0"
                 @change="() => onRefreshIntervalChange(0)"
               />
-              <span>手动</span>
+              <span>{{ t('settings.refreshManual') }}</span>
             </label>
             <label class="radio-pill" :class="{ active: refreshInterval === 10 }">
               <input
@@ -383,7 +379,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 :checked="refreshInterval === 10"
                 @change="() => onRefreshIntervalChange(10)"
               />
-              <span>10 秒</span>
+              <span>{{ t('settings.refresh10') }}</span>
             </label>
             <label class="radio-pill" :class="{ active: refreshInterval === 15 }">
               <input
@@ -393,7 +389,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 :checked="refreshInterval === 15"
                 @change="() => onRefreshIntervalChange(15)"
               />
-              <span>15 秒</span>
+              <span>{{ t('settings.refresh15') }}</span>
             </label>
             <label class="radio-pill" :class="{ active: refreshInterval === 30 }">
               <input
@@ -403,7 +399,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 :checked="refreshInterval === 30"
                 @change="() => onRefreshIntervalChange(30)"
               />
-              <span>30 秒</span>
+              <span>{{ t('settings.refresh30') }}</span>
             </label>
           </div>
         </section>
