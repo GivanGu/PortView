@@ -81,7 +81,7 @@ portview/
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `PORTVIEW_PORT` | `7577` | Web 监听端口 |
+| `PORTVIEW_PORT` | `8081` | Web 监听端口 |
 | `PORTVIEW_CONFIG_DIR` | `/app/config` | 配置目录 |
 
 ## 构建与发布

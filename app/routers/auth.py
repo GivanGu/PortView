@@ -67,7 +67,7 @@ async def login(body: LoginPayload, response: Response) -> APIResponse:
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,  # 本地 7577 通常是 http，不设 Secure
+        secure=False,  # 本地 8081 通常是 http，不设 Secure
         max_age=COOKIE_MAX_AGE,
         path="/",
     )

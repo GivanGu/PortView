@@ -2,7 +2,7 @@
 
 启动方式（开发）::
 
-    uv run uvicorn app.main:app --host 0.0.0.0 --port 7577 --reload
+    uv run uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
 
 启动时：
 1. 初始化配置目录与文件

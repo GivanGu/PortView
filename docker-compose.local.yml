@@ -19,7 +19,7 @@ services:
       # 避免每次 --force-recreate 后重置为全新空库、UI 回到设置密码首屏。
       - portview-data:/app/.data
     environment:
-      - PORTVIEW_PORT=7577
+      - PORTVIEW_PORT=8081
     restart: unless-stopped
 
 volumes:

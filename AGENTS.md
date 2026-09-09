@@ -19,7 +19,7 @@ uv run pytest tests/test_api.py -v  # single file
 ```bash
 cd frontend
 npm install
-npm run dev      # :3000, proxies /api → :7577
+npm run dev      # :3000, proxies /api → :8081
 npm run build    # vue-tsc -b && vite build → dist/
 ```
 
@@ -34,7 +34,7 @@ docker compose -f docker-compose.local.yml up -d --build --force-recreate
 # Terminal 1 — backend
 uv venv --python 3.12
 uv pip install -e ".[dev]"
-uvicorn app.main:app --reload --port 7577
+uvicorn app.main:app --reload --port 8081
 
 # Terminal 2 — frontend
 cd frontend && npm install && npm run dev

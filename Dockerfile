@@ -24,7 +24,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_NO_CACHE=1 \
-    PORTVIEW_PORT=7577 \
+    PORTVIEW_PORT=8081 \
     PATH="/app/.venv/bin:$PATH"
 
 # 系统依赖（gnupg：gpg --dearmor 需要，--no-install-recommends 不会自动带上）
@@ -49,9 +49,9 @@ COPY app/ ./app/
 COPY config/config.json.example ./config/config.json.example
 COPY --from=frontend /build/dist ./frontend/dist
 
-EXPOSE 7577
+EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f "http://localhost:${PORTVIEW_PORT}/api/health" || exit 1
 
-ENTRYPOINT ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORTVIEW_PORT:-7577}"]
+ENTRYPOINT ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORTVIEW_PORT:-8081}"]

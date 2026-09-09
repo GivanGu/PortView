@@ -19,7 +19,7 @@ PortView 运行在 NAS / 服务器上，实时读取 Docker 容器的端口映�
 - **自定义备注** — 为任意端口添加说明
 - **备注打通** — 端口卡片直接展示该端口的备注，搜索可命中备注
 - **多段监控区间** — 定义任意段数区间（如 80s / 8000s），一键筛选仅看关心的区间
-- **密码登录（可关闭）** — 单用户密码 + 会话 Cookie（`argon2id` 哈希），适合暴露 7577 端口时防误触
+- **密码登录（可关闭）** — 单用户密码 + 会话 Cookie（`argon2id` 哈希），适合暴露 8081 端口时防误触
 - **隐藏端口** — 一键隐藏不关心的端口
 - **快速搜索** — 按名称 / 端口号 / 备注即时过滤
 - **离线容器** — 已停止容器的端口映射同样展示
@@ -46,7 +46,7 @@ cd portview
 docker compose up -d
 ```
 
-服务默认监听 `7577` 端口，访问 `http://<host>:7577`。
+服务默认监听 `8081` 端口，访问 `http://<host>:8081`。
 
 ### 方式二：拉取 ACR 镜像
 
@@ -61,7 +61,7 @@ docker run -d --name portview \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -v $(pwd)/config:/app/config \
   -v portview-data:/app/.data \
-  -e PORTVIEW_PORT=7577 \
+  -e PORTVIEW_PORT=8081 \
   crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:latest
 # 上面 -v portview-data:/app/.data 命名卷用于持久化密码/备注/区间/登录态，
 # 详见上方「首次使用与数据持久化」。
@@ -73,19 +73,19 @@ docker run -d --name portview \
 # 后端（需要 uv）
 uv venv --python 3.12
 uv pip install fastapi "uvicorn[standard]" docker psutil pydantic
-uvicorn app.main:app --reload --port 7577
+uvicorn app.main:app --reload --port 8081
 
 # 前端（需要 Node 22+）
 cd frontend
 npm install
-npm run dev   # http://localhost:3000（proxy 到 :7577）
+npm run dev   # http://localhost:3000（proxy 到 :8081）
 ```
 
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `PORTVIEW_PORT` | `7577` | Web 服务监听端口 |
+| `PORTVIEW_PORT` | `8081` | Web 服务监听端口 |
 | `PORTVIEW_CONFIG_DIR` | `/app/config` | 配置文件目录 |
 | `PORTVIEW_REQUIRE_AUTH` | 未设 | `1` 强制开启登录门；`0`/`off` 强制关闭；未设则读数据库 `user_prefs.require_auth`（默认关闭） |
 | `PORTVIEW_DB` | `/app/.data/portview.db` | 运行时数据（SQLite）文件路径。生产建议用命名卷挂载 `/app/.data`，见下节 |

@@ -187,5 +187,5 @@ def _fallback_config() -> dict[str, Any]:
         "redis": {"port": 6379, "protocol": "TCP"},
         "mongodb": {"port": 27017, "protocol": "TCP"},
         "elasticsearch": {"port": 9200, "protocol": "TCP"},
-        "app_settings": {"host": "0.0.0.0", "port": 7577, "debug": False},
+        "app_settings": {"host": "0.0.0.0", "port": 8081, "debug": False},
     }

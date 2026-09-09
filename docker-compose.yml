@@ -13,7 +13,7 @@ services:
       # 导致 UI 首屏回到“设置密码 + 空卡片”。挂上命名卷后跨重建保留。
       - portview-data:/app/.data
     environment:
-      - PORTVIEW_PORT=7577  # 可修改此端口以避免冲突
+      - PORTVIEW_PORT=8081  # 可修改此端口以避免冲突
     restart: unless-stopped
 
 volumes:
