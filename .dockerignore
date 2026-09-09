@@ -1,0 +1,24 @@
+# Git / IDE
+.git
+.gitignore
+.pytest_cache
+.ruff_cache
+
+# 本地 Python 虚拟环境（构建时由 uv 重新生成，无需进构建上下文）
+.venv
+
+# Node 前端依赖（前端阶段会 npm ci 重装）
+frontend/node_modules
+frontend/dist
+
+# 运行时数据 / 临时文件
+.data
+__pycache__
+
+# 文档与 CI 配置（镜像用不到）
+README.md
+PROJECT.md
+.github
+memory
+tests
+*.md

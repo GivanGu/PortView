@@ -1,0 +1,24 @@
+# PortView 本地构建测试专用（与发布版的 docker-compose.yml 相互独立）
+#
+# 用法:
+#   docker compose -f docker-compose.local.yml up -d --build --force-recreate
+#   docker compose -f docker-compose.local.yml logs -f
+#
+services:
+  portview:
+    build: .
+    image: portview:dev
+    container_name: portview
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config:/app/config
+      # 持久化运行时数据（密码 / 端口备注 / 监控区间 / 登录开关 / 主题），
+      # 避免每次 --force-recreate 后重置为全新空库、UI 回到设置密码首屏。
+      - portview-data:/app/.data
+    environment:
+      - PORTVIEW_PORT=8081
+    restart: unless-stopped
+
+volumes:
+  portview-data:

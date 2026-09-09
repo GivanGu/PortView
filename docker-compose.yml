@@ -1,0 +1,20 @@
+services:
+  portview:
+    # 优先使用阿里 ACR（国内拉取快）；如需改用 GHCR，注释上一行并取消下一行注释。
+    image: crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwarehouse/portview:latest
+    # image: ghcr.io/givangu/portview:latest
+    container_name: portview
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config:/app/config
+      # 持久化运行时数据（密码 / 端口备注 / 监控区间 / 登录开关 / 主题）。
+      # 之前没挂 → 每次 up -d --force-recreate / 换 tag 重建都重置为全新空库，
+      # 导致 UI 首屏回到“设置密码 + 空卡片”。挂上命名卷后跨重建保留。
+      - portview-data:/app/.data
+    environment:
+      - PORTVIEW_PORT=8081  # 可修改此端口以避免冲突
+    restart: unless-stopped
+
+volumes:
+  portview-data:    # 命名卷；如需备份：docker run --rm -v portview-data:/src -v $(pwd)/.data:/dst alpine cp -a /src/. /dst/
