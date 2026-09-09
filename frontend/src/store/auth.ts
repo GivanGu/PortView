@@ -37,7 +37,16 @@ async function doLogout() {
 
 async function doSetPassword(pw: string) {
   await setPasswordApi(pw)
-  await refresh(true)
+  // v1.4.5：设密码 = 自动开启登录保护。
+  // 此前「设置密码」与「开启登录保护」是两个独立开关：从设置页设密码只调
+  // set_password（后端会撤销会话但不改 auth_required），导致设完密码重开应用
+  // 仍不要求登录。现在设密码后若未开启则自动开启。
+  // 注意：开启会撤销当前会话，调用方需自行 doLogin 重新建立会话。
+  const me = await refresh(true)
+  if (!me.auth_required) {
+    await setAuthEnabledApi(true)
+    await refresh(true)
+  }
 }
 
 async function doToggle(enabled: boolean) {

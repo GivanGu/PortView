@@ -25,8 +25,9 @@ async function handleSetPassword() {
     return
   }
   // v1.4.3：设置前确认 + 警示（忘记密码无法恢复）
+  // v1.4.5：设密码 = 自动开启登录保护，故设置后需重新登录
   const ok = confirm(
-    `新密码已设置（${newPassword.value.length} 位）。\n设置后需重新登录。\n\n请牢记密码，忘记密码将无法恢复。\n确认保存？`
+    `新密码（${newPassword.value.length} 位）将保存，并自动开启登录保护。\n设置后需重新登录。\n\n请牢记密码，忘记密码将无法恢复。\n确认保存？`
   )
   if (!ok) return
   passwordBusy.value = true
@@ -34,7 +35,7 @@ async function handleSetPassword() {
     await auth.doSetPassword(newPassword.value)
     newPassword.value = ''
     confirmPassword.value = ''
-    showToast('密码已更新，请重新登录')
+    showToast('密码已更新，登录保护已开启')
     setTimeout(() => window.location.reload(), 1200)
   } catch {
     showToast('设置失败')

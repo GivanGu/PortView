@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   LayoutDashboard,
   Network,
@@ -202,7 +202,18 @@ watch(refreshInterval, () => {
   applyStatsTimer()
 })
 
+// v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
+// 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
+const visited = reactive<Record<Tab, boolean>>({
+  overview: true,
+  ports: false,
+  notes: false,
+  hidden: false,
+  settings: false,
+})
+
 function switchTab(tab: Tab) {
+  visited[tab] = true
   activeTab.value = tab
 }
 
@@ -334,11 +345,11 @@ onBeforeUnmount(() => {
 
       <!-- 主内容 -->
       <main class="main-content">
-        <OverviewView v-if="activeTab === 'overview'" />
-        <PortsView v-else-if="activeTab === 'ports'" />
-        <NotesView v-else-if="activeTab === 'notes'" />
-        <HiddenPortsView v-else-if="activeTab === 'hidden'" />
-        <SettingsView v-else-if="activeTab === 'settings'" />
+        <OverviewView v-if="visited.overview" v-show="activeTab === 'overview'" />
+        <PortsView v-if="visited.ports" v-show="activeTab === 'ports'" />
+        <NotesView v-if="visited.notes" v-show="activeTab === 'notes'" />
+        <HiddenPortsView v-if="visited.hidden" v-show="activeTab === 'hidden'" />
+        <SettingsView v-if="visited.settings" v-show="activeTab === 'settings'" />
       </main>
     </div>
 

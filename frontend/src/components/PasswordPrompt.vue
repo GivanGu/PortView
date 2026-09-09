@@ -8,12 +8,10 @@ const emit = defineEmits<{
   (e: 'dismissed'): void
 }>()
 
-const { doSetPassword, doToggle, doLogin } = useAuth()
+const { doSetPassword, doLogin } = useAuth()
 
 const password = ref('')
 const confirm = ref('')
-// 默认勾选「同时开启登录保护」
-const enableAuth = ref(true)
 const busy = ref(false)
 const error = ref('')
 
@@ -29,13 +27,10 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    // 设置密码会撤销所有旧会话
+    // 设置密码会撤销所有旧会话，并自动开启登录保护（v1.4.5）
     await doSetPassword(password.value)
-    if (enableAuth.value) {
-      // 开启登录保护后，重新登录以建立新会话（避免被登出）
-      await doToggle(true)
-      await doLogin(password.value)
-    }
+    // 重新登录以建立新会话（避免被登出）
+    await doLogin(password.value)
     emit('saved')
   } catch {
     error.value = '保存失败，请重试'
@@ -58,7 +53,7 @@ function skip() {
       </div>
       <p class="pw-prompt-desc">
         为 PortView 设置一个访问密码，可防止他人查看你的端口信息。
-        设置后需重新登录。
+        设置后会自动开启登录保护，需重新登录。
       </p>
       <form @submit.prevent="save">
         <label class="pw-field">
@@ -81,10 +76,6 @@ function skip() {
             placeholder="再次输入密码"
             autocomplete="new-password"
           />
-        </label>
-        <label class="pw-check">
-          <input v-model="enableAuth" type="checkbox" />
-          <span>同时开启登录保护</span>
         </label>
         <p class="pw-warning">
           <ShieldAlert :size="13" />

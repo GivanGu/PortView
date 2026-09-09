@@ -76,6 +76,11 @@ async def _filter_cards_by_ports(
     filtered.sort(key=lambda c: c.get("port", c.get("start_port", 0)))
     port_data["port_cards"] = filtered
     port_data["total_used"] = len([c for c in filtered if c.get("type") in ("used", "unknown_range")])
+    # v1.4.5：按区间收窄后，可用端口数也要跟着收窄（此前沿用全段值，
+    # 导致选中区间时统计栏「可用端口」与「已用端口」口径不一致）。
+    port_data["total_available"] = sum(
+        c.get("available_count", 0) for c in filtered if c.get("type") == "gap"
+    )
     return port_data
 
 

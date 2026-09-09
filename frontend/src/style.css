@@ -1226,6 +1226,15 @@ html, body {
    概览页
    ═══════════════════════════════════════════ */
 
+/* v1.4.5：概览页容器。此前 .view 无样式定义，卡片直接贴边；
+   补齐内边距 + 独立滚动，与 .main-body 的观感保持一致。 */
+.view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  animation: fadeIn 0.25s ease;
+}
+
 .view-desc {
   margin-top: 4px;
   font-size: 13px;

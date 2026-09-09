@@ -46,6 +46,7 @@ async function handleDeleteRange(id: number) {
 // ── 监控区间：醒目入口 + 批量添加 ──
 const quickAddDialog = ref(false)
 const rangeInput = ref('')
+const rangeName = ref('')
 const addRangeBusy = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -96,10 +97,17 @@ async function handleQuickAdd() {
   if (!parsed.length) return
   addRangeBusy.value = true
   try {
-    for (const r of parsed) {
-      await createRange(r.name, r.start, r.end)
+    const name = rangeName.value.trim()
+    for (let i = 0; i < parsed.length; i++) {
+      const r = parsed[i]
+      // 用户填了名称：单个区间直接用；多个区间加序号后缀避免重名冲突
+      const finalName = name
+        ? (parsed.length === 1 ? name : `${name}-${i + 1}`)
+        : r.name
+      await createRange(finalName, r.start, r.end)
     }
     rangeInput.value = ''
+    rangeName.value = ''
     quickAddDialog.value = false
     await reloadRanges(true)
     showToast(`已添加 ${parsed.length} 个区间`)
@@ -498,6 +506,11 @@ onBeforeUnmount(() => {
             支持单端口（<code>80</code>）或区间（<code>22500-22600</code>），
             多个用逗号分隔。
           </p>
+          <input
+            class="form-input"
+            v-model="rangeName"
+            placeholder="名称（可选，如：业务端口段）"
+          />
           <textarea
             class="form-input range-textarea"
             v-model="rangeInput"
