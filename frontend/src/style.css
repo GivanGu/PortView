@@ -1278,6 +1278,32 @@ html, body {
   color: var(--text-secondary);
 }
 
+/* v1.4.4：Docker 卡片在线/离线子行（保持卡片尺寸不变） */
+.stat-sub {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.stat-sub-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+}
+
+.stat-sub-item .sub-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.stat-sub-item.online .sub-dot { background: var(--green); }
+.stat-sub-item.offline .sub-dot { background: var(--text-muted); }
+
 /* 图表区 */
 .chart-row {
   display: grid;

@@ -13,6 +13,7 @@ import {
   Activity,
   Palette,
   ShieldAlert,
+  RefreshCw,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -92,7 +93,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -203,9 +204,12 @@ watch(refreshInterval, () => {
 
 function switchTab(tab: Tab) {
   activeTab.value = tab
-  if (tab === 'overview' || tab === 'ports') {
-    loadStats()
-  }
+}
+
+// v1.4.4：顶栏全局刷新按钮。手动模式下点一下即刷新状态栏指标 + 通知各视图重新拉数据。
+function handleGlobalRefresh() {
+  loadStats()
+  triggerRefresh()
 }
 
 function onDocClick(e: MouseEvent) {
@@ -265,6 +269,10 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="topbar-actions">
+        <button class="icon-btn" :title="t('common.refresh')" @click="handleGlobalRefresh">
+          <RefreshCw :size="18" />
+        </button>
+
         <button class="icon-btn" :title="t('topbar.themeToggle')" @click="toggleTheme">
           <Sun v-if="theme === 'dark'" :size="18" />
           <Moon v-else :size="18" />
@@ -363,11 +371,13 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
-    <!-- v1.4.3：首次启动密码提示 -->
-    <PasswordPrompt
-      v-if="showPwPrompt"
-      @saved="onPwSaved"
-      @dismissed="onPwDismissed"
-    />
   </div>
+
+  <!-- v1.4.4：首次启动密码提示。放在 app-shell 外，避免 needsLogin 切换时
+       随 app-shell 一起卸载/重挂，导致旧实例的 saved 事件无法关闭新实例（登录循环）。 -->
+  <PasswordPrompt
+    v-if="showPwPrompt"
+    @saved="onPwSaved"
+    @dismissed="onPwDismissed"
+  />
 </template>

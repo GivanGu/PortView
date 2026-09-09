@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   fetchPorts,
   hidePort,
@@ -8,13 +8,13 @@ import {
   fetchRanges,
   createRange,
   deleteRange,
-  getPrefs,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import { Search, Container, Cog, Server, Plus, X, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
+import usePrefs from '@/store/prefs'
+import { Search, Container, Cog, Server, Plus, Trash2, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
@@ -28,33 +28,12 @@ const editServiceName = ref('')
 // ── 监控区间状态 ──
 const ranges = ref<RangeRead[]>([])
 const selectedRangeId = ref<number>(0) // 0 = 全部
-const newRange = reactive({ name: '', start: 1, end: 65535 })
-const rangeBusy = ref(false)
-const rangeDialog = ref(false)
 
 async function reloadRanges(merge = false) {
   const resp = await fetchRanges()
   if (resp.success) {
     if (merge) ranges.value = [...resp.data]
     else ranges.value = resp.data
-  }
-}
-
-async function handleCreateRange() {
-  if (!newRange.name || !newRange.name.trim()) return
-  if (newRange.start > newRange.end) return
-  rangeBusy.value = true
-  try {
-    await createRange(newRange.name.trim(), newRange.start, newRange.end)
-    newRange.name = ''
-    newRange.start = 1
-    newRange.end = 65535
-    rangeDialog.value = false
-    await reloadRanges(true)
-  } catch (e) {
-    console.error('create range failed', e)
-  } finally {
-    rangeBusy.value = false
   }
 }
 
@@ -115,11 +94,6 @@ async function handleQuickAdd() {
     return
   }
   if (!parsed.length) return
-  const total = parsed.reduce((s, r) => s + (r.end - r.start + 1), 0)
-  if (total > 100) {
-    showToast('一次最多添加 100 个端口')
-    return
-  }
   addRangeBusy.value = true
   try {
     for (const r of parsed) {
@@ -225,18 +199,30 @@ function startEdit(card: PortCard) {
 // ── 初始化 ──
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(async () => {
+// v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
+const { refreshInterval, refreshTick } = usePrefs()
+
+function applyPollTimer() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  if (refreshInterval.value > 0) {
+    pollTimer = setInterval(() => {
+      if (!document.hidden && !loading.value) loadData(true)
+    }, refreshInterval.value * 1000)
+  }
+}
+
+watch(refreshInterval, () => applyPollTimer())
+watch(refreshTick, () => {
+  if (!loading.value) loadData(true)
+})
+
+onMounted(() => {
   loadData()
   void reloadRanges()
-  // 从偏好读取刷新间隔（0=手动，10/15/30=秒）
-  try {
-    const res = await getPrefs()
-    if (res.success && res.data.refresh_interval > 0) {
-      pollTimer = setInterval(() => {
-        if (!document.hidden && !loading.value) loadData(true)
-      }, res.data.refresh_interval * 1000)
-    }
-  } catch { /* ignore */ }
+  applyPollTimer()
 })
 
 onBeforeUnmount(() => {
@@ -253,6 +239,15 @@ onBeforeUnmount(() => {
         <button class="btn btn-primary range-entry" @click="quickAddDialog = true">
           <SlidersHorizontal :size="15" />
           监控区间
+        </button>
+        <button
+          class="btn btn-danger range-delete"
+          :title="'删除所选区间'"
+          :disabled="selectedRangeId === 0"
+          @click="handleDeleteRange(selectedRangeId)"
+        >
+          <Trash2 :size="15" />
+          删除区间
         </button>
         <div class="export-group">
           <button class="btn" :disabled="!analysis || loading" @click="handleExport('csv')">
@@ -338,17 +333,6 @@ onBeforeUnmount(() => {
               {{ r.name }} ({{ r.start_port }}–{{ r.end_port }})
             </option>
           </select>
-          <button class="btn btn-tiny" :title="'新建区间'" @click="rangeDialog = true">
-            <Plus :size="13" />
-          </button>
-          <button
-            class="btn btn-tiny btn-danger"
-            :title="'删除所选区间'"
-            :disabled="selectedRangeId === 0"
-            @click="handleDeleteRange(selectedRangeId)"
-          >
-            <X :size="13" />
-          </button>
         </div>
       </div>
 
@@ -383,19 +367,14 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- 端口卡片网格 -->
+      <!-- v1.4.4：单一 v-for 按后端返回顺序渲染（已用/间隙/未知交错），
+           间隙卡片不再被甩到末尾，而是按端口号插到对应位置。 -->
       <div v-else-if="analysis && analysis.port_cards.length > 0" class="port-grid">
-        <!-- 已用端口 -->
-        <div
-          v-for="(card, idx) in analysis.port_cards"
-          :key="idx"
-          v-show="card.type === 'used' && cardVisible(card)"
-        >
-          <div
-            class="port-card"
-            :class="{ offline: card.is_running === false }"
-            v-if="card.type === 'used'"
-          >
-            <div class="port-actions">
+        <template v-for="(card, idx) in analysis.port_cards" :key="idx">
+          <!-- 已用端口 -->
+          <div v-if="card.type === 'used'" v-show="cardVisible(card)">
+            <div class="port-card" :class="{ offline: card.is_running === false }">
+              <div class="port-actions">
               <button
                 class="port-action-btn"
                 title="编辑服务名"
@@ -478,36 +457,29 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 可用端口间隙：仅在无源类型过滤时显示 -->
-        <div
-          v-for="(card, idx) in analysis.port_cards"
-          :key="'gap-' + idx"
-          v-show="card.type === 'gap' && sourceFilter === ''"
-        >
-          <div class="gap-card" v-if="card.type === 'gap'">
-            <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
-            <div class="gap-count">{{ card.available_count }} 个可用端口</div>
-          </div>
-        </div>
-
-        <!-- 未知范围：仅在无源类型过滤时显示 -->
-        <div
-          v-for="(card, idx) in analysis.port_cards"
-          :key="'unk-' + idx"
-          v-show="card.type === 'unknown_range' && sourceFilter === ''"
-        >
-          <div class="unknown-card" v-if="card.type === 'unknown_range'">
-            <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
-              <button
-                class="port-action-btn danger"
-                title="隐藏范围"
-                @click="handleHide(card)"
-              >🙈</button>
+          <!-- 可用端口间隙：仅在无源类型过滤时显示 -->
+          <div v-else-if="card.type === 'gap'" v-show="sourceFilter === ''">
+            <div class="gap-card">
+              <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
+              <div class="gap-count">{{ card.available_count }} 个可用端口</div>
             </div>
-            <div class="unknown-range">{{ card.start_port }} — {{ card.end_port }}</div>
-            <div class="unknown-count">{{ card.port_count }} 个未知服务端口</div>
           </div>
-        </div>
+
+          <!-- 未知范围：仅在无源类型过滤时显示 -->
+          <div v-else-if="card.type === 'unknown_range'" v-show="sourceFilter === ''">
+            <div class="unknown-card">
+              <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
+                <button
+                  class="port-action-btn danger"
+                  title="隐藏范围"
+                  @click="handleHide(card)"
+                >🙈</button>
+              </div>
+              <div class="unknown-range">{{ card.start_port }} — {{ card.end_port }}</div>
+              <div class="unknown-count">{{ card.port_count }} 个未知服务端口</div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- 空状态 -->
@@ -517,34 +489,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- v1.2：新建监控区间对话框 -->
-    <Teleport to="body">
-      <div v-if="rangeDialog" class="range-overlay" @click.self="rangeDialog = false">
-        <div class="range-dialog">
-          <h3>新建监控区间</h3>
-          <label>名称
-            <input class="form-input" v-model="newRange.name" placeholder="如 80s / 高段" />
-          </label>
-          <label>起始端口
-            <input class="form-input" type="number" min="0" max="65535" v-model.number="newRange.start" />
-          </label>
-          <label>结束端口
-            <input class="form-input" type="number" min="0" max="65535" v-model.number="newRange.end" />
-          </label>
-          <div class="range-dialog-actions">
-            <button class="btn btn-sm" @click="rangeDialog = false">取消</button>
-            <button
-              class="btn btn-sm btn-primary"
-              :disabled="rangeBusy || !newRange.name.trim()"
-              @click="handleCreateRange"
-            >
-              <Plus :size="13" /> 创建
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
     <!-- v1.4.3：监控区间批量添加对话框 -->
     <Teleport to="body">
       <div v-if="quickAddDialog" class="range-overlay" @click.self="quickAddDialog = false">
@@ -552,7 +496,7 @@ onBeforeUnmount(() => {
           <h3>添加监控区间</h3>
           <p class="range-hint">
             支持单端口（<code>80</code>）或区间（<code>22500-22600</code>），
-            多个用逗号分隔，一次最多 100 个端口。
+            多个用逗号分隔。
           </p>
           <textarea
             class="form-input range-textarea"

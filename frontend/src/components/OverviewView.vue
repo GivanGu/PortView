@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { fetchPorts, getPrefs, type PortCard } from '@/api'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { fetchPorts, type PortCard } from '@/api'
+import usePrefs from '@/store/prefs'
 
 interface OverviewStats {
   totalUsed: number
@@ -11,6 +12,8 @@ interface OverviewStats {
   hiddenPorts: number[]
   hostPorts: number
   dockerPorts: number
+  dockerOnline: number
+  dockerOffline: number
 }
 
 const CIRC = 2 * Math.PI * 52
@@ -24,6 +27,8 @@ const stats = ref<OverviewStats>({
   hiddenPorts: [],
   hostPorts: 0,
   dockerPorts: 0,
+  dockerOnline: 0,
+  dockerOffline: 0,
 })
 const loading = ref(true)
 const error = ref('')
@@ -51,6 +56,18 @@ function countBySource(cards: PortCard[], sources: string[]): number {
   return cards.filter((c) => c.type === 'used' && c.source && sources.includes(c.source)).length
 }
 
+// v1.4.4：Docker 端口的在线/离线计数（is_running 为权威信号）
+function countDockerStatus(cards: PortCard[]): { dockerOnline: number; dockerOffline: number } {
+  let online = 0
+  let offline = 0
+  for (const c of cards) {
+    if (c.type !== 'used' || c.source !== 'docker') continue
+    if (c.is_running === false) offline++
+    else online++
+  }
+  return { dockerOnline: online, dockerOffline: offline }
+}
+
 async function load(silent = false) {
   if (!silent) loading.value = true
   if (!silent) error.value = ''
@@ -66,6 +83,7 @@ async function load(silent = false) {
       hiddenPorts: data.hidden_ports,
       hostPorts: countBySource(data.port_cards, ['host', 'system']),
       dockerPorts: countBySource(data.port_cards, ['docker']),
+      ...countDockerStatus(data.port_cards),
     }
     loadedAt.value = new Date()
   } catch (e) {
@@ -75,19 +93,31 @@ async function load(silent = false) {
   }
 }
 
-// 自动刷新（与设置里的「刷新间隔」保持一致；0=手动）
+// v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
+const { refreshInterval, refreshTick } = usePrefs()
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(async () => {
+function applyPollTimer() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  if (refreshInterval.value > 0) {
+    pollTimer = setInterval(() => {
+      if (!document.hidden && !loading.value) load(true)
+    }, refreshInterval.value * 1000)
+  }
+}
+
+watch(refreshInterval, () => applyPollTimer())
+watch(refreshTick, () => {
+  if (!loading.value) load(true)
+})
+
+onMounted(() => {
   load()
-  try {
-    const res = await getPrefs()
-    if (res.success && res.data.refresh_interval > 0) {
-      pollTimer = setInterval(() => {
-        if (!document.hidden && !loading.value) load(true)
-      }, res.data.refresh_interval * 1000)
-    }
-  } catch { /* ignore */ }
+  applyPollTimer()
 })
 
 onBeforeUnmount(() => {
@@ -130,6 +160,10 @@ onBeforeUnmount(() => {
       <div class="stat-card">
         <div class="stat-value" style="color: var(--purple)">{{ stats.dockerPorts }}</div>
         <div class="stat-label">Docker 端口</div>
+        <div class="stat-sub">
+          <span class="stat-sub-item online"><span class="sub-dot"></span>{{ stats.dockerOnline }} 在线</span>
+          <span class="stat-sub-item offline"><span class="sub-dot"></span>{{ stats.dockerOffline }} 离线</span>
+        </div>
       </div>
       <div class="stat-card">
         <div class="stat-value" style="color: var(--yellow)">{{ stats.hiddenPorts.length }}</div>

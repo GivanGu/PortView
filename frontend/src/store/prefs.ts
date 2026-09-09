@@ -5,14 +5,23 @@ import { ref, readonly, type Ref } from 'vue'
  */
 const refreshInterval: Ref<number> = ref(0)
 
+// v1.4.4：手动刷新信号。顶栏「刷新」按钮自增一次，各视图 watch 它后重新拉数据。
+const refreshTick = ref(0)
+
 function setRefreshInterval(v: number) {
   refreshInterval.value = v
+}
+
+function triggerRefresh() {
+  refreshTick.value++
 }
 
 export function usePrefs() {
   return {
     refreshInterval: readonly(refreshInterval),
     setRefreshInterval,
+    refreshTick: readonly(refreshTick),
+    triggerRefresh,
   }
 }
 
