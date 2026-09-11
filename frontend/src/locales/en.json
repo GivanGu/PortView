@@ -117,7 +117,11 @@
     "dialogInputPlaceholder": "e.g. 80, 443, 22500-22600",
     "invalidRange": "Invalid range: {tok}",
     "invalidPort": "Invalid port: {tok}",
-    "addedRanges": "Added {n} range(s)"
+    "addedRanges": "Added {n} range(s)",
+    "logoDiscover": "Auto-detect logo",
+    "logoUpload": "Upload logo",
+    "logoDelete": "Delete logo",
+    "logoTooLarge": "Image exceeds 1MiB limit"
   },
   "hidden": {
     "total": "{n} total",

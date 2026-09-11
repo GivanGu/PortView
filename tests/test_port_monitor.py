@@ -1,7 +1,5 @@
 """PortMonitor 核心逻辑测试。"""
 
-
-
 from app.services.port_monitor import PortMonitor
 
 
@@ -36,8 +34,14 @@ class TestMergeUnknownAndGaps:
     def test_single_used_port(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         # 应该有: gap(1-79), 80(used), gap(81-100)
@@ -55,8 +59,14 @@ class TestMergeUnknownAndGaps:
         """区间起始到第一个已用端口之间的可用端口应生成头部 gap 卡片。"""
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         head = result[0]
@@ -69,8 +79,14 @@ class TestMergeUnknownAndGaps:
         """第一个已用端口恰为区间起始时，不应生成头部 gap。"""
         monitor = _make_monitor()
         cards = [
-            {"port": 1, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 1,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         assert result[0]["type"] == "used"
@@ -79,12 +95,30 @@ class TestMergeUnknownAndGaps:
     def test_consecutive_unknown_merges(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 1000, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
-            {"port": 1001, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
-            {"port": 1002, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
+            {
+                "port": 1000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+            {
+                "port": 1001,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+            {
+                "port": 1002,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
         # 1000-1002 应合并为 unknown_range
@@ -97,8 +131,14 @@ class TestMergeUnknownAndGaps:
     def test_single_unknown_not_merged(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 1000, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
+            {
+                "port": 1000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
         # 单个未知服务不合并，保持 used
@@ -107,10 +147,22 @@ class TestMergeUnknownAndGaps:
     def test_gap_between_cards(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
-            {"port": 8080, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "App", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
+            {
+                "port": 8080,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "App",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 10000)
         # 应该有 head gap(1-79)、中间 gap(81-8079)、尾部 gap(8081-10000)
@@ -161,8 +213,12 @@ class TestPortAnalysis:
     def test_protocol_filter(self):
         monitor = _make_monitor()
         config = {}
-        result_tcp = monitor.get_port_analysis(config, start_port=1, end_port=100, protocol_filter="TCP")
-        result_udp = monitor.get_port_analysis(config, start_port=1, end_port=100, protocol_filter="UDP")
+        result_tcp = monitor.get_port_analysis(
+            config, start_port=1, end_port=100, protocol_filter="TCP"
+        )
+        result_udp = monitor.get_port_analysis(
+            config, start_port=1, end_port=100, protocol_filter="UDP"
+        )
         assert result_tcp["protocol_filter"] == "TCP"
         assert result_udp["protocol_filter"] == "UDP"
 

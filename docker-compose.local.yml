@@ -10,6 +10,10 @@ services:
     image: portview:dev
     container_name: portview
     network_mode: host
+    # Logo 自动识别需从容器访问宿主机端口（host 网络下默认 127.0.0.1；
+    # bridge 网络可设 PORTVIEW_DISCOVER_HOST=host.docker.internal 并依赖此映射）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config:/app/config

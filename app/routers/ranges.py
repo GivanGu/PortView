@@ -60,8 +60,7 @@ async def _list() -> list[dict]:
     if conn is None:
         return []
     cur = await conn.execute(
-        "SELECT id, name, start_port, end_port, created_at"
-        " FROM range_rules ORDER BY start_port, id"
+        "SELECT id, name, start_port, end_port, created_at FROM range_rules ORDER BY start_port, id"
     )
     rows = await cur.fetchall()
     return [
@@ -94,8 +93,7 @@ async def create_range(body: RangePayload) -> APIResponse:
     now = int(time.time())
     try:
         await conn.execute(
-            "INSERT INTO range_rules (name, start_port, end_port, created_at)"
-            " VALUES (?, ?, ?, ?)",
+            "INSERT INTO range_rules (name, start_port, end_port, created_at) VALUES (?, ?, ?, ?)",
             (body.name, body.start_port, body.end_port, now),
         )
         await conn.commit()

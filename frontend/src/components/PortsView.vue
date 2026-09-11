@@ -10,10 +10,17 @@ import {
   createRange,
   deleteRange,
   getAccessAddress,
+  fetchLogos,
+  uploadLogo,
+  deleteLogo,
+  discoverLogo,
+  logoUrl,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
+  type LogoMeta,
 } from '@/api'
+import { appKey } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
@@ -29,6 +36,104 @@ const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
+
+// ── Logo 状态 (v1.5.0) ──
+const logos = ref<Map<string, LogoMeta>>(new Map())
+const logoBusy = ref<Set<string>>(new Set())
+
+async function loadLogos() {
+  try {
+    const resp = await fetchLogos()
+    if (resp.success) {
+      const m = new Map<string, LogoMeta>()
+      for (const meta of resp.data) m.set(meta.app_key, meta)
+      logos.value = m
+    }
+  } catch (e) {
+    console.error('加载 Logo 列表失败:', e)
+  }
+}
+
+function logoStatus(card: PortCard): string | null {
+  const key = appKey(card)
+  return logos.value.get(key)?.status ?? null
+}
+
+function logoSrc(card: PortCard): string | null {
+  const key = appKey(card)
+  const meta = logos.value.get(key)
+  if (meta?.status === 'found') return logoUrl(key)
+  return null
+}
+
+function isLogoBusy(card: PortCard): boolean {
+  return logoBusy.value.has(appKey(card))
+}
+
+async function handleDiscoverLogo(card: PortCard) {
+  const key = appKey(card)
+  if (!card.port) return
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    const resp = await discoverLogo(key, card.port)
+    if (resp.success) {
+      await loadLogos()
+    }
+  } catch (e) {
+    console.error('Logo 识别失败:', e)
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
+
+async function handleUploadLogo(card: PortCard) {
+  const key = appKey(card)
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/png,image/jpeg,image/svg+xml,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    if (file.size > 1024 * 1024) {
+      showToast(t('ports.logoTooLarge'))
+      return
+    }
+    logoBusy.value = new Set(logoBusy.value).add(key)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1]
+        await uploadLogo(key, file.type, base64)
+        await loadLogos()
+      }
+      reader.readAsDataURL(file)
+    } catch (e) {
+      console.error('Logo 上传失败:', e)
+    } finally {
+      const s = new Set(logoBusy.value)
+      s.delete(key)
+      logoBusy.value = s
+    }
+  }
+  input.click()
+}
+
+async function handleDeleteLogo(card: PortCard) {
+  const key = appKey(card)
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    await deleteLogo(key)
+    await loadLogos()
+  } catch (e) {
+    console.error('Logo 删除失败:', e)
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
 
 // ── 监控区间状态 ──
 const ranges = ref<RangeRead[]>([])
@@ -266,6 +371,7 @@ watch(refreshTick, () => {
 onMounted(() => {
   loadData()
   void reloadRanges()
+  void loadLogos()
   applyPollTimer()
 })
 
@@ -430,6 +536,26 @@ onBeforeUnmount(() => {
                 @click="startEdit(card)"
               >✏️</button>
               <button
+                v-if="logoStatus(card) !== 'found'"
+                class="port-action-btn"
+                :title="t('ports.logoDiscover')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDiscoverLogo(card)"
+              >🔍</button>
+              <button
+                class="port-action-btn"
+                :title="t('ports.logoUpload')"
+                :disabled="isLogoBusy(card)"
+                @click="handleUploadLogo(card)"
+              >🖼</button>
+              <button
+                v-if="logoStatus(card) === 'found'"
+                class="port-action-btn danger"
+                :title="t('ports.logoDelete')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDeleteLogo(card)"
+              >🗑</button>
+              <button
                 class="port-action-btn danger"
                 :title="t('ports.hidePort')"
                 @click="handleHide(card)"
@@ -454,6 +580,14 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="port-service">
+              <img
+                v-if="logoSrc(card)"
+                :src="logoSrc(card)!"
+                class="service-logo"
+                :alt="card.service_name || 'logo'"
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+              <span v-else class="service-logo-placeholder">🖼</span>
               {{ card.service_name || t('ports.unknownService') }}
             </div>
 

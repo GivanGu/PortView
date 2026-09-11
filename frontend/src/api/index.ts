@@ -283,3 +283,38 @@ export function deleteRange(id: number): Promise<ApiResponse> {
 
 // ── notes (upsert with remark) ──────────────────────
 // NotePayload / upsertNote 已存在；此处仅确保 remark 字段被允许。
+
+// ── logos (v1.5.0) ──────────────────────────────────
+
+export interface LogoMeta {
+  app_key: string
+  status: 'found' | 'not_found'
+  mime: string | null
+}
+
+export function fetchLogos(): Promise<ApiResponse<LogoMeta[]>> {
+  return request<LogoMeta[]>('/api/logos')
+}
+
+export function uploadLogo(appKey: string, mime: string, dataBase64: string): Promise<ApiResponse> {
+  return request(`/api/logos/${encodeURIComponent(appKey)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ mime, data: dataBase64 }),
+  })
+}
+
+export function deleteLogo(appKey: string): Promise<ApiResponse> {
+  return request(`/api/logos/${encodeURIComponent(appKey)}`, { method: 'DELETE' })
+}
+
+export function discoverLogo(appKey: string, port: number, path = '/'): Promise<ApiResponse<{ status: string; mime: string | null }>> {
+  return request<{ status: string; mime: string | null }>('/api/logos/discover', {
+    method: 'POST',
+    body: JSON.stringify({ app_key: appKey, port, path }),
+  })
+}
+
+/** 构建 logo 图片 URL（供 <img src> 使用）。 */
+export function logoUrl(appKey: string): string {
+  return `/api/logos/${encodeURIComponent(appKey)}`
+}

@@ -48,9 +48,7 @@ async def _resolve_range_ids(range_ids: list[int]) -> set[int] | None:
     return union
 
 
-async def _filter_cards_by_ports(
-    port_data: dict, ports: set[int] | None
-) -> dict:
+async def _filter_cards_by_ports(port_data: dict, ports: set[int] | None) -> dict:
     """把 port_cards 过滤到给定端口集合内。ports 为 None → 原样返回。"""
     if ports is None:
         return port_data
@@ -75,14 +73,15 @@ async def _filter_cards_by_ports(
             filtered.append(new_card)
     filtered.sort(key=lambda c: c.get("port", c.get("start_port", 0)))
     port_data["port_cards"] = filtered
-    port_data["total_used"] = len([c for c in filtered if c.get("type") in ("used", "unknown_range")])
+    port_data["total_used"] = len(
+        [c for c in filtered if c.get("type") in ("used", "unknown_range")]
+    )
     # v1.4.5：按区间收窄后，可用端口数也要跟着收窄（此前沿用全段值，
     # 导致选中区间时统计栏「可用端口」与「已用端口」口径不一致）。
     port_data["total_available"] = sum(
         c.get("available_count", 0) for c in filtered if c.get("type") == "gap"
     )
     return port_data
-
 
 
 @router.get("/ports", response_model=APIResponse)
@@ -119,9 +118,7 @@ async def api_ports(
         )
 
         # P1.1：按监控区间收窄
-        port_data = await _filter_cards_by_ports(
-            port_data, await _resolve_range_ids(range_ids)
-        )
+        port_data = await _filter_cards_by_ports(port_data, await _resolve_range_ids(range_ids))
 
         search_term = search.strip().lower()
         if search_term:
@@ -164,7 +161,7 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
                     card.get("service_name", "") or "",
                     card.get("container", "") or "",
                     card.get("protocol", "") or "",
-                    card.get("remark", "") or "",   # P1.1：备注也纳入搜索
+                    card.get("remark", "") or "",  # P1.1：备注也纳入搜索
                 ]
             ).lower()
             if search_term in text:
@@ -178,7 +175,9 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
                     card.get("service_name", "") or "",
                     card.get("container", "") or "",
                     card.get("protocol", "") or "",
-                    "可用", "available", "unused",
+                    "可用",
+                    "available",
+                    "unused",
                 ]
             ).lower()
             is_match = search_term in text

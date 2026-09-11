@@ -98,6 +98,7 @@ class HiddenPortsBatchRequest(BaseModel):
 
 # ── P1-1 端口备注 ─────────────────────────────────────────
 
+
 class NoteCreateRequest(BaseModel):
     """新建 / 更新一条端口备注。``port`` 唯一，存在则 upsert。"""
 
@@ -120,6 +121,7 @@ class NoteRead(BaseModel):
 
 # ── P1-2 用户偏好 ─────────────────────────────────────────
 
+
 class UserPrefsRead(BaseModel):
     """读取用户偏好（主题 / 强调色 / 语言 / 刷新间隔）。"""
 
@@ -136,3 +138,42 @@ class UserPrefsPatch(BaseModel):
     accent: str | None = None
     lang: Literal["zh", "en"] | None = None
     refresh_interval: int | None = Field(default=None, ge=0, le=300)
+
+
+# ── v1.5.0 应用 Logo ──────────────────────────────────────
+
+
+class LogoMeta(BaseModel):
+    """单个应用 Logo 的元信息（不含图片字节，用于列表 / 详情）。"""
+
+    app_key: str
+    status: Literal["found", "not_found"]
+    mime: str | None = None
+    created_at: int = 0
+    updated_at: int = 0
+
+
+class LogoRead(BaseModel):
+    """单个应用 Logo 完整记录（含 base64 图片数据）。"""
+
+    app_key: str
+    status: Literal["found", "not_found"]
+    mime: str | None = None
+    data: str | None = Field(default=None, description="base64 编码的图片字节；not_found 时为 null")
+    created_at: int = 0
+    updated_at: int = 0
+
+
+class DiscoverRequest(BaseModel):
+    """自动识别 Logo 请求：给定 app_key 与端口，服务端抓取该服务自身的 favicon。"""
+
+    app_key: str
+    port: int = Field(default=0, ge=0, le=65535)
+    path: str = "/"
+
+
+class LogoUploadRequest(BaseModel):
+    """手动上传 / 替换 Logo：``data`` 为 base64 编码的图片字节。"""
+
+    mime: str
+    data: str

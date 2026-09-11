@@ -24,13 +24,43 @@ logger = logging.getLogger(__name__)
 
 # 常见端口 → 服务名 兜底映射
 _DEFAULT_PORTS: dict[int, str] = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 67: "DHCP Server",
-    68: "DHCP Client", 69: "TFTP", 80: "HTTP", 110: "POP3", 123: "NTP", 135: "RPC",
-    137: "NetBIOS Name", 138: "NetBIOS Datagram", 139: "NetBIOS Session", 143: "IMAP",
-    161: "SNMP", 389: "LDAP", 443: "HTTPS", 445: "SMB", 465: "SMTPS", 514: "Syslog",
-    587: "SMTP", 631: "IPP", 636: "LDAPS", 993: "IMAPS", 995: "POP3S", 1433: "SQL Server",
-    1521: "Oracle", 3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
-    6379: "Redis", 8080: "HTTP Proxy", 8443: "HTTPS Alt", 9200: "Elasticsearch",
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    67: "DHCP Server",
+    68: "DHCP Client",
+    69: "TFTP",
+    80: "HTTP",
+    110: "POP3",
+    123: "NTP",
+    135: "RPC",
+    137: "NetBIOS Name",
+    138: "NetBIOS Datagram",
+    139: "NetBIOS Session",
+    143: "IMAP",
+    161: "SNMP",
+    389: "LDAP",
+    443: "HTTPS",
+    445: "SMB",
+    465: "SMTPS",
+    514: "Syslog",
+    587: "SMTP",
+    631: "IPP",
+    636: "LDAPS",
+    993: "IMAPS",
+    995: "POP3S",
+    1433: "SQL Server",
+    1521: "Oracle",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    5900: "VNC",
+    6379: "Redis",
+    8080: "HTTP Proxy",
+    8443: "HTTPS Alt",
+    9200: "Elasticsearch",
     27017: "MongoDB",
 }
 
@@ -309,7 +339,11 @@ class PortMonitor:
         healthcheck = config.get("Healthcheck", {})
         if not healthcheck or "Test" not in healthcheck:
             return
-        test_cmd = " ".join(healthcheck["Test"]) if isinstance(healthcheck["Test"], list) else str(healthcheck["Test"])
+        test_cmd = (
+            " ".join(healthcheck["Test"])
+            if isinstance(healthcheck["Test"], list)
+            else str(healthcheck["Test"])
+        )
         for port_str in re.findall(r"(?:localhost|127\.0\.0\.1|0\.0\.0\.0):?(\d{1,5})", test_cmd):
             port = int(port_str)
             if 1 <= port <= 65535:
@@ -387,7 +421,9 @@ class PortMonitor:
             port = port_info["port"]
             if port < start_port or port > end_port:
                 continue
-            if (port in docker_port_map and port_info.get("is_running", True)) or port not in docker_port_map:
+            if (
+                port in docker_port_map and port_info.get("is_running", True)
+            ) or port not in docker_port_map:
                 docker_port_map[port] = port_info
             docker_protocol = port_info.get("protocol", "TCP")
             if docker_protocol == "UDP":
@@ -424,7 +460,9 @@ class PortMonitor:
             docker_info = docker_port_map.get(port)
             docker_is_running = docker_info.get("is_running", True) if docker_info else True
             port_actively_listened = port in host_ports_info
-            use_docker_card = docker_info is not None and (docker_is_running or not port_actively_listened)
+            use_docker_card = docker_info is not None and (
+                docker_is_running or not port_actively_listened
+            )
 
             if use_docker_card:
                 # docker 分支已确认该端口由容器映射（docker SDK 命中），source 恒为 docker；
@@ -461,7 +499,8 @@ class PortMonitor:
                     "type": "used",
                     "source": source,
                     "protocol": protocol,
-                    "service_name": config_service_name or host_info.get("service_name", "未知服务"),
+                    "service_name": config_service_name
+                    or host_info.get("service_name", "未知服务"),
                     "container": host_info.get("container_name"),
                     "container_status": "running" if actively_listening else "exited",
                     "is_host_network": is_host_container,
@@ -499,11 +538,7 @@ class PortMonitor:
                 sp = card.get("start_port", 0)
                 ep = card.get("end_port", 0)
                 hit = next(
-                    (
-                        notes_map[p]
-                        for p in range(sp, ep + 1)
-                        if notes_map.get(p)
-                    ),
+                    (notes_map[p] for p in range(sp, ep + 1) if notes_map.get(p)),
                     "",
                 )
                 card["remark"] = hit
@@ -593,7 +628,11 @@ class PortMonitor:
             # 间隙卡片
             if i < len(port_data_list):
                 last_card = port_cards[-1]
-                current_last_port = last_card["end_port"] if last_card["type"] == "unknown_range" else last_card.get("port")
+                current_last_port = (
+                    last_card["end_port"]
+                    if last_card["type"] == "unknown_range"
+                    else last_card.get("port")
+                )
                 next_port = port_data_list[i]["port"]
                 gap = next_port - current_last_port - 1
                 if gap > 0:
@@ -612,9 +651,15 @@ class PortMonitor:
             if last_card["type"] == "gap":
                 if last_card["end_port"] < end_port:
                     last_card["end_port"] = end_port
-                    last_card["available_count"] = last_card["end_port"] - last_card["start_port"] + 1
+                    last_card["available_count"] = (
+                        last_card["end_port"] - last_card["start_port"] + 1
+                    )
             else:
-                last_port = last_card["end_port"] if last_card["type"] == "unknown_range" else last_card.get("port", 0)
+                last_port = (
+                    last_card["end_port"]
+                    if last_card["type"] == "unknown_range"
+                    else last_card.get("port", 0)
+                )
                 if last_port < end_port:
                     final_gap = end_port - last_port
                     if final_gap > 0:

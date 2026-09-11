@@ -37,7 +37,9 @@ class TestPorts:
         assert "total_available" in data["data"]
 
     def test_ports_protocol_filter(self, client: TestClient):
-        resp = client.get("/api/ports", params={"protocol": "TCP", "start_port": 1, "end_port": 100})
+        resp = client.get(
+            "/api/ports", params={"protocol": "TCP", "start_port": 1, "end_port": 100}
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -80,7 +82,10 @@ class TestConfig:
         assert "error" in data
 
     def test_edit_port(self, client: TestClient):
-        resp = client.post("/api/config/edit", json={"port": 8080, "service_name": "MyApp", "service_type": "docker"})
+        resp = client.post(
+            "/api/config/edit",
+            json={"port": 8080, "service_name": "MyApp", "service_type": "docker"},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -136,15 +141,27 @@ class TestNotes:
 
     def test_upsert_and_list(self, client: TestClient):
         # 新建
-        r = client.post("/api/notes", json={
-            "port": 8080, "service_name": "http-svc", "protocol": "tcp", "remark": "web",
-        })
+        r = client.post(
+            "/api/notes",
+            json={
+                "port": 8080,
+                "service_name": "http-svc",
+                "protocol": "tcp",
+                "remark": "web",
+            },
+        )
         assert r.status_code == 200 and r.json()["success"] is True
 
         # upsert（修改 remark）
-        r = client.post("/api/notes", json={
-            "port": 8080, "service_name": "http-svc", "protocol": "tcp", "remark": "web v2",
-        })
+        r = client.post(
+            "/api/notes",
+            json={
+                "port": 8080,
+                "service_name": "http-svc",
+                "protocol": "tcp",
+                "remark": "web v2",
+            },
+        )
         assert r.json()["success"] is True
 
         # 列表应包含且只有一条 8080，remark 为 v2
@@ -168,7 +185,10 @@ class TestNotes:
         assert r.status_code == 422
 
     def test_search(self, client: TestClient):
-        client.post("/api/notes", json={"port": 5432, "service_name": "postgres", "protocol": "both", "remark": "db"})
+        client.post(
+            "/api/notes",
+            json={"port": 5432, "service_name": "postgres", "protocol": "both", "remark": "db"},
+        )
         data = client.get("/api/notes", params={"search": "postgres"}).json()["data"]
         assert any(n["port"] == 5432 for n in data)
         client.delete("/api/notes/5432")
@@ -200,3 +220,95 @@ class TestPrefs:
         assert r.json()["success"] is True
         d = client.get("/api/prefs").json()["data"]
         assert d["theme"] == "dark" and d["accent"] == "indigo" and d["lang"] == "zh"
+
+
+class TestLogos:
+    """v1.5.0 应用 Logo 端点。"""
+
+    def test_list_empty(self, client: TestClient):
+        r = client.get("/api/logos")
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert isinstance(r.json()["data"], list)
+
+    def test_upload_and_get(self, client: TestClient):
+        # 上传一张 1x1 PNG
+        import base64
+
+        png_1x1 = base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+        r = client.put("/api/logos/test-app", json={"mime": "image/png", "data": png_1x1})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+        # GET 应返回图片字节
+        r = client.get("/api/logos/test-app")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "image/png"
+        assert len(r.content) > 0
+
+        # 列表应包含
+        lst = client.get("/api/logos").json()["data"]
+        assert any(m["app_key"] == "test-app" and m["status"] == "found" for m in lst)
+
+        # 清理
+        assert client.delete("/api/logos/test-app").json()["success"] is True
+
+    def test_upload_invalid_mime(self, client: TestClient):
+        import base64
+
+        data = base64.b64encode(b"hello").decode()
+        r = client.put("/api/logos/bad-mime", json={"mime": "text/plain", "data": data})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_upload_invalid_base64(self, client: TestClient):
+        r = client.put("/api/logos/bad-b64", json={"mime": "image/png", "data": "!!!"})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_delete_idempotent(self, client: TestClient):
+        # 删除不存在的 key 也应成功
+        r = client.delete("/api/logos/nonexistent")
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+    def test_get_not_found(self, client: TestClient):
+        r = client.get("/api/logos/ghost-app")
+        assert r.status_code == 404
+
+    def test_invalid_app_key(self, client: TestClient):
+        r = client.get("/api/logos/UPPER_CASE!")
+        assert r.status_code == 400
+
+    def test_discover_no_port(self, client: TestClient):
+        # port=0 应直接落 not_found
+        r = client.post("/api/logos/discover", json={"app_key": "no-port", "port": 0})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert r.json()["data"]["status"] == "not_found"
+
+        # 清理
+        client.delete("/api/logos/no-port")
+
+    def test_discover_idempotent(self, client: TestClient):
+        # 先上传一个 logo
+        import base64
+
+        png_1x1 = base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+        client.put("/api/logos/idem-app", json={"mime": "image/png", "data": png_1x1})
+
+        # 再次 discover 应返回 cached
+        r = client.post("/api/logos/discover", json={"app_key": "idem-app", "port": 8080})
+        assert r.json()["success"] is True
+        assert r.json()["message"] == "cached"
+
+        # 清理
+        client.delete("/api/logos/idem-app")

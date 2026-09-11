@@ -29,8 +29,11 @@ logger = logging.getLogger(__name__)
 # 数据库文件：`<project>/.data/portview.db`（可由 PORTVIEW_DB 环境变量覆盖）
 _DB_PATH = os.environ.get(
     "PORTVIEW_DB",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                 ".data", "portview.db"),
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        ".data",
+        "portview.db",
+    ),
 )
 
 # 连接引用 —— FastAPI 单例
@@ -44,7 +47,6 @@ _SCHEMA = [
     "  applied_at INTEGER NOT NULL DEFAULT 0,"
     "  note TEXT NOT NULL DEFAULT ''"
     ")",
-
     # 端口备注：用户可为任意端口附加备注（1 个端口 ≤ 1 行）
     "CREATE TABLE IF NOT EXISTS port_notes ("
     "  port INTEGER PRIMARY KEY,"  # 0-65535 或自定义
@@ -53,7 +55,6 @@ _SCHEMA = [
     "  created_at INTEGER NOT NULL DEFAULT 0,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
-
     # 强调色 + 主题：1 行持久化用户偏好
     "CREATE TABLE IF NOT EXISTS user_prefs ("
     "  id INTEGER PRIMARY KEY CHECK (id = 1),"
@@ -63,7 +64,6 @@ _SCHEMA = [
     "  refresh_interval INTEGER NOT NULL DEFAULT 0,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
-
     # 自定义监控区间：无行数上限
     "CREATE TABLE IF NOT EXISTS range_rules ("
     "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -73,7 +73,6 @@ _SCHEMA = [
     "  created_at INTEGER NOT NULL DEFAULT 0,"
     "  UNIQUE(name)"
     ")",
-
     # 审计 log（轻量；可后期删除或归档）
     "CREATE TABLE IF NOT EXISTS audit_log ("
     "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -82,7 +81,6 @@ _SCHEMA = [
     "  payload TEXT NOT NULL DEFAULT '{}',"
     "  created_at INTEGER NOT NULL DEFAULT 0"
     ")",
-
     # 单行用户表：portview 是单用户本地工具，只存一条
     # P1 阶段允许关闭 auth（env PORTVIEW_REQUIRE_AUTH=0 或 user_prefs.require_auth=0），
     # 若开启则用户第一次调用 POST /api/auth/set_password 初始化，之后 POST /api/auth/login 拿到 token
@@ -93,7 +91,6 @@ _SCHEMA = [
     "  created_at INTEGER NOT NULL DEFAULT 0,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
-
     # 会话 token（支持「登出」= 删行；多标签页并存 = 多行）
     "CREATE TABLE IF NOT EXISTS sessions ("
     "  token TEXT PRIMARY KEY,"
@@ -101,6 +98,16 @@ _SCHEMA = [
     "  created_at INTEGER NOT NULL DEFAULT 0,"
     "  expires_at INTEGER NOT NULL DEFAULT 0,"
     "  last_seen_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+    # 应用 Logo（v1.5.0）：按 app_key 共享，三态（found / not_found），
+    # BLOB 存图片字节，随 portview-data 卷备份。
+    "CREATE TABLE IF NOT EXISTS service_logos ("
+    "  app_key    TEXT PRIMARY KEY,"
+    "  status     TEXT NOT NULL DEFAULT 'found' CHECK (status IN ('found', 'not_found')),"
+    "  mime       TEXT,"
+    "  data       BLOB,"
+    "  created_at INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
 ]
 
@@ -152,7 +159,9 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
     cur = await conn.execute("PRAGMA table_info(user_prefs)")
     pref_cols = {row[1] for row in await cur.fetchall()}
     if "require_auth" not in pref_cols:
-        await conn.execute("ALTER TABLE user_prefs ADD COLUMN require_auth INTEGER NOT NULL DEFAULT 0")
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN require_auth INTEGER NOT NULL DEFAULT 0"
+        )
         # 若 PORTVIEW_REQUIRE_AUTH=1 显式要求登录，则初始化时打开
         if os.environ.get("PORTVIEW_REQUIRE_AUTH", "0") == "1":
             await conn.execute("UPDATE user_prefs SET require_auth = 1 WHERE id = 1")
@@ -164,14 +173,28 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
     cur = await conn.execute("PRAGMA table_info(user_prefs)")
     pref_cols2 = {row[1] for row in await cur.fetchall()}
     if "refresh_interval" not in pref_cols2:
-        await conn.execute("ALTER TABLE user_prefs ADD COLUMN refresh_interval INTEGER NOT NULL DEFAULT 0")
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN refresh_interval INTEGER NOT NULL DEFAULT 0"
+        )
         logger.info("migration: user_prefs.refresh_interval added (default 0 = manual)")
+
+    # v1.5.0 迁移：新增 service_logos 表（应用 Logo 持久化）。
+    # 表由上方 _SCHEMA 的 CREATE TABLE IF NOT EXISTS 幂等创建；
+    # 这里仅对「老库」bump schema_version 以追踪迁移（新库首次种入即为 1，随后升到 2）。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 2:
+        await conn.execute(
+            "UPDATE schema_version SET version = 2, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.5.0 service_logos"),
+        )
+        logger.info("migration: schema_version -> 2 (service_logos)")
 
     await conn.commit()
     if _db is not None:
         await _db.close()
     _db = conn
-    logger.info("SQLite @ %s (WAL, 5 tables) ready", path)
+    logger.info("SQLite @ %s (WAL, 8 tables) ready", path)
     yield conn
     await conn.close()
     logger.info("SQLite @ %s closed", path)
@@ -191,12 +214,13 @@ async def close_db() -> None:
 
 # ----------------------- 便捷 helper -----------------------
 
+
 async def ensure_schema_version_bump(version: int, note: str) -> None:
     """bump schema_version（用于迁移追踪）。"""
     if _db is None:
         return
     await _db.execute(
-        "UPDATE schema_version SET version = MAX(version, ?), applied_at = ?, note || ? WHERE id = 1",
+        "UPDATE schema_version SET version = MAX(version, ?), applied_at = ?, note = note || ? WHERE id = 1",
         (version, int(time.time()), " " + note),
     )
     await _db.commit()

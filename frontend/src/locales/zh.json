@@ -117,7 +117,11 @@
     "dialogInputPlaceholder": "如：80, 443, 22500-22600",
     "invalidRange": "无效区间：{tok}",
     "invalidPort": "无效端口：{tok}",
-    "addedRanges": "已添加 {n} 个区间"
+    "addedRanges": "已添加 {n} 个区间",
+    "logoDiscover": "自动识别 Logo",
+    "logoUpload": "上传 Logo",
+    "logoDelete": "删除 Logo",
+    "logoTooLarge": "图片超过 1MiB 限制"
   },
   "hidden": {
     "total": "共 {n} 个",

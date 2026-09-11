@@ -110,7 +110,9 @@ class TestRanges:
         assert r2.json()["data"] == []
 
     def test_crud(self, client: TestClient):
-        resp = client.post("/api/ranges", json={"name": "test-range", "start_port": 80, "end_port": 90})
+        resp = client.post(
+            "/api/ranges", json={"name": "test-range", "start_port": 80, "end_port": 90}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["name"] == "test-range"
@@ -120,7 +122,9 @@ class TestRanges:
         assert u.status_code == 200
         assert u.json()["data"]["end_port"] == 100
         # duplicate name
-        dup = client.post("/api/ranges", json={"name": "test-range", "start_port": 1, "end_port": 2})
+        dup = client.post(
+            "/api/ranges", json={"name": "test-range", "start_port": 1, "end_port": 2}
+        )
         assert dup.status_code == 409
         # delete
         d = client.delete(f"/api/ranges/{data['id']}")
@@ -172,6 +176,7 @@ class TestRemark:
     def test_remark_in_used_card(self, client: TestClient):
         # 起一个真监听 → 让 host 的 port 变成"已用"（不依赖 Docker）
         import socket
+
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("127.0.0.1", 0))
@@ -181,22 +186,34 @@ class TestRemark:
             # 塞备注
             r = client.post(
                 "/api/notes",
-                json={"port": port, "service_name": "test-svc", "protocol": "tcp", "remark": "http entry"},
+                json={
+                    "port": port,
+                    "service_name": "test-svc",
+                    "protocol": "tcp",
+                    "remark": "http entry",
+                },
             )
             assert r.status_code == 200
             # 查该端口 → 应"已用"且带 remark
             resp = client.get("/api/ports", params={"start_port": port, "end_port": port})
             assert resp.status_code == 200
             used = [
-                c for c in resp.json()["data"]["port_cards"]
+                c
+                for c in resp.json()["data"]["port_cards"]
                 if c["type"] == "used" and c.get("port") == port
             ]
-            assert used, f"port {port} should be 'used' (card set: {resp.json()['data']['port_cards']})"
+            assert used, (
+                f"port {port} should be 'used' (card set: {resp.json()['data']['port_cards']})"
+            )
             assert used[0].get("remark") == "http entry", used[0]
             # 搜索命中备注
-            s = client.get("/api/ports", params={"search": "http entry", "start_port": 1, "end_port": 65535})
+            s = client.get(
+                "/api/ports", params={"search": "http entry", "start_port": 1, "end_port": 65535}
+            )
             hits = [c for c in s.json()["data"]["port_cards"] if c.get("remark")]
-            assert any(c.get("port") == port for c in hits), f"remark-search missed {port}; hits={hits}"
+            assert any(c.get("port") == port for c in hits), (
+                f"remark-search missed {port}; hits={hits}"
+            )
         finally:
             srv.close()
 
