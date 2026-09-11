@@ -7,6 +7,8 @@ import {
   deleteNote,
   fetchPorts,
   fetchLogos,
+  discoverLogo,
+  uploadLogo,
   type NoteRead,
   type NotePayload,
   type PortCard,
@@ -27,8 +29,9 @@ const searchQuery = ref('')
 const allUsedPorts = ref<PortCard[]>([])
 
 // v1.5.0：无 Logo 端口 —— 展示所有已用但未设置 Logo 的端口，
-// 方便用户「看到→补备注 / 补 Logo」的一站式快速流。
+// 方便用户「看到→快速补 Logo」的一站式快速流。
 const logos = ref<Map<string, LogoMeta>>(new Map())
+const logoBusy = ref<Set<string>>(new Set())
 
 // 编辑器状态（新建/编辑共用 modal）
 const editorOpen = ref(false)
@@ -122,6 +125,55 @@ async function loadLogos() {
   } catch (e) {
     console.error('load logos failed:', e)
   }
+}
+
+function isLogoBusy(card: PortCard): boolean {
+  return logoBusy.value.has(appKey(card))
+}
+
+async function handleDiscoverLogo(card: PortCard) {
+  const key = appKey(card)
+  if (!card.port) return
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    const resp = await discoverLogo(key, card.port)
+    if (resp.success) await loadLogos()
+  } catch (e) {
+    console.error('Logo discover failed:', e)
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
+
+async function handleUploadLogo(card: PortCard) {
+  const key = appKey(card)
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/png,image/jpeg,image/svg+xml,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    if (file.size > 1024 * 1024) return
+    logoBusy.value = new Set(logoBusy.value).add(key)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1]
+        await uploadLogo(key, file.type, base64)
+        await loadLogos()
+      }
+      reader.readAsDataURL(file)
+    } catch (e) {
+      console.error('Logo upload failed:', e)
+    } finally {
+      const s = new Set(logoBusy.value)
+      s.delete(key)
+      logoBusy.value = s
+    }
+  }
+  input.click()
 }
 
 function openEditByPort(port: number, preset?: string) {
@@ -281,7 +333,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- v1.5.0：无 Logo 端口分区 —— 让"看到就补 Logo / 补备注"成为一条主路径 -->
+        <!-- v1.5.0：无 Logo 端口分区 —— 让"看到就补 Logo"成为一条主路径 -->
         <div v-if="shownNoLogo.length" class="unremarked-panel" style="margin-bottom: 16px;">
           <div class="unremarked-header">
             <ImageOff :size="15" class="unremarked-icon" />
@@ -301,10 +353,26 @@ onMounted(() => {
               <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
               <button
                 class="btn btn-sm btn-primary"
-                @click="openEditByPort(c.port!)"
-                :title="t('notes.noLogoHint')"
+                :disabled="isLogoBusy(c)"
+                @click="handleDiscoverLogo(c)"
+                :title="t('notes.noLogoDiscover')"
               >
-                <Plus :size="13" /> {{ t('notes.noLogoBtn') }}
+                🔍 {{ t('notes.noLogoDiscoverBtn') }}
+              </button>
+              <button
+                class="btn btn-sm"
+                :disabled="isLogoBusy(c)"
+                @click="handleUploadLogo(c)"
+                :title="t('notes.noLogoUploadBtn')"
+              >
+                🖼
+              </button>
+              <button
+                class="btn btn-sm"
+                @click="openEditByPort(c.port!)"
+                :title="t('notes.noLogoNoteBtn')"
+              >
+                <StickyNote :size="13" />
               </button>
             </div>
           </div>

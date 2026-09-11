@@ -154,8 +154,11 @@
     "unremarkedHint": "Add a note for this port",
     "unremarkedBtn": "Note",
     "noLogo": "Ports without a logo",
-    "noLogoHint": "Add a note / logo for this port",
-    "noLogoBtn": "Note"
+    "noLogoHint": "Quickly add a logo for this port",
+    "noLogoDiscover": "Auto-discover logo",
+    "noLogoDiscoverBtn": "Discover",
+    "noLogoUploadBtn": "Upload logo",
+    "noLogoNoteBtn": "Add note"
   },
   "settings": {
     "title": "Settings",

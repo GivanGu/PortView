@@ -154,8 +154,11 @@
     "unremarkedHint": "为这个端口写一条备注",
     "unremarkedBtn": "备注",
     "noLogo": "未设置 Logo 的端口",
-    "noLogoHint": "为这个端口补备注 / 补 Logo",
-    "noLogoBtn": "备注"
+    "noLogoHint": "为这个端口快速添加 Logo",
+    "noLogoDiscover": "自动发现 Logo",
+    "noLogoDiscoverBtn": "发现",
+    "noLogoUploadBtn": "上传 Logo",
+    "noLogoNoteBtn": "添加备注"
   },
   "settings": {
     "title": "设置",
