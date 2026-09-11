@@ -226,6 +226,12 @@
     "mismatch": "两次输入的密码不一致",
     "saveFailed": "保存失败，请重试"
   },
+  "addrPrompt": {
+    "title": "尚未配置访问地址",
+    "desc": "「打开服务」需要一个基础地址（如 http://192.168.1.100），用于拼接端口号生成可访问的链接。前往设置页配置后即可使用。",
+    "cancel": "取消",
+    "configure": "去配置"
+  },
   "export": {
     "colPort": "端口",
     "colProtocol": "协议",

@@ -16,6 +16,7 @@ import {
 } from '@/api'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
+import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import { Search, Container, Cog, Server, Plus, Trash2, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -209,6 +210,12 @@ function startEdit(card: PortCard) {
 }
 
 // ── 打开服务 ──
+const showAddrPrompt = ref(false)
+
+function navigateToSettings() {
+  window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+}
+
 async function handleOpenService(card: PortCard) {
   if (!card.port) return
   try {
@@ -217,11 +224,20 @@ async function handleOpenService(card: PortCard) {
       const base = resp.data.address.replace(/\/+$/, '')
       window.open(`${base}:${card.port}`, '_blank')
     } else {
-      window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+      showAddrPrompt.value = true
     }
   } catch {
-    window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+    showAddrPrompt.value = true
   }
+}
+
+function onAddrConfigure() {
+  showAddrPrompt.value = false
+  navigateToSettings()
+}
+
+function onAddrDismissed() {
+  showAddrPrompt.value = false
 }
 
 // ── 初始化 ──
@@ -557,5 +573,12 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
     </Teleport>
+
+    <!-- 未配置访问地址提示 -->
+    <AccessAddressPrompt
+      v-if="showAddrPrompt"
+      @configure="onAddrConfigure"
+      @dismissed="onAddrDismissed"
+    />
   </div>
 </template>

@@ -226,6 +226,12 @@
     "mismatch": "Passwords do not match",
     "saveFailed": "Save failed, please retry"
   },
+  "addrPrompt": {
+    "title": "No access address set",
+    "desc": "\"Open service\" needs a base address (e.g. http://192.168.1.100) to build the link with the port number. Configure it in Settings to enable this.",
+    "cancel": "Cancel",
+    "configure": "Configure"
+  },
   "export": {
     "colPort": "Port",
     "colProtocol": "Protocol",
