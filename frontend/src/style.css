@@ -585,25 +585,56 @@ html, body {
   transition: all 0.15s;
   position: relative;
   overflow: hidden;
-  /* v1.5.2：Logo 铺满整卡背景，内容叠在上层 */
-  min-height: 92px;
+  /* v1.5.2：固定高度，所有卡片等高 */
+  height: 130px;
   display: flex;
   flex-direction: column;
+  /* v1.5.2：3D 立体阴影 */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .port-card:hover {
   border-color: var(--border-light);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.12),
+    0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* v1.5.2：Logo 背景层（铺满整卡，cover 填充） */
+/* v1.5.2：3D 渐变描边（上亮下暗，模拟立体光感） */
+.port-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* v1.5.2：Logo 背景层（高度撑满卡片，水平居中，不拉伸） */
 .port-card-bg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   z-index: 0;
   pointer-events: none;
 }
@@ -859,6 +890,29 @@ html, body {
 .port-card.offline .port-source,
 .port-card.offline .port-source * {
   opacity: 0.75;
+}
+
+/* v1.5.2：亮色主题 3D 描边调整（白底上高光不明显，改用更柔和的阴影） */
+[data-theme="light"] .port-card {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.06),
+    0 2px 6px rgba(30, 41, 59, 0.08);
+}
+[data-theme="light"] .port-card:hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.06),
+    0 6px 16px rgba(30, 41, 59, 0.12);
+}
+[data-theme="light"] .port-card::after {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(200, 210, 230, 0.2) 40%,
+    transparent 60%,
+    rgba(30, 41, 59, 0.1) 100%
+  );
 }
 
 .port-status-text {
