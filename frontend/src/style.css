@@ -613,6 +613,13 @@ html, body {
     0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
+/* 编辑模式：展开卡片高度，让输入框可见 */
+.port-card.editing {
+  height: auto;
+  min-height: 130px;
+  overflow: visible;
+}
+
 /* v1.5.2：3D 渐变描边（上亮下暗，模拟立体光感） */
 .port-card::after {
   content: '';

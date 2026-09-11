@@ -303,10 +303,20 @@ function onNavigate(e: Event) {
   if (!tab) return
   switchTab(tab)
   if (anchor) {
-    // 等视图渲染（v-if 挂载）后再滚动到目标锚点
-    nextTick(() => {
-      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+    // 等视图渲染（v-if 挂载）后再滚动到目标锚点，带重试机制
+    const target = anchor
+    let attempts = 0
+    const maxAttempts = 5
+    function tryScroll() {
+      const el = document.getElementById(target)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } else if (attempts < maxAttempts) {
+        attempts++
+        setTimeout(tryScroll, 80)
+      }
+    }
+    nextTick(tryScroll)
   }
 }
 

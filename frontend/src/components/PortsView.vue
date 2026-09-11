@@ -80,7 +80,11 @@ async function handleDiscoverLogo(card: PortCard) {
       await loadLogos()
       if (resp.data.status === 'not_found') {
         showToast(t('ports.logoDiscoverFailed', { service: card.service_name || card.port }))
+      } else {
+        showToast(t('ports.logoAdded'))
       }
+    } else {
+      showToast(resp.error || t('ports.logoDiscoverFailed', { service: card.service_name || card.port }))
     }
   } catch (e) {
     console.error('Logo 识别失败:', e)
@@ -528,7 +532,7 @@ onBeforeUnmount(() => {
         <template v-for="(card, idx) in analysis.port_cards" :key="idx">
           <!-- 已用端口 -->
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
-            <div class="port-card" :class="{ offline: card.is_running === false }">
+            <div class="port-card" :class="{ offline: card.is_running === false, editing: editingPort === card.port }">
               <!-- v1.5.2：Logo 铺满整卡作为背景层（cover 填充，随卡片尺寸自动缩放） -->
               <img
                 v-if="logoSrc(card)"

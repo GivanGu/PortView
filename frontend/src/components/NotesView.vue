@@ -155,6 +155,8 @@ async function handleDiscoverLogo(card: PortCard) {
       } else {
         showToast(t('notes.logoAdded'))
       }
+    } else {
+      showToast(resp.error || t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
     }
   } catch (e) {
     console.error('Logo discover failed:', e)
