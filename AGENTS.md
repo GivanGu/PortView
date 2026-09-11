@@ -40,6 +40,28 @@ uvicorn app.main:app --reload --port 8081
 cd frontend && npm install && npm run dev
 ```
 
+## Branching & Release
+
+### 分支模型
+- **`main`** — 稳定分支。仅接受已验证的功能合并，每次合并需 bump 版本号并发版。
+- **`dev`** — 开发分支。日常功能开发在此进行，验证通过后合并回 `main`。
+
+### CI / 镜像构建
+| 分支 | Workflow | 镜像 Tag | 说明 |
+|---|---|---|---|
+| `main` | `docker-publish.yml` | `<version>` + `latest` | 稳定版，版本号取自 `app/__init__.py` |
+| `dev` | `docker-dev.yml` | `dev` + `dev-<short-sha>` | 开发版，`dev` 为移动标签，`dev-<sha>` 绑定 commit |
+
+两个 workflow 均推送 **GHCR + ACR**，tag 命名空间完全隔离，互不覆盖。
+
+### 发版流程
+1. 在 `dev` 分支开发功能，push 触发 `docker-dev.yml` 构建开发镜像
+2. 验证 `dev` 镜像（`docker pull <registry>/portview:dev`）
+3. 合并 `dev` → `main`
+4. bump `app/__init__.py` 版本号（如 `1.4.8` → `1.4.9`）
+5. push `main` 触发 `docker-publish.yml` 构建稳定镜像
+6. 创建 GitHub Release（英文 changelog），tag `vX.Y.Z`
+
 ## Architecture
 
 ### Backend (`app/`)
@@ -77,6 +99,6 @@ cd frontend && npm install && npm run dev
 
 - Python: ruff (line-length 100, target py312), isort with `app` as first-party; RUF001/002/003 (Chinese fullwidth chars) and B008 (FastAPI Depends) are ignored
 - Commit style: `<type>(<scope>): <summary>` — e.g. `feat(port-monitor): add offline container support`
-- Release: push to `main` triggers `docker-publish.yml` → single build pushed to GHCR + ACR (version + latest); version read from `app/__init__.py`
+- Release: `main` → `docker-publish.yml` (version + latest); `dev` → `docker-dev.yml` (dev + dev-<sha>); version read from `app/__init__.py`
 - **Every release must create a GitHub Release** (via API or `gh release create`) with an English changelog; the in-app update badge links to the latest release page (`/releases/tag/vX.Y.Z`)
 - Language: code comments and commit messages are in Chinese; README is bilingual (English default `README.md` + Chinese `README.zh-CN.md`)
