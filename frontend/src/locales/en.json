@@ -158,7 +158,11 @@
     "noLogoDiscover": "Auto-discover logo",
     "noLogoDiscoverBtn": "Discover",
     "noLogoUploadBtn": "Upload logo",
-    "noLogoNoteBtn": "Add note"
+    "noLogoNoteBtn": "Add note",
+    "logoDiscovering": "Discovering…",
+    "logoAdded": "Logo added",
+    "logoDiscoverFailed": "No logo found for {service}, you can upload one manually",
+    "logoUploadFailed": "Failed to upload logo"
   },
   "settings": {
     "title": "Settings",

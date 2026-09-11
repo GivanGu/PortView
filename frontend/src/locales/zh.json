@@ -158,7 +158,11 @@
     "noLogoDiscover": "自动发现 Logo",
     "noLogoDiscoverBtn": "发现",
     "noLogoUploadBtn": "上传 Logo",
-    "noLogoNoteBtn": "添加备注"
+    "noLogoNoteBtn": "添加备注",
+    "logoDiscovering": "发现中…",
+    "logoAdded": "Logo 已添加",
+    "logoDiscoverFailed": "未找到 {service} 的 Logo，可手动上传",
+    "logoUploadFailed": "Logo 上传失败"
   },
   "settings": {
     "title": "设置",

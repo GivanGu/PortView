@@ -321,7 +321,9 @@ function startEdit(card: PortCard) {
 const showAddrPrompt = ref(false)
 
 function navigateToSettings() {
-  window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+  window.dispatchEvent(new CustomEvent('portview:navigate', {
+    detail: { tab: 'settings', anchor: 'settings-access-address' },
+  }))
 }
 
 async function handleOpenService(card: PortCard) {

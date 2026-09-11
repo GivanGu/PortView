@@ -492,7 +492,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Access Address -->
-        <section class="settings-card">
+        <section class="settings-card" id="settings-access-address">
           <header class="settings-card-title">
             <Globe :size="16" class="card-ico" />
             <span>{{ t('settings.accessAddress') }}</span>

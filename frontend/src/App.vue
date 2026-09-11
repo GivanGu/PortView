@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import {
   LayoutDashboard,
   Network,
@@ -297,8 +297,17 @@ function onDocClick(e: MouseEvent) {
 
 // v1.4.8：跨组件导航事件（如 PortsView 点「打开服务」未设置地址时跳设置页）
 function onNavigate(e: Event) {
-  const tab = (e as CustomEvent).detail?.tab as Tab | undefined
-  if (tab) switchTab(tab)
+  const detail = (e as CustomEvent).detail ?? {}
+  const tab = detail.tab as Tab | undefined
+  const anchor = detail.anchor as string | undefined
+  if (!tab) return
+  switchTab(tab)
+  if (anchor) {
+    // 等视图渲染（v-if 挂载）后再滚动到目标锚点
+    nextTick(() => {
+      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 }
 
 onMounted(async () => {

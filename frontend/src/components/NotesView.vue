@@ -15,7 +15,7 @@ import {
   type LogoMeta,
 } from '@/api'
 import { appKey } from '@/logo'
-import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff } from 'lucide-vue-next'
+import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -23,6 +23,17 @@ const notes = ref<NoteRead[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const searchQuery = ref('')
+
+// 轻提示（Logo 发现/上传结果反馈）
+const toast = ref('')
+const toastVisible = ref(false)
+let toastTimer: ReturnType<typeof setTimeout>
+function showToast(msg: string) {
+  toast.value = msg
+  toastVisible.value = true
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastVisible.value = false }, 2600)
+}
 
 // v1.3：未备注端口 —— 展示所有已用但无 note 记录的端口，
 // 方便用户「看到→点开→补备注」的一站式快速流。
@@ -137,9 +148,17 @@ async function handleDiscoverLogo(card: PortCard) {
   logoBusy.value = new Set(logoBusy.value).add(key)
   try {
     const resp = await discoverLogo(key, card.port)
-    if (resp.success) await loadLogos()
+    if (resp.success) {
+      await loadLogos()
+      if (resp.data?.status === 'not_found') {
+        showToast(t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
+      } else {
+        showToast(t('notes.logoAdded'))
+      }
+    }
   } catch (e) {
     console.error('Logo discover failed:', e)
+    showToast(t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
   } finally {
     const s = new Set(logoBusy.value)
     s.delete(key)
@@ -163,10 +182,12 @@ async function handleUploadLogo(card: PortCard) {
         const base64 = (reader.result as string).split(',')[1]
         await uploadLogo(key, file.type, base64)
         await loadLogos()
+        showToast(t('notes.logoAdded'))
       }
       reader.readAsDataURL(file)
     } catch (e) {
       console.error('Logo upload failed:', e)
+      showToast(t('notes.logoUploadFailed'))
     } finally {
       const s = new Set(logoBusy.value)
       s.delete(key)
@@ -351,29 +372,33 @@ onMounted(() => {
               </span>
               <span class="unremarked-svc">{{ c.service_name || (c.container || '—') }}</span>
               <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
-              <button
-                class="btn btn-sm btn-primary"
-                :disabled="isLogoBusy(c)"
-                @click="handleDiscoverLogo(c)"
-                :title="t('notes.noLogoDiscover')"
-              >
-                🔍 {{ t('notes.noLogoDiscoverBtn') }}
-              </button>
-              <button
-                class="btn btn-sm"
-                :disabled="isLogoBusy(c)"
-                @click="handleUploadLogo(c)"
-                :title="t('notes.noLogoUploadBtn')"
-              >
-                🖼
-              </button>
-              <button
-                class="btn btn-sm"
-                @click="openEditByPort(c.port!)"
-                :title="t('notes.noLogoNoteBtn')"
-              >
-                <StickyNote :size="13" />
-              </button>
+              <div class="row-actions">
+                <button
+                  class="btn btn-sm btn-primary"
+                  :disabled="isLogoBusy(c)"
+                  @click="handleDiscoverLogo(c)"
+                  :title="t('notes.noLogoDiscover')"
+                >
+                  <Search :size="13" class="spinning" v-if="isLogoBusy(c)" />
+                  <Search :size="13" v-else />
+                  {{ isLogoBusy(c) ? t('notes.logoDiscovering') : t('notes.noLogoDiscoverBtn') }}
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :disabled="isLogoBusy(c)"
+                  @click="handleUploadLogo(c)"
+                  :title="t('notes.noLogoUploadBtn')"
+                >
+                  <ImagePlus :size="13" /> {{ t('notes.noLogoUploadBtn') }}
+                </button>
+                <button
+                  class="btn btn-sm"
+                  @click="openEditByPort(c.port!)"
+                  :title="t('notes.noLogoNoteBtn')"
+                >
+                  <StickyNote :size="13" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -475,5 +500,10 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 轻提示 -->
+    <Teleport to="body">
+      <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
+    </Teleport>
   </div>
 </template>
