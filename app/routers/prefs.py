@@ -4,8 +4,8 @@
 
 端点：
 - GET   ``/api/prefs``       读取当前用户（单行）
-- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval），未提供字段不修改
-- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0）
+- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval / logo_scrim），未提供字段不修改
+- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0, logo_scrim=left）
 
 说明：
 - 前端 App.vue 已经在 localStorage 中保留了偏好；这里的持久化是**服务端备份**，
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/prefs", tags=["prefs"])
 
 _ACCENTS = {"indigo", "blue", "teal", "rose", "amber", "violet"}
+_LOGO_SCRIMS = {"none", "left", "overlay", "glass"}
 
 
 @router.get("", response_model=APIResponse)
@@ -35,7 +36,7 @@ async def api_get_prefs() -> APIResponse:
         return APIResponse(success=False, error="db not ready")
     conn = db_service._db
     cur = await conn.execute(
-        "SELECT theme, accent, lang, refresh_interval FROM user_prefs WHERE id = 1"
+        "SELECT theme, accent, lang, refresh_interval, logo_scrim FROM user_prefs WHERE id = 1"
     )
     row = await cur.fetchone()
     if row is None:
@@ -47,6 +48,7 @@ async def api_get_prefs() -> APIResponse:
             accent=row["accent"],
             lang=row["lang"],
             refresh_interval=row["refresh_interval"] or 0,
+            logo_scrim=row["logo_scrim"] or "left",
         ),
     )
 
@@ -57,6 +59,10 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
         return APIResponse(success=False, error="db not ready")
     if patch.accent is not None and patch.accent not in _ACCENTS:
         return APIResponse(success=False, error=f"accent must be one of {sorted(_ACCENTS)}")
+    if patch.logo_scrim is not None and patch.logo_scrim not in _LOGO_SCRIMS:
+        return APIResponse(
+            success=False, error=f"logo_scrim must be one of {sorted(_LOGO_SCRIMS)}"
+        )
 
     import time
 
@@ -75,6 +81,9 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     if patch.refresh_interval is not None:
         sets.append("refresh_interval = ?")
         params.append(patch.refresh_interval)
+    if patch.logo_scrim is not None:
+        sets.append("logo_scrim = ?")
+        params.append(patch.logo_scrim)
     if not sets:
         return APIResponse(success=True, message="no-op")
     sets.append("updated_at = ?")
@@ -98,7 +107,7 @@ async def api_reset_prefs() -> APIResponse:
 
     conn = db_service._db
     await conn.execute(
-        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, updated_at = ? WHERE id = 1",
+        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, logo_scrim = 'left', updated_at = ? WHERE id = 1",
         (int(time.time()),),
     )
     await conn.commit()

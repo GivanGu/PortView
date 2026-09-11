@@ -67,6 +67,7 @@ function onPwDismissed() {
 
 const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
+const LOGO_SCRIM_KEY = 'portview.logoScrim'
 
 const ACCENTS = [
   { id: 'indigo', color: '#6366f1' },
@@ -130,7 +131,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -176,6 +177,29 @@ function initialAccent(): AccentId {
     /* ignore */
   }
   return 'indigo'
+}
+
+// v1.5.2：卡片 Logo 遮罩档位。落到 <html data-logo-scrim> 属性，
+// style.css 依据它给 .port-card-scrim 套对应渐变/毛玻璃/无遮罩样式。
+const LOGO_SCRIMS = ['none', 'left', 'overlay', 'glass'] as const
+
+function applyLogoScrim(s: string) {
+  document.documentElement.setAttribute('data-logo-scrim', s)
+  try {
+    localStorage.setItem(LOGO_SCRIM_KEY, s)
+  } catch {
+    /* ignore */
+  }
+}
+
+function initialLogoScrim(): string {
+  try {
+    const saved = localStorage.getItem(LOGO_SCRIM_KEY)
+    if (saved && LOGO_SCRIMS.includes(saved as (typeof LOGO_SCRIMS)[number])) return saved
+  } catch {
+    /* ignore */
+  }
+  return 'left'
 }
 
 function toggleTheme() {
@@ -239,6 +263,11 @@ watch(refreshInterval, () => {
   applyStatsTimer()
 })
 
+// v1.5.2：Logo 遮罩档位切换后实时落到 <html> 属性，卡片遮罩即时变化
+watch(logoScrim, (v) => {
+  applyLogoScrim(v)
+})
+
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
 const visited = reactive<Record<Tab, boolean>>({
@@ -279,6 +308,7 @@ onMounted(async () => {
   applyTheme(theme.value)
   accent.value = initialAccent()
   applyAccent(accent.value)
+  applyLogoScrim(initialLogoScrim())
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -294,7 +324,10 @@ onMounted(async () => {
   }
   try {
     const prefs = await getPrefs()
-    if (prefs.success) setRefreshInterval(prefs.data.refresh_interval ?? 0)
+    if (prefs.success) {
+      setRefreshInterval(prefs.data.refresh_interval ?? 0)
+      if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
+    }
   } catch { /* ignore */ }
   applyStatsTimer()
   loading.value = false

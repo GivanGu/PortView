@@ -203,6 +203,7 @@ export interface UserPrefs {
   accent: string
   lang: 'zh' | 'en'
   refresh_interval: number
+  logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
 }
 
 export interface UserPrefsPatch {
@@ -210,6 +211,7 @@ export interface UserPrefsPatch {
   accent?: string
   lang?: 'zh' | 'en'
   refresh_interval?: number
+  logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {

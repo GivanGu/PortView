@@ -50,6 +50,10 @@
   --rail-width: 200px;
   --topbar-height: 56px;
   --statusbar-height: 32px;
+
+  /* v1.5.2：Logo 遮罩 */
+  --scrim: rgba(8, 10, 18, 0.55);
+  --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -80,6 +84,10 @@
 
   --shadow: 0 4px 24px rgba(30, 41, 59, 0.08);
   --shadow-sm: 0 2px 8px rgba(30, 41, 59, 0.06);
+
+  /* v1.5.2：Logo 遮罩（亮色） */
+  --scrim: rgba(255, 255, 255, 0.62);
+  --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* ── 主题切换按钮 ── */
@@ -574,20 +582,48 @@ html, body {
   border: 1px solid var(--border);
   border-left: 3px solid var(--green);
   border-radius: var(--radius);
-  padding: 14px 16px;
   transition: all 0.15s;
   position: relative;
-  /* v1.5.0：横向布局（Logo 64px + 信息列），min-height 覆盖 Logo 高度 + 上下 padding */
+  overflow: hidden;
+  /* v1.5.2：Logo 铺满整卡背景，内容叠在上层 */
   min-height: 92px;
   display: flex;
   flex-direction: column;
 }
 
 .port-card:hover {
-  background: var(--bg-card-hover);
   border-color: var(--border-light);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+/* v1.5.2：Logo 背景层（铺满整卡，cover 填充） */
+.port-card-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* v1.5.2：可读性遮罩层（四档由 [data-logo-scrim] 控制） */
+.port-card-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* v1.5.2：内容层（叠在 bg + scrim 之上） */
+.port-card-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 16px;
 }
 
 .port-card-header {
@@ -627,46 +663,34 @@ html, body {
   color: var(--cyan);
 }
 
-/* v1.5.0：卡片横向布局 —— Logo 主视觉 + 信息列 */
-.port-card-body {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  flex: 1;
+/* v1.5.2：四档遮罩样式（由 <html data-logo-scrim> 驱动） */
+[data-logo-scrim="left"] .port-card-scrim {
+  background: linear-gradient(to right, var(--scrim) 0%, transparent 65%);
 }
 
-.port-logo {
-  width: 64px;
-  height: 64px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+[data-logo-scrim="overlay"] .port-card-scrim {
+  background: var(--scrim);
 }
 
-.port-logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-  box-sizing: border-box;
+[data-logo-scrim="glass"] .port-card-scrim {
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-.port-logo-placeholder {
-  font-size: 26px;
+[data-logo-scrim="none"] .port-card-scrim {
+  background: transparent;
+}
+
+/* 无遮罩时给文字加投影保证可读性 */
+[data-logo-scrim="none"] .port-card-content {
+  text-shadow: var(--text-shadow);
+}
+
+/* 离线卡：Logo 背景灰化 + 降低不透明度 */
+.port-card.offline .port-card-bg {
+  filter: grayscale(1);
   opacity: 0.4;
-  line-height: 1;
-}
-
-.port-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .port-service {
@@ -861,6 +885,7 @@ html, body {
   gap: 4px;
   opacity: 0;
   transition: opacity 0.15s;
+  z-index: 3;
 }
 
 .port-card:hover .port-actions {

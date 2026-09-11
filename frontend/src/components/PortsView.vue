@@ -527,57 +527,17 @@ onBeforeUnmount(() => {
           <!-- 已用端口 -->
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
             <div class="port-card" :class="{ offline: card.is_running === false }">
-              <div class="port-actions">
-              <button
-                class="port-action-btn"
-                :title="t('ports.openService')"
-                @click="handleOpenService(card)"
-              >🔗</button>
-              <button
-                class="port-action-btn"
-                :title="t('ports.editService')"
-                @click="startEdit(card)"
-              >✏️</button>
-              <button
-                v-if="logoStatus(card) !== 'found'"
-                class="port-action-btn"
-                :title="t('ports.logoDiscover')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDiscoverLogo(card)"
-              >🔍</button>
-              <button
-                class="port-action-btn"
-                :title="t('ports.logoUpload')"
-                :disabled="isLogoBusy(card)"
-                @click="handleUploadLogo(card)"
-              >🖼</button>
-              <button
-                v-if="logoStatus(card) === 'found'"
-                class="port-action-btn danger"
-                :title="t('ports.logoDelete')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDeleteLogo(card)"
-              >🗑</button>
-              <button
-                class="port-action-btn danger"
-                :title="t('ports.hidePort')"
-                @click="handleHide(card)"
-              >🙈</button>
-            </div>
+              <!-- v1.5.2：Logo 铺满整卡作为背景层（cover 填充，随卡片尺寸自动缩放） -->
+              <img
+                v-if="logoSrc(card)"
+                :src="logoSrc(card)!"
+                class="port-card-bg"
+                alt=""
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+              <div v-if="logoSrc(card)" class="port-card-scrim"></div>
 
-            <div class="port-card-body">
-              <!-- v1.5.0：Logo 作为卡片主视觉，放大到 64px 方块，保持比例 -->
-              <div class="port-logo">
-                <img
-                  v-if="logoSrc(card)"
-                  :src="logoSrc(card)!"
-                  class="port-logo-img"
-                  :alt="card.service_name || 'logo'"
-                  @error="($event.target as HTMLImageElement).style.display = 'none'"
-                />
-                <span v-else class="port-logo-placeholder">🖼</span>
-              </div>
-              <div class="port-info">
+              <div class="port-card-content">
                 <div class="port-card-header">
                   <span class="port-header-left">
                     <span
@@ -633,6 +593,43 @@ onBeforeUnmount(() => {
                   <span class="port-image-value">{{ card.image }}</span>
                 </div>
               </div>
+
+              <div class="port-actions">
+              <button
+                class="port-action-btn"
+                :title="t('ports.openService')"
+                @click="handleOpenService(card)"
+              >🔗</button>
+              <button
+                class="port-action-btn"
+                :title="t('ports.editService')"
+                @click="startEdit(card)"
+              >✏️</button>
+              <button
+                v-if="logoStatus(card) !== 'found'"
+                class="port-action-btn"
+                :title="t('ports.logoDiscover')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDiscoverLogo(card)"
+              >🔍</button>
+              <button
+                class="port-action-btn"
+                :title="t('ports.logoUpload')"
+                :disabled="isLogoBusy(card)"
+                @click="handleUploadLogo(card)"
+              >🖼</button>
+              <button
+                v-if="logoStatus(card) === 'found'"
+                class="port-action-btn danger"
+                :title="t('ports.logoDelete')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDeleteLogo(card)"
+              >🗑</button>
+              <button
+                class="port-action-btn danger"
+                :title="t('ports.hidePort')"
+                @click="handleHide(card)"
+              >🙈</button>
             </div>
 
             <!-- 编辑模式 -->

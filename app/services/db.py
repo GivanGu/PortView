@@ -178,6 +178,16 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: user_prefs.refresh_interval added (default 0 = manual)")
 
+    # v1.5.2 迁移：user_prefs 加 logo_scrim 列（卡片 Logo 背景的可读性遮罩档位）。
+    # 取值 none / left / overlay / glass，默认 left（左侧渐变，信息类卡片最协调）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols3 = {row[1] for row in await cur.fetchall()}
+    if "logo_scrim" not in pref_cols3:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN logo_scrim TEXT NOT NULL DEFAULT 'left'"
+        )
+        logger.info("migration: user_prefs.logo_scrim added (default 'left')")
+
     # v1.5.0 迁移：新增 service_logos 表（应用 Logo 持久化）。
     # 表由上方 _SCHEMA 的 CREATE TABLE IF NOT EXISTS 幂等创建；
     # 这里仅对「老库」bump schema_version 以追踪迁移（新库首次种入即为 1，随后升到 2）。

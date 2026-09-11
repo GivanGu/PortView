@@ -5,7 +5,7 @@ import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, Layers } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -82,7 +82,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -151,6 +151,12 @@ function onRefreshIntervalChange(v: number) {
   void persistPartial({ refresh_interval: v })
 }
 
+// v1.5.2：卡片 Logo 背景的可读性遮罩档位
+function onLogoScrimChange(v: 'none' | 'left' | 'overlay' | 'glass') {
+  setLogoScrim(v)
+  void persistPartial({ logo_scrim: v })
+}
+
 // ── 访问地址 ──
 const accessAddress = ref('')
 const accessAddrBusy = ref(false)
@@ -190,6 +196,7 @@ async function handleReset() {
   applyTheme('dark')
   applyAccent('indigo')
   applyLang('zh')
+  setLogoScrim('left')
   showToast(t('settings.resetDone'))
 }
 
@@ -203,6 +210,7 @@ onMounted(async () => {
       if (p.accent && ACCENTS.some(a => a.id === p.accent)) applyAccent(p.accent)
       if (p.lang) applyLang(p.lang)
       setRefreshInterval(p.refresh_interval ?? 0)
+      if (p.logo_scrim) setLogoScrim(p.logo_scrim)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -428,6 +436,57 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 @change="() => onRefreshIntervalChange(30)"
               />
               <span>{{ t('settings.refresh30') }}</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- v1.5.2：Logo 遮罩 -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <Layers :size="16" class="card-ico" />
+            <span>{{ t('settings.logoScrim') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.logoScrimHint') }}</p>
+          <div class="radio-2col">
+            <label class="radio-pill" :class="{ active: logoScrim === 'left' }">
+              <input
+                type="radio"
+                name="pv-logo-scrim"
+                :value="'left'"
+                :checked="logoScrim === 'left'"
+                @change="() => onLogoScrimChange('left')"
+              />
+              <span>{{ t('settings.scrimLeft') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: logoScrim === 'overlay' }">
+              <input
+                type="radio"
+                name="pv-logo-scrim"
+                :value="'overlay'"
+                :checked="logoScrim === 'overlay'"
+                @change="() => onLogoScrimChange('overlay')"
+              />
+              <span>{{ t('settings.scrimOverlay') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: logoScrim === 'glass' }">
+              <input
+                type="radio"
+                name="pv-logo-scrim"
+                :value="'glass'"
+                :checked="logoScrim === 'glass'"
+                @change="() => onLogoScrimChange('glass')"
+              />
+              <span>{{ t('settings.scrimGlass') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: logoScrim === 'none' }">
+              <input
+                type="radio"
+                name="pv-logo-scrim"
+                :value="'none'"
+                :checked="logoScrim === 'none'"
+                @change="() => onLogoScrimChange('none')"
+              />
+              <span>{{ t('settings.scrimNone') }}</span>
             </label>
           </div>
         </section>
