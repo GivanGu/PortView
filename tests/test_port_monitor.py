@@ -177,3 +177,40 @@ class TestPortAnalysis:
         # 80 被隐藏了，但因为没有实际监听，total_used 可能还是 0
         # 关键是 hidden_ports 字段正确
         assert result["hidden_ports"] == [80]
+
+    def test_docker_port_not_mislabeled_host_by_config(self, monkeypatch):
+        """回归：docker 容器端口即使配置标注为 host，source 也应恒为 docker。
+
+        复现场景：3306 是运行中的 mysql 容器（docker SDK 命中），
+        但 config.json 里 "MySQL数据库:host" 标注为 host。
+        修复前该卡片 source 被误判为 "host"（前端显示「主机」）。
+        """
+        monitor = _make_monitor()
+        monkeypatch.setattr(
+            monitor,
+            "get_docker_ports",
+            lambda: [
+                {
+                    "port": 3306,
+                    "protocol": "TCP",
+                    "is_running": True,
+                    "container_name": "1p-mysql",
+                    "container_image": "mysql:8.4.11",
+                    "container_port": 3306,
+                    "container_status": "running",
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            monitor,
+            "get_host_ports",
+            lambda config: {3306: {"protocol": "TCP", "service_name": "MySQL"}},
+        )
+        config = {"MySQL数据库": {"port": 3306, "protocol": "TCP", "service_type": "host"}}
+        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+
+        card = next(c for c in result["port_cards"] if c.get("port") == 3306)
+        assert card["type"] == "used"
+        assert card["source"] == "docker"
+        assert card["container"] == "1p-mysql"
+        assert card["image"] == "mysql:8.4.11"

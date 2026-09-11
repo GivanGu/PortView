@@ -427,7 +427,9 @@ class PortMonitor:
             use_docker_card = docker_info is not None and (docker_is_running or not port_actively_listened)
 
             if use_docker_card:
-                source = config_service_type if config_service_type in ("docker", "host") else "docker"
+                # docker 分支已确认该端口由容器映射（docker SDK 命中），source 恒为 docker；
+                # 配置里的 service_type 只是用户标注，不应覆盖实际检测结果（否则容器端口会被误标为「主机」）。
+                source = "docker"
                 card_data: dict[str, Any] = {
                     "port": port,
                     "type": "used",
