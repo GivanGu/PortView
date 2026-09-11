@@ -6,11 +6,14 @@ import {
   upsertNote,
   deleteNote,
   fetchPorts,
+  fetchLogos,
   type NoteRead,
   type NotePayload,
   type PortCard,
+  type LogoMeta,
 } from '@/api'
-import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle } from 'lucide-vue-next'
+import { appKey } from '@/logo'
+import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -22,6 +25,10 @@ const searchQuery = ref('')
 // v1.3：未备注端口 —— 展示所有已用但无 note 记录的端口，
 // 方便用户「看到→点开→补备注」的一站式快速流。
 const allUsedPorts = ref<PortCard[]>([])
+
+// v1.5.0：无 Logo 端口 —— 展示所有已用但未设置 Logo 的端口，
+// 方便用户「看到→补备注 / 补 Logo」的一站式快速流。
+const logos = ref<Map<string, LogoMeta>>(new Map())
 
 // 编辑器状态（新建/编辑共用 modal）
 const editorOpen = ref(false)
@@ -58,6 +65,25 @@ const shownUnremarked = computed(() => {
   )
 })
 
+// v1.5.0：无 Logo 端口 = 已用端口中 logo 状态非 'found' 的
+const noLogo = computed(() => {
+  return allUsedPorts.value
+    .filter(c => c.type === 'used' && c.port != null &&
+      logos.value.get(appKey(c))?.status !== 'found')
+    .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
+})
+
+const shownNoLogo = computed(() => {
+  if (!searchQuery.value) return noLogo.value
+  const q = searchQuery.value.toLowerCase()
+  return noLogo.value.filter(c =>
+    String(c.port ?? '').includes(q) ||
+    (c.service_name ?? '').toLowerCase().includes(q) ||
+    (c.container ?? '').toLowerCase().includes(q) ||
+    (c.remark ?? '').toLowerCase().includes(q)
+  )
+})
+
 async function loadData() {
   loading.value = true
   try {
@@ -81,6 +107,20 @@ async function loadAllPorts() {
     }
   } catch (e) {
     console.error('load all ports failed:', e)
+  }
+}
+
+// v1.5.0：加载 Logo 状态，供"无 Logo"分区判断
+async function loadLogos() {
+  try {
+    const resp = await fetchLogos()
+    if (resp.success) {
+      const m = new Map<string, LogoMeta>()
+      for (const meta of resp.data) m.set(meta.app_key, meta)
+      logos.value = m
+    }
+  } catch (e) {
+    console.error('load logos failed:', e)
   }
 }
 
@@ -173,6 +213,7 @@ function exportNotesJson() {
 onMounted(() => {
   loadData()
   loadAllPorts()
+  loadLogos()
 })
 
 // 保存/删除 note 后，"未备注"分区需要即时反映 ——
@@ -240,7 +281,36 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="notes.length === 0 && shownUnremarked.length === 0" class="empty-state">
+        <!-- v1.5.0：无 Logo 端口分区 —— 让"看到就补 Logo / 补备注"成为一条主路径 -->
+        <div v-if="shownNoLogo.length" class="unremarked-panel" style="margin-bottom: 16px;">
+          <div class="unremarked-header">
+            <ImageOff :size="15" class="unremarked-icon" />
+            <span class="unremarked-title">{{ t('notes.noLogo') }} <span class="unremarked-count">{{ shownNoLogo.length }}</span></span>
+          </div>
+          <div class="unremarked-list">
+            <div
+              v-for="c in shownNoLogo"
+              :key="'nl-' + c.port"
+              class="unremarked-row"
+            >
+              <span class="unremarked-port">{{ c.port }}</span>
+              <span class="unremarked-src" :class="(c.source || '').toLowerCase()">
+                {{ c.source === 'docker' ? t('common.sourceDocker') : c.source === 'system' ? t('common.sourceSystem') : (c.source === 'host' ? t('common.sourceHost') : t('common.sourceUnknown')) }}
+              </span>
+              <span class="unremarked-svc">{{ c.service_name || (c.container || '—') }}</span>
+              <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
+              <button
+                class="btn btn-sm btn-primary"
+                @click="openEditByPort(c.port!)"
+                :title="t('notes.noLogoHint')"
+              >
+                <Plus :size="13" /> {{ t('notes.noLogoBtn') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="notes.length === 0 && shownUnremarked.length === 0 && shownNoLogo.length === 0" class="empty-state">
           <div class="empty-icon"><StickyNote :size="32" /></div>
           <div class="empty-text">{{ t('notes.empty') }}</div>
           <button class="btn btn-primary" :style="{ marginTop: '12px' }" @click="openCreate">

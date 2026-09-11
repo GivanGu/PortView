@@ -78,6 +78,9 @@ async function handleDiscoverLogo(card: PortCard) {
     const resp = await discoverLogo(key, card.port)
     if (resp.success) {
       await loadLogos()
+      if (resp.data.status === 'not_found') {
+        showToast(t('ports.logoDiscoverFailed', { service: card.service_name || card.port }))
+      }
     }
   } catch (e) {
     console.error('Logo 识别失败:', e)
@@ -562,67 +565,74 @@ onBeforeUnmount(() => {
               >🙈</button>
             </div>
 
-            <div class="port-card-header">
-              <span class="port-header-left">
-                <span
-                  class="port-status-dot"
-                  :class="card.is_running === false ? 'is-offline' : 'is-online'"
-                  :title="card.is_running === false ? t('common.offline') : t('common.online')"
-                  :aria-label="card.is_running === false ? t('common.offline') : t('common.online')"
-                  role="img"
-                ></span>
-                <span class="port-number">{{ card.port }}</span>
-              </span>
-              <span
-                class="port-protocol"
-                :class="(card.protocol || '').toLowerCase()"
-              >{{ card.protocol }}</span>
-            </div>
+            <div class="port-card-body">
+              <!-- v1.5.0：Logo 作为卡片主视觉，放大到 64px 方块，保持比例 -->
+              <div class="port-logo">
+                <img
+                  v-if="logoSrc(card)"
+                  :src="logoSrc(card)!"
+                  class="port-logo-img"
+                  :alt="card.service_name || 'logo'"
+                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                />
+                <span v-else class="port-logo-placeholder">🖼</span>
+              </div>
+              <div class="port-info">
+                <div class="port-card-header">
+                  <span class="port-header-left">
+                    <span
+                      class="port-status-dot"
+                      :class="card.is_running === false ? 'is-offline' : 'is-online'"
+                      :title="card.is_running === false ? t('common.offline') : t('common.online')"
+                      :aria-label="card.is_running === false ? t('common.offline') : t('common.online')"
+                      role="img"
+                    ></span>
+                    <span class="port-number">{{ card.port }}</span>
+                  </span>
+                  <span
+                    class="port-protocol"
+                    :class="(card.protocol || '').toLowerCase()"
+                  >{{ card.protocol }}</span>
+                </div>
 
-            <div class="port-service">
-              <img
-                v-if="logoSrc(card)"
-                :src="logoSrc(card)!"
-                class="service-logo"
-                :alt="card.service_name || 'logo'"
-                @error="($event.target as HTMLImageElement).style.display = 'none'"
-              />
-              <span v-else class="service-logo-placeholder">🖼</span>
-              {{ card.service_name || t('ports.unknownService') }}
-            </div>
+                <div class="port-service">
+                  {{ card.service_name || t('ports.unknownService') }}
+                </div>
 
-            <!-- v1.2：用户备注 -->
-            <div v-if="card.remark" class="port-remark" :title="card.remark">
-              <StickyNote :size="11" class="port-remark-icon" />
-              <span class="port-remark-text">{{ card.remark }}</span>
-            </div>
+                <!-- v1.2：用户备注 -->
+                <div v-if="card.remark" class="port-remark" :title="card.remark">
+                  <StickyNote :size="11" class="port-remark-icon" />
+                  <span class="port-remark-text">{{ card.remark }}</span>
+                </div>
 
-            <div class="port-detail">
-              <span
-                class="port-source"
-                :class="card.source"
-              >
-                <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
-                <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
-                <Server v-else :size="13" class="port-source-icon" />
-                <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
-              </span>
+                <div class="port-detail">
+                  <span
+                    class="port-source"
+                    :class="card.source"
+                  >
+                    <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
+                    <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
+                    <Server v-else :size="13" class="port-source-icon" />
+                    <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
+                  </span>
 
-              <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
-                   底行不再重复「在线/离线」文字，避免两处信号打架）。 -->
-              <span
-                v-if="card.container"
-                class="port-status"
-                :title="card.container"
-              >
-                <span class="port-status-container">{{ card.container }}</span>
-              </span>
-            </div>
+                  <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
+                       底行不再重复「在线/离线」文字，避免两处信号打架）。 -->
+                  <span
+                    v-if="card.container"
+                    class="port-status"
+                    :title="card.container"
+                  >
+                    <span class="port-status-container">{{ card.container }}</span>
+                  </span>
+                </div>
 
-            <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
-            <div v-if="card.image" class="port-image">
-              <span class="port-image-label">{{ t('ports.image') }}</span>
-              <span class="port-image-value">{{ card.image }}</span>
+                <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
+                <div v-if="card.image" class="port-image">
+                  <span class="port-image-label">{{ t('ports.image') }}</span>
+                  <span class="port-image-value">{{ card.image }}</span>
+                </div>
+              </div>
             </div>
 
             <!-- 编辑模式 -->

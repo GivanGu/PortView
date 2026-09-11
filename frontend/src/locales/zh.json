@@ -121,7 +121,8 @@
     "logoDiscover": "自动识别 Logo",
     "logoUpload": "上传 Logo",
     "logoDelete": "删除 Logo",
-    "logoTooLarge": "图片超过 1MiB 限制"
+    "logoTooLarge": "图片超过 1MiB 限制",
+    "logoDiscoverFailed": "未找到 {service} 的 Logo，可手动上传"
   },
   "hidden": {
     "total": "共 {n} 个",
@@ -151,7 +152,10 @@
     "deleteConfirm": "删除端口 {port} 的备注？",
     "unremarked": "未备注端口",
     "unremarkedHint": "为这个端口写一条备注",
-    "unremarkedBtn": "备注"
+    "unremarkedBtn": "备注",
+    "noLogo": "未设置 Logo 的端口",
+    "noLogoHint": "为这个端口补备注 / 补 Logo",
+    "noLogoBtn": "备注"
   },
   "settings": {
     "title": "设置",

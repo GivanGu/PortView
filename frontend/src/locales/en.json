@@ -121,7 +121,8 @@
     "logoDiscover": "Auto-detect logo",
     "logoUpload": "Upload logo",
     "logoDelete": "Delete logo",
-    "logoTooLarge": "Image exceeds 1MiB limit"
+    "logoTooLarge": "Image exceeds 1MiB limit",
+    "logoDiscoverFailed": "No logo found for {service} — upload one manually"
   },
   "hidden": {
     "total": "{n} total",
@@ -151,7 +152,10 @@
     "deleteConfirm": "Delete the note for port {port}?",
     "unremarked": "Unremarked ports",
     "unremarkedHint": "Add a note for this port",
-    "unremarkedBtn": "Note"
+    "unremarkedBtn": "Note",
+    "noLogo": "Ports without a logo",
+    "noLogoHint": "Add a note / logo for this port",
+    "noLogoBtn": "Note"
   },
   "settings": {
     "title": "Settings",
