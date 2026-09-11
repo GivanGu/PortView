@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 # 确保测试用临时配置
 os.environ["PORTVIEW_CONFIG_DIR"] = "/tmp/portview_api_test_config"
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 
 @pytest.fixture

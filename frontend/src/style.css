@@ -2394,6 +2394,33 @@ html, body {
   margin: 0 0 12px;
 }
 
+/* ── 设置：访问地址 ────────────────────────────────────── */
+.access-addr-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.access-addr-row .form-input {
+  flex: 1;
+}
+
+/* ── 状态栏：版本更新提示 ──────────────────────────────── */
+.update-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.update-badge:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+
 /* ── 设置：密码警告 ────────────────────────────────────── */
 .auth-warning {
   display: flex;

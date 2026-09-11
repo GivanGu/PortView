@@ -75,7 +75,7 @@ def create_app() -> FastAPI:
 
     # 登录守卫：开启 auth 时，除 /api/auth/* 与 /api/health 外的所有 /api/* 都需有效会话。
     # 中间件方式统一拦截，避免每个路由各自声明 Depends；关闭 auth 时全放行。
-    _AUTH_WHITELIST = ("/api/health", "/api/auth/login", "/api/auth/set_password",
+    _auth_whitelist = ("/api/health", "/api/auth/login", "/api/auth/set_password",
                        "/api/auth/me", "/api/auth/toggle")
 
     @app.middleware("http")
@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
         path = request.url.path
         if not path.startswith("/api/"):
             return await call_next(request)
-        if path in _AUTH_WHITELIST or path.startswith("/api/auth/"):
+        if path in _auth_whitelist or path.startswith("/api/auth/"):
             return await call_next(request)
         if not await auth_service.is_auth_required():
             return await call_next(request)

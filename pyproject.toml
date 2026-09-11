@@ -50,6 +50,10 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "RUF001", # ambiguous unicode in strings (Chinese text)
+    "RUF002", # ambiguous unicode in docstrings (Chinese text)
+    "RUF003", # ambiguous unicode in comments (Chinese text)
+    "B008",   # FastAPI Depends() in defaults
 ]
 
 [tool.ruff.lint.isort]

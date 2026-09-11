@@ -7,15 +7,23 @@ import logging
 from fastapi import APIRouter, Depends
 
 from app.config import (
+    ACCESS_ADDRESS_KEY,
+    load_access_address,
     load_config,
     load_hidden_ports,
     load_raw_config,
-    save_config,
+    save_access_address,
     save_hidden_ports,
     save_raw_config,
 )
 from app.dependencies import get_monitor
-from app.models import APIResponse, HiddenPortRequest, HiddenPortsBatchRequest, PortEditRequest
+from app.models import (
+    AccessAddressRequest,
+    APIResponse,
+    HiddenPortRequest,
+    HiddenPortsBatchRequest,
+    PortEditRequest,
+)
 from app.routers.ports import _load_notes_map
 from app.services.port_monitor import PortMonitor
 
@@ -29,7 +37,7 @@ def api_get_config() -> APIResponse:
     try:
         raw = load_raw_config()
         return APIResponse(success=True, data=raw)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("获取配置失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -43,6 +51,8 @@ def api_save_config(payload: dict) -> APIResponse:
 
         # 校验每个条目
         for key, value in payload.items():
+            if key == ACCESS_ADDRESS_KEY:
+                continue
             if not isinstance(value, str):
                 return APIResponse(success=False, error=f"配置项 {key} 的值必须是字符串")
             if ":" not in key:
@@ -65,8 +75,30 @@ def api_save_config(payload: dict) -> APIResponse:
         if save_raw_config(payload):
             return APIResponse(success=True, message="配置已保存")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("保存配置失败: %s", e)
+        return APIResponse(success=False, error=str(e))
+
+
+@router.get("/access_address", response_model=APIResponse)
+def api_get_access_address() -> APIResponse:
+    """获取全局访问地址（如 http://192.168.31.1）。"""
+    try:
+        return APIResponse(success=True, data={"address": load_access_address()})
+    except Exception as e:
+        logger.error("获取访问地址失败: %s", e)
+        return APIResponse(success=False, error=str(e))
+
+
+@router.post("/access_address", response_model=APIResponse)
+def api_save_access_address(req: AccessAddressRequest) -> APIResponse:
+    """保存全局访问地址。空字符串表示清除。"""
+    try:
+        if save_access_address(req.address):
+            return APIResponse(success=True, message="访问地址已保存")
+        return APIResponse(success=False, error="保存失败")
+    except Exception as e:
+        logger.error("保存访问地址失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
 
@@ -96,7 +128,7 @@ def api_edit_port(req: PortEditRequest) -> APIResponse:
         if save_raw_config(raw):
             return APIResponse(success=True, message=f"端口 {req.port} 已更新为 {req.service_name}")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("编辑端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -110,7 +142,7 @@ def api_get_hidden() -> APIResponse:
     try:
         hidden = load_hidden_ports()
         return APIResponse(success=True, data=hidden)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("获取隐藏端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -172,7 +204,7 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
                     }
                 )
         return APIResponse(success=True, data=details)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("获取隐藏端口详情失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -188,7 +220,7 @@ def api_hide_port(req: HiddenPortRequest) -> APIResponse:
         if save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"端口 {req.port} 已隐藏")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("隐藏端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -202,7 +234,7 @@ def api_unhide_port(port: int) -> APIResponse:
         if save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"端口 {port} 已取消隐藏")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("取消隐藏端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -217,7 +249,7 @@ def api_batch_hide(req: HiddenPortsBatchRequest) -> APIResponse:
         if save_hidden_ports(hidden_list):
             return APIResponse(success=True, message=f"已隐藏 {len(req.ports)} 个端口")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("批量隐藏端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -232,6 +264,6 @@ def api_batch_unhide(req: HiddenPortsBatchRequest) -> APIResponse:
         if save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"已取消隐藏 {len(req.ports)} 个端口")
         return APIResponse(success=False, error="保存失败")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("批量取消隐藏端口失败: %s", e)
         return APIResponse(success=False, error=str(e))

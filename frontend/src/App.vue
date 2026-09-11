@@ -86,6 +86,33 @@ const version = ref('')
 const loading = ref(true)
 const showAccentPicker = ref(false)
 
+// v1.4.8：版本检测
+const latestVersion = ref('')
+const hasUpdate = computed(() => {
+  if (!version.value || !latestVersion.value) return false
+  const cur = version.value.replace(/^v/, '').split('.').map(Number)
+  const lat = latestVersion.value.replace(/^v/, '').split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((lat[i] || 0) > (cur[i] || 0)) return true
+    if ((lat[i] || 0) < (cur[i] || 0)) return false
+  }
+  return false
+})
+
+async function checkLatestVersion() {
+  try {
+    const res = await fetch('https://api.github.com/repos/GivanGu/PortView/releases/latest')
+    if (res.ok) {
+      const data = await res.json()
+      latestVersion.value = data.tag_name || ''
+    }
+  } catch { /* 离线时静默 */ }
+}
+
+function openGitHub() {
+  window.open('https://github.com/GivanGu/PortView', '_blank')
+}
+
 // 状态栏实时指标
 const stats = ref<{ used: number; available: number; containers: number }>({
   used: 0,
@@ -229,8 +256,15 @@ function onDocClick(e: MouseEvent) {
   }
 }
 
+// v1.4.8：跨组件导航事件（如 PortsView 点「打开服务」未设置地址时跳设置页）
+function onNavigate(e: Event) {
+  const tab = (e as CustomEvent).detail?.tab as Tab | undefined
+  if (tab) switchTab(tab)
+}
+
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
+  document.addEventListener('portview:navigate', onNavigate)
   theme.value = initialTheme()
   applyTheme(theme.value)
   accent.value = initialAccent()
@@ -255,10 +289,13 @@ onMounted(async () => {
   applyStatsTimer()
   loading.value = false
   loadStats()
+  // v1.4.8：版本检测（不阻塞加载）
+  void checkLatestVersion()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
+  document.removeEventListener('portview:navigate', onNavigate)
   if (statsTimer) clearInterval(statsTimer)
 })
 </script>
@@ -280,6 +317,12 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="topbar-actions">
+        <button class="icon-btn" :title="t('topbar.github')" @click="openGitHub">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </button>
+
         <button class="icon-btn" :title="t('common.refresh')" @click="handleGlobalRefresh">
           <RefreshCw :size="18" />
         </button>
@@ -358,6 +401,14 @@ onBeforeUnmount(() => {
       <div class="status-item">
         <span class="status-dot" />
         <span>PortView v{{ version }}</span>
+        <button
+          v-if="hasUpdate"
+          class="update-badge"
+          :title="t('topbar.updateAvailable', { v: latestVersion })"
+          @click="openGitHub"
+        >
+          {{ t('topbar.updateAvailable', { v: latestVersion }) }}
+        </button>
       </div>
       <div class="status-item">
         <span class="status-label">

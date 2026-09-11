@@ -82,7 +82,7 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     params.append(1)  # WHERE id = 1
 
     conn = db_service._db
-    cur = await conn.execute(
+    await conn.execute(
         f"UPDATE user_prefs SET {', '.join(sets)} WHERE id = ?",
         tuple(params),
     )

@@ -18,7 +18,9 @@
     "themeLight": "浅色",
     "themeDark": "深色",
     "themeToggle": "切换主题",
-    "langToggle": "切换语言"
+    "langToggle": "切换语言",
+    "github": "GitHub",
+    "updateAvailable": "v{v} 可用"
   },
   "accent": {
     "title": "强调色",
@@ -75,6 +77,10 @@
     "dockerOffline": "离线",
     "usageRate": "端口占用率",
     "protocolDist": "协议分布",
+    "sourceDist": "来源分布",
+    "sourceDistSub": "端口",
+    "statusDist": "在线 / 离线",
+    "statusDistSub": "端口",
     "loadFailed": "加载失败"
   },
   "ports": {
@@ -95,6 +101,7 @@
     "statUdp": "UDP",
     "statDocker": "Docker 容器",
     "loading": "加载端口数据...",
+    "openService": "打开服务",
     "editService": "编辑服务名",
     "hidePort": "隐藏端口",
     "hideRange": "隐藏范围",
@@ -191,7 +198,11 @@
     "refreshManual": "手动",
     "refresh10": "10 秒",
     "refresh15": "15 秒",
-    "refresh30": "30 秒"
+    "refresh30": "30 秒",
+    "accessAddress": "访问地址",
+    "accessAddressHint": "设置后，端口卡片上的「打开服务」按钮将使用此地址拼接端口号",
+    "accessAddressPlaceholder": "如 http://192.168.1.100",
+    "accessAddrSaved": "访问地址已保存"
   },
   "login": {
     "subtitle": "请输入密码以登录",

@@ -1,8 +1,6 @@
 """PortMonitor 核心逻辑测试。"""
 
-from typing import Any
 
-import pytest
 
 from app.services.port_monitor import PortMonitor
 

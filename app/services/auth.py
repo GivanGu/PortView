@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import Argon2Error
@@ -56,10 +55,7 @@ async def create_user_if_absent(username: str = "admin", password: str = "") -> 
     if db is None:
         return False
     now = int(time.time())
-    if password:
-        ph = hash_password(password)
-    else:
-        ph = ""
+    ph = hash_password(password) if password else ""
     await db.execute(
         "INSERT INTO users (id, username, password_hash, created_at, updated_at)"
         " VALUES (1, ?, ?, ?, ?)"
@@ -214,19 +210,18 @@ async def set_auth_required(enabled: bool) -> None:
 # 惰性 import os（避免循环依赖；db 里已经 import 过）
 import os  # noqa: E402
 
-
 __all__: list[str] = [
-    "hash_password",
-    "verify_password",
-    "create_user_if_absent",
-    "update_password",
-    "has_password",
-    "verify_user_password",
-    "issue_session",
-    "revoke_session",
-    "revoke_all_sessions",
-    "is_valid_session",
-    "is_auth_required",
-    "set_auth_required",
     "SESSION_TTL_SECONDS",
+    "create_user_if_absent",
+    "has_password",
+    "hash_password",
+    "is_auth_required",
+    "is_valid_session",
+    "issue_session",
+    "revoke_all_sessions",
+    "revoke_session",
+    "set_auth_required",
+    "update_password",
+    "verify_password",
+    "verify_user_password",
 ]

@@ -93,7 +93,7 @@ async def create_range(body: RangePayload) -> APIResponse:
         raise HTTPException(status_code=500, detail="db not initialized")
     now = int(time.time())
     try:
-        cur = await conn.execute(
+        await conn.execute(
             "INSERT INTO range_rules (name, start_port, end_port, created_at)"
             " VALUES (?, ?, ?, ?)",
             (body.name, body.start_port, body.end_port, now),

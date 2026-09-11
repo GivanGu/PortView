@@ -2,10 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { getPrefs, patchPrefs, resetPrefs, type UserPrefs } from '@/api'
+import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -151,6 +151,33 @@ function onRefreshIntervalChange(v: number) {
   void persistPartial({ refresh_interval: v })
 }
 
+// ── 访问地址 ──
+const accessAddress = ref('')
+const accessAddrBusy = ref(false)
+
+async function loadAccessAddress() {
+  try {
+    const resp = await getAccessAddress()
+    if (resp.success) accessAddress.value = resp.data || ''
+  } catch { /* ignore */ }
+}
+
+async function handleSaveAccessAddress() {
+  accessAddrBusy.value = true
+  try {
+    const resp = await setAccessAddress(accessAddress.value.trim())
+    if (resp.success) {
+      showToast(t('settings.accessAddrSaved'))
+    } else {
+      showToast(t('settings.saveFailed'))
+    }
+  } catch {
+    showToast(t('settings.saveFailed'))
+  } finally {
+    accessAddrBusy.value = false
+  }
+}
+
 async function handleReset() {
   if (!confirm(t('settings.resetConfirm'))) return
   savingPref.value = true
@@ -180,6 +207,7 @@ onMounted(async () => {
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
   }
+  void loadAccessAddress()
 })
 
 const savingText = computed(() => (savingPref.value ? t('settings.saving') : ''))
@@ -401,6 +429,31 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
               />
               <span>{{ t('settings.refresh30') }}</span>
             </label>
+          </div>
+        </section>
+
+        <!-- Access Address -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <Globe :size="16" class="card-ico" />
+            <span>{{ t('settings.accessAddress') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.accessAddressHint') }}</p>
+          <div class="access-addr-row">
+            <input
+              v-model="accessAddress"
+              class="form-input"
+              type="text"
+              :placeholder="t('settings.accessAddressPlaceholder')"
+              @keyup.enter="handleSaveAccessAddress"
+            />
+            <button
+              class="btn btn-small btn-primary"
+              :disabled="accessAddrBusy"
+              @click="handleSaveAccessAddress"
+            >
+              {{ t('common.save') }}
+            </button>
           </div>
         </section>
 

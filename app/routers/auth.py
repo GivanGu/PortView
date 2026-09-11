@@ -42,10 +42,10 @@ async def set_password(body: SetPasswordPayload, response: Response) -> APIRespo
     # 这里 v1.2 只做 set/update，不区分；前端在"设置" tab 提供旧密码+新密码两个字段）
     if has:
         # 已存在 → 视为 update_password；失败则 400
-        ok = await auth_svc.verify_user_password(body.password)
+        await auth_svc.verify_user_password(body.password)
         # 允许"覆盖式"修改：只要登录了就能改；未登录也能改（单用户工具，密码忘了就忘在锁外）
         # 简化策略：直接覆盖（不强制旧密码），但要求新密码长度>=4
-        pass  # noqa: SIM105
+        pass
     await auth_svc.create_user_if_absent(password=body.password)
     await auth_svc.update_password(body.password)
     # 登出旧会话（改了密码后老 cookie 失效）

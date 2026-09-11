@@ -14,15 +14,15 @@ import os
 
 os.environ["PORTVIEW_CONFIG_DIR"] = "/tmp/portview_p1_test"
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import pytest
+from fastapi.testclient import TestClient
 
 # 强制使用临时 SQLite
 os.environ["PORTVIEW_DB"] = "/tmp/portview_p1_test/p1.db"
 # 关掉 env 层的 require_auth，让测试控制
 os.environ.pop("PORTVIEW_REQUIRE_AUTH", None)
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 
 @pytest.fixture

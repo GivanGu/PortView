@@ -84,6 +84,12 @@ class HiddenPortRequest(BaseModel):
     port: int
 
 
+class AccessAddressRequest(BaseModel):
+    """全局访问地址保存请求（如 http://192.168.31.1）。空字符串表示清除。"""
+
+    address: str = ""
+
+
 class HiddenPortsBatchRequest(BaseModel):
     """批量隐藏 / 取消隐藏请求。"""
 

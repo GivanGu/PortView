@@ -47,7 +47,8 @@ cd frontend && npm install && npm run dev
 - **Services**: `app/services/port_monitor.py` (Docker SDK + psutil → PortCard list), `app/services/db.py` (SQLite via aiosqlite, 5 tables), `app/services/auth.py` (argon2id sessions)
 - **Routers**: `app/routers/{ports,config,notes,prefs,ranges,auth}.py` — all under `/api/`
 - **Auth guard**: middleware in `main.py` checks `portview_session` cookie; whitelist is `/api/health`, `/api/auth/*`
-- **Config**: `app/config.py` reads `config/config.json` + `config/hidden_ports.json`
+- **Config**: `app/config.py` reads `config/config.json` + `config/hidden_ports.json`; `__access_address__` key stores global base URL for "open service" links
+- **Access address API**: `GET/POST /api/config/access_address` — read/write the global base URL (e.g. `http://192.168.31.1`)
 
 ### Frontend (`frontend/`)
 - Vue 3 + TypeScript + vue-i18n, dark theme, no UI framework
@@ -74,7 +75,7 @@ cd frontend && npm install && npm run dev
 
 ## Conventions
 
-- Python: ruff (line-length 100, target py312), isort with `app` as first-party
+- Python: ruff (line-length 100, target py312), isort with `app` as first-party; RUF001/002/003 (Chinese fullwidth chars) and B008 (FastAPI Depends) are ignored
 - Commit style: `<type>(<scope>): <summary>` — e.g. `feat(port-monitor): add offline container support`
 - Release: push to `main` triggers `docker-publish.yml` → single build pushed to GHCR + ACR (version + latest); version read from `app/__init__.py`
 - Language: code comments and commit messages are in Chinese; README is bilingual (English default `README.md` + Chinese `README.zh-CN.md`)

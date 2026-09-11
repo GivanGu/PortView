@@ -102,6 +102,17 @@ export function saveConfig(config: ConfigEntry): Promise<ApiResponse> {
   return request('/api/config', { method: 'POST', body: JSON.stringify(config) })
 }
 
+export function getAccessAddress(): Promise<ApiResponse<{ address: string }>> {
+  return request<{ address: string }>('/api/config/access_address')
+}
+
+export function setAccessAddress(address: string): Promise<ApiResponse> {
+  return request('/api/config/access_address', {
+    method: 'POST',
+    body: JSON.stringify({ address }),
+  })
+}
+
 export function editPort(port: number, serviceName: string, serviceType: 'docker' | 'host' = 'host'): Promise<ApiResponse> {
   return request('/api/config/edit', {
     method: 'POST',

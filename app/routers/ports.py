@@ -128,7 +128,7 @@ async def api_ports(
             port_data = _apply_search(port_data, search_term)
 
         return APIResponse(success=True, data=port_data)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("API 调用失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
@@ -146,7 +146,7 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
             notes_map=await _load_notes_map(),
         )
         return APIResponse(success=True, data=port_data, message="端口信息已刷新")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("刷新失败: %s", e)
         return APIResponse(success=False, error=str(e))
 

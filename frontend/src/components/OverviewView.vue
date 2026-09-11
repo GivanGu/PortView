@@ -46,6 +46,22 @@ const udpLen = computed(() => (protoTotal.value > 0 ? (stats.value.udpUsed / pro
 const tcpPct = computed(() => (protoTotal.value > 0 ? (stats.value.tcpUsed / protoTotal.value) * 100 : 0))
 const udpPct = computed(() => (protoTotal.value > 0 ? (stats.value.udpUsed / protoTotal.value) * 100 : 0))
 
+// 来源分布：本地（host/system）vs Docker
+const srcTotal = computed(() => stats.value.hostPorts + stats.value.dockerPorts)
+const hostLen = computed(() => (srcTotal.value > 0 ? (stats.value.hostPorts / srcTotal.value) * CIRC : 0))
+const dockerLen = computed(() => (srcTotal.value > 0 ? (stats.value.dockerPorts / srcTotal.value) * CIRC : 0))
+const hostPct = computed(() => (srcTotal.value > 0 ? (stats.value.hostPorts / srcTotal.value) * 100 : 0))
+const dockerPct = computed(() => (srcTotal.value > 0 ? (stats.value.dockerPorts / srcTotal.value) * 100 : 0))
+
+// 在线/离线：全部端口（主机端口均在线 + Docker 在线 vs Docker 离线）
+const onlineCount = computed(() => stats.value.hostPorts + stats.value.dockerOnline)
+const offlineCount = computed(() => stats.value.dockerOffline)
+const statusTotal = computed(() => onlineCount.value + offlineCount.value)
+const onlineLen = computed(() => (statusTotal.value > 0 ? (onlineCount.value / statusTotal.value) * CIRC : 0))
+const offlineLen = computed(() => (statusTotal.value > 0 ? (offlineCount.value / statusTotal.value) * CIRC : 0))
+const onlinePct = computed(() => (statusTotal.value > 0 ? (onlineCount.value / statusTotal.value) * 100 : 0))
+const offlinePct = computed(() => (statusTotal.value > 0 ? (offlineCount.value / statusTotal.value) * 100 : 0))
+
 function dashoffset(pct: number) {
   const clamped = Math.min(1, Math.max(0, pct))
   return CIRC * (1 - clamped)
@@ -244,6 +260,84 @@ onBeforeUnmount(() => {
             <span class="pie-dot" style="background: var(--orange)" />
             <span class="pie-legend-label">UDP</span>
             <span class="pie-legend-val">{{ stats.udpUsed }} ({{ udpPct.toFixed(1) }}%)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">{{ t('overview.sourceDist') }}</div>
+        <div class="pie-wrap">
+          <svg viewBox="0 0 120 120" class="pie-svg">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="12" />
+            <circle
+              cx="60" cy="60" r="52" fill="none"
+              stroke="var(--cyan)" stroke-width="12"
+              :stroke-dasharray="`${hostLen} ${CIRC - hostLen}`"
+              stroke-dashoffset="0"
+              transform="rotate(-90 60 60)"
+            />
+            <circle
+              cx="60" cy="60" r="52" fill="none"
+              stroke="var(--purple)" stroke-width="12"
+              :stroke-dasharray="`${dockerLen} ${CIRC - dockerLen}`"
+              :stroke-dashoffset="-hostLen"
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct">{{ srcTotal }}</div>
+            <div class="ring-sub">{{ t('overview.sourceDistSub') }}</div>
+          </div>
+        </div>
+        <div class="pie-legend">
+          <div class="pie-legend-item">
+            <span class="pie-dot" style="background: var(--cyan)" />
+            <span class="pie-legend-label">{{ t('overview.hostPorts') }}</span>
+            <span class="pie-legend-val">{{ stats.hostPorts }} ({{ hostPct.toFixed(1) }}%)</span>
+          </div>
+          <div class="pie-legend-item">
+            <span class="pie-dot" style="background: var(--purple)" />
+            <span class="pie-legend-label">{{ t('overview.dockerPorts') }}</span>
+            <span class="pie-legend-val">{{ stats.dockerPorts }} ({{ dockerPct.toFixed(1) }}%)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">{{ t('overview.statusDist') }}</div>
+        <div class="pie-wrap">
+          <svg viewBox="0 0 120 120" class="pie-svg">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="12" />
+            <circle
+              cx="60" cy="60" r="52" fill="none"
+              stroke="var(--green)" stroke-width="12"
+              :stroke-dasharray="`${onlineLen} ${CIRC - onlineLen}`"
+              stroke-dashoffset="0"
+              transform="rotate(-90 60 60)"
+            />
+            <circle
+              cx="60" cy="60" r="52" fill="none"
+              stroke="var(--red)" stroke-width="12"
+              :stroke-dasharray="`${offlineLen} ${CIRC - offlineLen}`"
+              :stroke-dashoffset="-onlineLen"
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct">{{ statusTotal }}</div>
+            <div class="ring-sub">{{ t('overview.statusDistSub') }}</div>
+          </div>
+        </div>
+        <div class="pie-legend">
+          <div class="pie-legend-item">
+            <span class="pie-dot" style="background: var(--green)" />
+            <span class="pie-legend-label">{{ t('common.online') }}</span>
+            <span class="pie-legend-val">{{ onlineCount }} ({{ onlinePct.toFixed(1) }}%)</span>
+          </div>
+          <div class="pie-legend-item">
+            <span class="pie-dot" style="background: var(--red)" />
+            <span class="pie-legend-label">{{ t('common.offline') }}</span>
+            <span class="pie-legend-val">{{ offlineCount }} ({{ offlinePct.toFixed(1) }}%)</span>
           </div>
         </div>
       </div>

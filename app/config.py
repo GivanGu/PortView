@@ -27,6 +27,10 @@ CONFIG_DIR = os.environ.get("PORTVIEW_CONFIG_DIR", "/app/config")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 HIDDEN_PORTS_FILE = os.path.join(CONFIG_DIR, "hidden_ports.json")
 
+# 全局访问地址（如 http://192.168.31.1）在 config.json 中的保留键。
+# 卡片「打开服务」按钮用它拼接端口后在新标签页打开。
+ACCESS_ADDRESS_KEY = "__access_address__"
+
 # 仓库内自带的示例配置（首次启动时复制）
 _EXAMPLE_CONFIG_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -80,14 +84,16 @@ def load_config() -> dict[str, Any]:
     解析失败时返回一套内置默认配置，保证服务可用。
     """
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             raw_config = json.load(f)
-    except Exception as e:  # noqa: BLE001 - 解析失败时返回默认配置
+    except Exception as e:
         logger.warning("加载配置文件失败: %s", e)
         return _fallback_config()
 
     processed: dict[str, Any] = {}
     for key, value in raw_config.items():
+        if key == ACCESS_ADDRESS_KEY:
+            continue
         if isinstance(value, str) and ":" in value:
             if ":" in key and (key.endswith(":docker") or key.endswith(":host")):
                 # 新格式：服务名:docker/host
@@ -129,7 +135,7 @@ def load_config() -> dict[str, Any]:
 
 def load_raw_config() -> dict[str, Any]:
     """读取原始配置 JSON（未经结构化处理，供设置界面编辑）。"""
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    with open(CONFIG_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -150,13 +156,39 @@ def save_raw_config(raw: Mapping[str, Any]) -> bool:
     return _write_json(CONFIG_FILE, dict(raw))
 
 
+def load_access_address() -> str:
+    """读取全局访问地址（如 http://192.168.31.1）。未设置时返回空字符串。"""
+    try:
+        raw = load_raw_config()
+    except Exception as e:
+        logger.warning("读取访问地址失败: %s", e)
+        return ""
+    value = raw.get(ACCESS_ADDRESS_KEY, "")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def save_access_address(address: str) -> bool:
+    """保存全局访问地址。空字符串表示清除。"""
+    try:
+        raw = load_raw_config()
+    except Exception as e:
+        logger.warning("读取配置失败，无法保存访问地址: %s", e)
+        raw = {}
+    address = address.strip()
+    if address:
+        raw[ACCESS_ADDRESS_KEY] = address
+    else:
+        raw.pop(ACCESS_ADDRESS_KEY, None)
+    return _write_json(CONFIG_FILE, raw)
+
+
 def load_hidden_ports() -> list[int]:
     """加载隐藏端口列表。"""
     try:
         if os.path.exists(HIDDEN_PORTS_FILE):
-            with open(HIDDEN_PORTS_FILE, "r", encoding="utf-8") as f:
+            with open(HIDDEN_PORTS_FILE, encoding="utf-8") as f:
                 return json.load(f)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.warning("加载隐藏端口配置失败: %s", e)
     return []
 
@@ -172,7 +204,7 @@ def _write_json(path: str, data: Any) -> bool:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.error("写入 %s 失败: %s", path, e)
         return False
 

@@ -62,7 +62,7 @@ class PortMonitor:
 
                 self.docker_client = docker.from_env()
                 logger.info("Docker 客户端连接成功")
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error("Docker 客户端连接失败: %s", e)
                 self.docker_client = None
 
@@ -80,7 +80,7 @@ class PortMonitor:
 
             self.docker_client = docker.from_env()
             logger.info("Docker 客户端重连成功")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("Docker 客户端重连失败: %s", e)
             self.docker_client = None
         self.container_cache = {}
@@ -99,14 +99,14 @@ class PortMonitor:
         try:
             containers = self.docker_client.containers.list(all=True)
             logger.info("发现 %d 个容器（含已停止）", len(containers))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("获取 Docker 端口信息失败: %s", e)
             return ports_info
 
         for container in containers:
             try:
                 ports_info.extend(self._parse_container(container))
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 name = getattr(container, "name", "unknown")
                 logger.warning("处理容器 %s 端口信息失败，已跳过: %s", name, e)
         return ports_info
@@ -195,7 +195,7 @@ class PortMonitor:
                     port = conn.laddr.port
                     # psutil >= 7.x 用 ``.ip``；旧版才有 ``.address``（已弃用）
                     address = getattr(conn.laddr, "ip", None) or getattr(conn.laddr, "address", "")
-                except Exception:  # noqa: BLE001
+                except Exception:
                     continue
 
                 # psutil 7.x 不再暴露 ``.proto``；用 socket ``.type`` 判定：
@@ -221,7 +221,7 @@ class PortMonitor:
                         "service_name": self.get_service_name(port, config),
                         "container_name": container_name,
                     }
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("获取主机端口信息失败: %s", e)
 
         # 合并协议（含 IPv4/IPv6 信息，如 TCP/TCP6）
@@ -289,7 +289,7 @@ class PortMonitor:
 
                 info["exposed_ports"].update(info["potential_ports"])
                 self.container_cache[container.name] = info
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("获取 Docker 容器信息失败: %s", e)
 
         self.cache_timestamp = current_time
@@ -387,9 +387,7 @@ class PortMonitor:
             port = port_info["port"]
             if port < start_port or port > end_port:
                 continue
-            if port in docker_port_map and port_info.get("is_running", True):
-                docker_port_map[port] = port_info
-            elif port not in docker_port_map:
+            if (port in docker_port_map and port_info.get("is_running", True)) or port not in docker_port_map:
                 docker_port_map[port] = port_info
             docker_protocol = port_info.get("protocol", "TCP")
             if docker_protocol == "UDP":
@@ -502,7 +500,7 @@ class PortMonitor:
                     (
                         notes_map[p]
                         for p in range(sp, ep + 1)
-                        if p in notes_map and notes_map[p]
+                        if notes_map.get(p)
                     ),
                     "",
                 )

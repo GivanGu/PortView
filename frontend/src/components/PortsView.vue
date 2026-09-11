@@ -9,6 +9,7 @@ import {
   fetchRanges,
   createRange,
   deleteRange,
+  getAccessAddress,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
@@ -207,6 +208,22 @@ function startEdit(card: PortCard) {
   }
 }
 
+// ── 打开服务 ──
+async function handleOpenService(card: PortCard) {
+  if (!card.port) return
+  try {
+    const resp = await getAccessAddress()
+    if (resp.success && resp.data) {
+      const base = resp.data.replace(/\/+$/, '')
+      window.open(`${base}:${card.port}`, '_blank')
+    } else {
+      window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+    }
+  } catch {
+    window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+  }
+}
+
 // ── 初始化 ──
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -386,6 +403,11 @@ onBeforeUnmount(() => {
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
             <div class="port-card" :class="{ offline: card.is_running === false }">
               <div class="port-actions">
+              <button
+                class="port-action-btn"
+                :title="t('ports.openService')"
+                @click="handleOpenService(card)"
+              >🔗</button>
               <button
                 class="port-action-btn"
                 :title="t('ports.editService')"
