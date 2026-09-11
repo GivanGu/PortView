@@ -158,7 +158,7 @@ const accessAddrBusy = ref(false)
 async function loadAccessAddress() {
   try {
     const resp = await getAccessAddress()
-    if (resp.success) accessAddress.value = resp.data || ''
+    if (resp.success) accessAddress.value = resp.data?.address || ''
   } catch { /* ignore */ }
 }
 

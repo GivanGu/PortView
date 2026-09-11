@@ -213,8 +213,8 @@ async function handleOpenService(card: PortCard) {
   if (!card.port) return
   try {
     const resp = await getAccessAddress()
-    if (resp.success && resp.data) {
-      const base = resp.data.replace(/\/+$/, '')
+    if (resp.success && resp.data?.address) {
+      const base = resp.data.address.replace(/\/+$/, '')
       window.open(`${base}:${card.port}`, '_blank')
     } else {
       window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
