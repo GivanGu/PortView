@@ -78,4 +78,5 @@ cd frontend && npm install && npm run dev
 - Python: ruff (line-length 100, target py312), isort with `app` as first-party; RUF001/002/003 (Chinese fullwidth chars) and B008 (FastAPI Depends) are ignored
 - Commit style: `<type>(<scope>): <summary>` — e.g. `feat(port-monitor): add offline container support`
 - Release: push to `main` triggers `docker-publish.yml` → single build pushed to GHCR + ACR (version + latest); version read from `app/__init__.py`
+- **Every release must create a GitHub Release** (via API or `gh release create`) with an English changelog; the in-app update badge links to the latest release page (`/releases/tag/vX.Y.Z`)
 - Language: code comments and commit messages are in Chinese; README is bilingual (English default `README.md` + Chinese `README.zh-CN.md`)
