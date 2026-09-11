@@ -91,11 +91,15 @@ const latestVersion = ref('')
 const latestReleaseUrl = ref('')
 const hasUpdate = computed(() => {
   if (!version.value || !latestVersion.value) return false
+  if (version.value === 'unknown') return false
   const cur = version.value.replace(/^v/, '').split('.').map(Number)
   const lat = latestVersion.value.replace(/^v/, '').split('.').map(Number)
   for (let i = 0; i < 3; i++) {
-    if ((lat[i] || 0) > (cur[i] || 0)) return true
-    if ((lat[i] || 0) < (cur[i] || 0)) return false
+    const c = cur[i]
+    const l = lat[i]
+    if (isNaN(c) || isNaN(l)) return false
+    if (l > c) return true
+    if (l < c) return false
   }
   return false
 })
