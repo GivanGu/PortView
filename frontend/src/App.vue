@@ -88,6 +88,7 @@ const showAccentPicker = ref(false)
 
 // v1.4.8：版本检测
 const latestVersion = ref('')
+const latestReleaseUrl = ref('')
 const hasUpdate = computed(() => {
   if (!version.value || !latestVersion.value) return false
   const cur = version.value.replace(/^v/, '').split('.').map(Number)
@@ -105,12 +106,17 @@ async function checkLatestVersion() {
     if (res.ok) {
       const data = await res.json()
       latestVersion.value = data.tag_name || ''
+      latestReleaseUrl.value = data.html_url || ''
     }
   } catch { /* 离线时静默 */ }
 }
 
 function openGitHub() {
   window.open('https://github.com/GivanGu/PortView', '_blank')
+}
+
+function openLatestRelease() {
+  window.open(latestReleaseUrl.value || 'https://github.com/GivanGu/PortView/releases', '_blank')
 }
 
 // 状态栏实时指标
@@ -405,7 +411,7 @@ onBeforeUnmount(() => {
           v-if="hasUpdate"
           class="update-badge"
           :title="t('topbar.updateAvailable', { v: latestVersion })"
-          @click="openGitHub"
+          @click="openLatestRelease"
         >
           {{ t('topbar.updateAvailable', { v: latestVersion }) }}
         </button>
