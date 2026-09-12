@@ -11,12 +11,12 @@ import type { PortCard } from '@/api'
 function imageRepoName(image?: string): string | null {
   if (!image) return null
   // 去掉 digest
-  let name = image.split('@')[0]
-  // 去掉 tag
-  name = name.split(':').pop() || name
-  // 取最后一段路径（仓库名）
+  const name = image.split('@')[0]
+  // 取最后一段路径（可能是 repo:tag）
   const parts = name.split('/')
-  const repo = parts[parts.length - 1]
+  const last = parts[parts.length - 1]
+  // 去掉 tag
+  const repo = last.split(':')[0]
   // 过滤空 / 纯数字（如 localhost:5000/12345）
   if (!repo || /^\d+$/.test(repo)) return null
   return repo.toLowerCase()
@@ -31,9 +31,9 @@ export function appKey(card: PortCard): string {
   const repo = imageRepoName(card.image)
   if (repo) return repo
 
-  // 2. 用户自定义服务名
+  // 2. 用户自定义服务名（仅保留后端允许的字符：a-z 0-9 . _ : / -）
   if (card.service_name) {
-    return card.service_name.trim().toLowerCase().replace(/\s+/g, '_')
+    return card.service_name.trim().toLowerCase().replace(/[^a-z0-9._:/-]/g, '_')
   }
 
   // 3. 兜底：端口号
