@@ -84,8 +84,16 @@ async def api_list_logos() -> APIResponse:
 
 @router.get("/defaults", response_model=APIResponse)
 async def api_list_default_logos() -> APIResponse:
-    """内置默认 Logo 的归一化 key 列表（供前端判断某 service_name 是否有默认图标）。"""
-    return APIResponse(success=True, data=default_logos.available_keys())
+    """内置默认 Logo 匹配表（供前端回退）。
+
+    返回 ``{names: [归一化 key], ports: {"端口": key}}``：
+    - ``ports`` 优先（知名端口最可靠，不受 service_name 影响）
+    - ``names`` 兜底（按 service_name 归一化匹配）
+    """
+    return APIResponse(
+        success=True,
+        data={"names": default_logos.available_keys(), "ports": default_logos.port_map()},
+    )
 
 
 @router.get("/default/{key}")

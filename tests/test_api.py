@@ -314,12 +314,15 @@ class TestLogos:
         client.delete("/api/logos/idem-app")
 
     def test_default_logos_list(self, client: TestClient):
-        # v1.5.13：内置默认 Logo 列表应包含常见服务
+        # v1.5.13：内置默认 Logo 匹配表应含 names + ports
         r = client.get("/api/logos/defaults")
         assert r.status_code == 200
         assert r.json()["success"] is True
-        keys = r.json()["data"]
-        assert "mysql" in keys and "redis" in keys and "https" in keys
+        data = r.json()["data"]
+        assert "mysql" in data["names"] and "redis" in data["names"]
+        # 知名端口映射：3306 → mysql，443 → https
+        assert data["ports"]["3306"] == "mysql"
+        assert data["ports"]["443"] == "https"
 
     def test_default_logo_get(self, client: TestClient):
         # v1.5.13：内置默认 Logo 应返回 SVG 字节

@@ -60,6 +60,50 @@ DEFAULT_LOGOS: dict[str, str] = {
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
 
+# 知名端口 → Logo key（与 port_monitor._DEFAULT_PORTS 对齐，端口匹配最可靠，
+# 不受 service_name 为「未知服务」/自定义名的影响）。
+PORT_LOGOS: dict[int, str] = {
+    21: "ftp",
+    22: "ssh",
+    23: "telnet",
+    25: "smtp",
+    53: "dns",
+    67: "dhcpserver",
+    68: "dhcpclient",
+    69: "tftp",
+    80: "http",
+    110: "pop3",
+    123: "ntp",
+    135: "rpc",
+    137: "netbiosname",
+    138: "netbiosdatagram",
+    139: "netbiossession",
+    143: "imap",
+    161: "snmp",
+    389: "ldap",
+    443: "https",
+    445: "smb",
+    465: "smtps",
+    514: "syslog",
+    587: "smtp",
+    631: "ipp",
+    636: "ldaps",
+    993: "imaps",
+    995: "pop3s",
+    1433: "sqlserver",
+    1521: "oracle",
+    3306: "mysql",
+    3389: "rdp",
+    5432: "postgresql",
+    5900: "vnc",
+    6379: "redis",
+    8080: "http",
+    8081: "portview",
+    8443: "https",
+    9200: "elasticsearch",
+    27017: "mongodb",
+}
+
 
 def normalize(name: str) -> str:
     """归一化 service_name：小写 + 去除非字母数字（与前端 logo.ts 一致）。"""
@@ -67,8 +111,13 @@ def normalize(name: str) -> str:
 
 
 def available_keys() -> list[str]:
-    """所有可用默认 Logo 的归一化 key（供前端判断是否匹配）。"""
+    """所有可用默认 Logo 的归一化 key（供前端按 service_name 匹配）。"""
     return sorted(DEFAULT_LOGOS.keys())
+
+
+def port_map() -> dict[str, str]:
+    """知名端口 → Logo key（JSON 友好，key 转字符串；供前端按端口匹配）。"""
+    return {str(p): k for p, k in PORT_LOGOS.items()}
 
 
 def resolve(key: str) -> Path | None:

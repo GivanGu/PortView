@@ -45,8 +45,10 @@ const logos = ref<Map<string, LogoMeta>>(new Map())
 const logoBusy = ref<Set<string>>(new Set())
 // v1.5.11：box 模式下 Logo 加载失败的 appKey 集合（用于回退到 🖼 占位符）
 const logoError = ref<Set<string>>(new Set())
-// v1.5.13：内置默认 Logo 的归一化 key 集合（用户上传 Logo 缺失时按 service_name 回退）
-const defaultLogos = ref<Set<string>>(new Set())
+// v1.5.13：内置默认 Logo 匹配表（用户上传 Logo 缺失时回退）
+// ports 优先（知名端口最可靠），names 兜底（按 service_name 归一化匹配）
+const defaultLogoPorts = ref<Map<number, string>>(new Map())
+const defaultLogoNames = ref<Set<string>>(new Set())
 
 async function loadLogos() {
   try {
@@ -60,10 +62,15 @@ async function loadLogos() {
   } catch (e) {
     console.error('加载 Logo 列表失败:', e)
   }
-  // v1.5.13：内置默认 Logo 列表（独立请求，失败不影响用户上传 Logo）
+  // v1.5.13：内置默认 Logo 匹配表（独立请求，失败不影响用户上传 Logo）
   try {
     const d = await fetchDefaultLogos()
-    if (d.success) defaultLogos.value = new Set(d.data)
+    if (d.success) {
+      const pm = new Map<number, string>()
+      for (const [p, k] of Object.entries(d.data.ports)) pm.set(Number(p), k)
+      defaultLogoPorts.value = pm
+      defaultLogoNames.value = new Set(d.data.names)
+    }
   } catch (e) {
     console.error('加载默认 Logo 列表失败:', e)
   }
@@ -74,12 +81,17 @@ function logoStatus(card: PortCard): string | null {
   return logos.value.get(key)?.status ?? null
 }
 
-/** 按 service_name 匹配内置默认 Logo 的归一化 key；无匹配返回 null。 */
+/** 匹配内置默认 Logo 的 key：端口优先（知名端口最可靠），service_name 兜底；无匹配返回 null。 */
 function defaultLogoKey(card: PortCard): string | null {
+  if (card.port != null && defaultLogoPorts.value.has(card.port)) {
+    return defaultLogoPorts.value.get(card.port)!
+  }
   const name = card.service_name
-  if (!name) return null
-  const norm = normalizeServiceName(name)
-  return defaultLogos.value.has(norm) ? norm : null
+  if (name) {
+    const norm = normalizeServiceName(name)
+    if (defaultLogoNames.value.has(norm)) return norm
+  }
+  return null
 }
 
 function logoSrc(card: PortCard): string | null {

@@ -323,9 +323,14 @@ export function logoUrl(appKey: string): string {
   return `/api/logos/${encodeURIComponent(appKey)}`
 }
 
-/** 内置默认 Logo 的归一化 key 列表（v1.5.13）。 */
-export function fetchDefaultLogos(): Promise<ApiResponse<string[]>> {
-  return request<string[]>('/api/logos/defaults')
+/** 内置默认 Logo 匹配表（v1.5.13）：ports 优先 + names 兜底。 */
+export interface DefaultLogos {
+  names: string[]
+  ports: Record<string, string>
+}
+
+export function fetchDefaultLogos(): Promise<ApiResponse<DefaultLogos>> {
+  return request<DefaultLogos>('/api/logos/defaults')
 }
 
 /** 构建内置默认 Logo 图片 URL（供 <img src> 使用）。 */
