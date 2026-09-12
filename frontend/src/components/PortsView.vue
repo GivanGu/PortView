@@ -41,6 +41,8 @@ const editServiceName = ref('')
 // ── Logo 状态 (v1.5.0) ──
 const logos = ref<Map<string, LogoMeta>>(new Map())
 const logoBusy = ref<Set<string>>(new Set())
+// v1.5.11：box 模式下 Logo 加载失败的 appKey 集合（用于回退到 🖼 占位符）
+const logoError = ref<Set<string>>(new Set())
 
 async function loadLogos() {
   try {
@@ -49,6 +51,7 @@ async function loadLogos() {
       const m = new Map<string, LogoMeta>()
       for (const meta of resp.data) m.set(meta.app_key, meta)
       logos.value = m
+      logoError.value = new Set()
     }
   } catch (e) {
     console.error('加载 Logo 列表失败:', e)
@@ -69,6 +72,14 @@ function logoSrc(card: PortCard): string | null {
 
 function isLogoBusy(card: PortCard): boolean {
   return logoBusy.value.has(appKey(card))
+}
+
+function hasLogoError(card: PortCard): boolean {
+  return logoError.value.has(appKey(card))
+}
+
+function markLogoError(card: PortCard) {
+  logoError.value = new Set(logoError.value).add(appKey(card))
 }
 
 async function handleDiscoverLogo(card: PortCard) {
@@ -559,10 +570,11 @@ onBeforeUnmount(() => {
                     v-if="logoSrc(card)"
                     :src="logoSrc(card)!"
                     class="port-logo-img"
+                    :style="{ display: hasLogoError(card) ? 'none' : '' }"
                     :alt="card.service_name || 'logo'"
-                    @error="($event.target as HTMLImageElement).style.display = 'none'"
+                    @error="markLogoError(card)"
                   />
-                  <span v-else class="port-logo-placeholder">🖼</span>
+                  <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
                 </div>
                 <div class="port-info">
                   <PortCardContent :card="card" />

@@ -741,7 +741,7 @@ html, body {
   z-index: 2;
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 14px;
   flex: 1;
   padding: 14px 16px;
@@ -751,6 +751,7 @@ html, body {
   width: 64px;
   height: 64px;
   flex-shrink: 0;
+  align-self: flex-start;
   border-radius: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -783,6 +784,12 @@ html, body {
 
 /* 离线卡：Logo 背景灰化 + 降低不透明度 */
 .port-card.offline .port-card-bg {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+/* 离线卡：box 模式 Logo 框同样灰化，与 background 模式一致 */
+.port-card.offline .port-logo-img {
   filter: grayscale(1);
   opacity: 0.4;
 }
