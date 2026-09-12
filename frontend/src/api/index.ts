@@ -106,8 +106,8 @@ export function getAccessAddress(): Promise<ApiResponse<{ address: string }>> {
   return request<{ address: string }>('/api/config/access_address')
 }
 
-export function setAccessAddress(address: string): Promise<ApiResponse> {
-  return request('/api/config/access_address', {
+export function setAccessAddress(address: string): Promise<ApiResponse<{ address: string }>> {
+  return request<{ address: string }>('/api/config/access_address', {
     method: 'POST',
     body: JSON.stringify({ address }),
   })

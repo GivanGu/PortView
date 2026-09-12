@@ -222,8 +222,8 @@
     "scrimGlass": "毛玻璃",
     "scrimNone": "无遮罩",
     "accessAddress": "访问地址",
-    "accessAddressHint": "设置后，端口卡片上的「打开服务」按钮将使用此地址拼接端口号",
-    "accessAddressPlaceholder": "如 http://192.168.1.100",
+    "accessAddressHint": "设置后，端口卡片上的「打开服务」按钮将使用此地址拼接端口号。可直接填 IP（如 192.168.31.1），自动按 http 协议处理",
+    "accessAddressPlaceholder": "如 192.168.31.1 或 http://192.168.1.100",
     "accessAddrSaved": "访问地址已保存"
   },
   "login": {
