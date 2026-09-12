@@ -122,6 +122,7 @@
     "logoUpload": "Upload logo",
     "logoDelete": "Delete logo",
     "logoTooLarge": "Image exceeds 1MiB limit",
+    "logoAdded": "Logo added",
     "logoDiscoverFailed": "No logo found for {service} — upload one manually"
   },
   "hidden": {

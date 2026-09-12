@@ -114,6 +114,7 @@ async function handleUploadLogo(card: PortCard) {
         const base64 = (reader.result as string).split(',')[1]
         await uploadLogo(key, file.type, base64)
         await loadLogos()
+        showToast(t('ports.logoAdded'))
       }
       reader.readAsDataURL(file)
     } catch (e) {

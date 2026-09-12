@@ -122,6 +122,7 @@
     "logoUpload": "上传 Logo",
     "logoDelete": "删除 Logo",
     "logoTooLarge": "图片超过 1MiB 限制",
+    "logoAdded": "Logo 已添加",
     "logoDiscoverFailed": "未找到 {service} 的 Logo，可手动上传"
   },
   "hidden": {

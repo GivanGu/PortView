@@ -24,19 +24,19 @@ function imageRepoName(image?: string): string | null {
 
 /**
  * 为一张端口卡片派生稳定的 app_key。
- * 同一应用的多张卡片（不同端口）应得到相同 key。
+ *
+ * 关键：key 必须是「同一应用」的稳定标识，绝不能是展示用的 service_name
+ * （后端对无法识别的主机端口统一填「未知服务」，用它做 key 会让所有未知端口
+ * 塌缩成同一个 key，导致一张卡片的 Logo 泄漏到其它卡片）。
+ *
+ * 优先级：镜像仓库名（Docker 同一应用最可靠）> 端口号（保证每张卡片独立）。
  */
 export function appKey(card: PortCard): string {
-  // 1. 镜像仓库名（Docker 容器最可靠）
+  // 1. 镜像仓库名（Docker 容器最可靠的「同一应用」标识）
   const repo = imageRepoName(card.image)
   if (repo) return repo
 
-  // 2. 用户自定义服务名（仅保留后端允许的字符：a-z 0-9 . _ : / -）
-  if (card.service_name) {
-    return card.service_name.trim().toLowerCase().replace(/[^a-z0-9._:/-]/g, '_')
-  }
-
-  // 3. 兜底：端口号
+  // 2. 兜底：端口号（保证每张卡片独立，不互相串 Logo）
   if (card.port) return `port:${card.port}`
 
   // 理论上不会到这里（used 卡片必有 port）
