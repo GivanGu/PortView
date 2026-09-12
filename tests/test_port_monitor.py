@@ -11,6 +11,7 @@ def _make_monitor() -> PortMonitor:
     monitor.cache_timestamp = 0.0
     monitor.cache_ttl = 30
     monitor.default_ports = {22: "SSH", 80: "HTTP", 443: "HTTPS", 3306: "MySQL"}
+    monitor.self_port = 8081
     return monitor
 
 
@@ -28,6 +29,15 @@ class TestGetServiceName:
     def test_unknown(self):
         monitor = _make_monitor()
         assert monitor.get_service_name(12345, {}) == "未知服务"
+
+    def test_self_port_always_portview(self):
+        """PortView 自身端口（8081）恒识别为 PortView，通用端口库标注不覆盖。"""
+        monitor = _make_monitor()
+        # 无配置
+        assert monitor.get_service_name(8081, {}) == "PortView"
+        # 通用端口库把 8081 标注为 "模式注册:host"，仍应识别为 PortView
+        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        assert monitor.get_service_name(8081, config) == "PortView"
 
 
 class TestMergeUnknownAndGaps:
@@ -270,3 +280,57 @@ class TestPortAnalysis:
         assert card["source"] == "docker"
         assert card["container"] == "1p-mysql"
         assert card["image"] == "mysql:8.4.11"
+
+    def test_self_port_host_network_identified_as_portview(self, monkeypatch):
+        """回归：PortView 自身端口（host 网络容器 8081）即使配置标注 host，
+        也应识别为 docker / PortView，而非「主机 / 未知服务」。
+
+        复现场景：PortView 以 network_mode: host 运行，无 PortBindings，
+        8081 经 EXPOSE 检测为 host 网络容器；config.json 里 "模式注册:host"
+        把 8081 标注为 host。修复前该卡片 source="host"、service_name="未知服务"。
+        """
+        monitor = _make_monitor()
+        # host 网络容器：无 PortBindings → docker SDK 无命中
+        monkeypatch.setattr(monitor, "get_docker_ports", lambda: [])
+        monkeypatch.setattr(
+            monitor,
+            "get_host_ports",
+            lambda config: {
+                8081: {
+                    "protocol": "TCP",
+                    "service_name": "未知服务",
+                    "container_name": "portview",
+                }
+            },
+        )
+        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+
+        card = next(c for c in result["port_cards"] if c.get("port") == 8081)
+        assert card["type"] == "used"
+        assert card["source"] == "docker"
+        assert card["service_name"] == "PortView"
+        assert card["container"] == "portview"
+
+    def test_host_network_container_wins_over_config_host(self, monkeypatch):
+        """回归：非自身端口的 host 网络容器，检测结果（docker）应优先于配置标注（host）。"""
+        monitor = _make_monitor()
+        monkeypatch.setattr(monitor, "get_docker_ports", lambda: [])
+        monkeypatch.setattr(
+            monitor,
+            "get_host_ports",
+            lambda config: {
+                9090: {
+                    "protocol": "TCP",
+                    "service_name": "未知服务",
+                    "container_name": "some-app",
+                }
+            },
+        )
+        config = {"监控系统": {"port": 9090, "protocol": "TCP", "service_type": "host"}}
+        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+
+        card = next(c for c in result["port_cards"] if c.get("port") == 9090)
+        assert card["type"] == "used"
+        assert card["source"] == "docker"
+        assert card["container"] == "some-app"

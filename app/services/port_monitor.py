@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import socket
 import time
@@ -59,6 +60,7 @@ _DEFAULT_PORTS: dict[int, str] = {
     5900: "VNC",
     6379: "Redis",
     8080: "HTTP Proxy",
+    8081: "PortView",
     8443: "HTTPS Alt",
     9200: "Elasticsearch",
     27017: "MongoDB",
@@ -102,6 +104,13 @@ class PortMonitor:
         self.cache_ttl = 30  # 秒
 
         self.default_ports = _DEFAULT_PORTS
+
+        # PortView 自身监听端口（Dockerfile 中 ENV PORTVIEW_PORT，默认 8081）。
+        # 该端口恒为 PortView 自身，识别时优先级最高，避免被通用端口库误标。
+        try:
+            self.self_port = int(os.environ.get("PORTVIEW_PORT", "8081"))
+        except ValueError:
+            self.self_port = 8081
 
     def reconnect(self) -> None:
         """重新连接 Docker 客户端并清空缓存（供刷新接口调用）。"""
@@ -272,7 +281,11 @@ class PortMonitor:
         return port_info
 
     def get_service_name(self, port: int, config: dict[str, Any]) -> str:
-        """根据端口号获取服务名称（配置文件映射 + 默认映射）。"""
+        """根据端口号获取服务名称（自身端口 + 配置文件映射 + 默认映射）。"""
+        # PortView 自身端口优先级最高：无论通用端口库如何标注，都识别为 PortView。
+        if port == self._self_port():
+            return "PortView"
+
         port_to_service: dict[int, str] = {}
         for k, v in config.items():
             if isinstance(v, dict) and "port" in v:
@@ -285,6 +298,10 @@ class PortMonitor:
         if port in self.default_ports:
             return self.default_ports[port]
         return "未知服务"
+
+    def _self_port(self) -> int:
+        """PortView 自身监听端口（``__new__`` 绕过 ``__init__`` 时兜底 8081）。"""
+        return getattr(self, "self_port", 8081)
 
     def get_host_network_containers_cached(self) -> dict[str, dict[str, Any]]:
         """获取 host 网络容器信息（带缓存）。"""
@@ -457,6 +474,10 @@ class PortMonitor:
                     config_service_name = service_name
                     break
 
+            # PortView 自身端口（PORTVIEW_PORT，默认 8081）优先级最高：
+            # 无论通用端口库如何标注（如 "模式注册:host"），都识别为 PortView / docker。
+            is_self_port = port == self._self_port()
+
             docker_info = docker_port_map.get(port)
             docker_is_running = docker_info.get("is_running", True) if docker_info else True
             port_actively_listened = port in host_ports_info
@@ -477,19 +498,29 @@ class PortMonitor:
                     "process": f"Docker: {docker_info['container_name']}",
                     "image": docker_info.get("container_image", ""),
                     "container_port": docker_info["container_port"],
-                    "service_name": config_service_name or docker_info["container_name"],
+                    "service_name": "PortView"
+                    if is_self_port
+                    else (config_service_name or docker_info["container_name"]),
                     "is_running": docker_info.get("is_running", True),
                     "container_status": docker_info.get("container_status", "running"),
                 }
             else:
                 host_info = host_ports_info.get(port, {})
                 is_host_container = bool(host_info.get("container_name"))
-                if config_service_type in ("docker", "host"):
-                    source = config_service_type
-                elif is_host_container:
+                if is_self_port:
+                    # PortView 自身端口：恒为 docker / PortView，不受通用端口库标注影响。
                     source = "docker"
+                    service_name = "PortView"
                 else:
-                    source = "system"
+                    # 检测到 host 网络容器（EXPOSE/ENV 命中）是强信号，优先于配置标注；
+                    # 与 docker 分支保持一致：实际检测结果 > 用户标注（否则容器端口会被误标为「主机」）。
+                    if is_host_container:
+                        source = "docker"
+                    elif config_service_type in ("docker", "host"):
+                        source = config_service_type
+                    else:
+                        source = "system"
+                    service_name = config_service_name or host_info.get("service_name", "未知服务")
                 # 主机分支：只要这个端口还在 host_ports_info 里，就说明此刻有进程
                 # 在监听，判定为「在线」；反之（比如某个已停止容器的 host-network
                 # 映射残留）判定为「离线」。前端据此显式显示在线/离线状态。
@@ -499,8 +530,7 @@ class PortMonitor:
                     "type": "used",
                     "source": source,
                     "protocol": protocol,
-                    "service_name": config_service_name
-                    or host_info.get("service_name", "未知服务"),
+                    "service_name": service_name,
                     "container": host_info.get("container_name"),
                     "container_status": "running" if actively_listening else "exited",
                     "is_host_network": is_host_container,
