@@ -130,6 +130,7 @@ class UserPrefsRead(BaseModel):
     lang: Literal["zh", "en"]
     refresh_interval: int = 0
     logo_scrim: Literal["none", "left", "overlay", "glass"] = "left"
+    logo_display_mode: Literal["background", "box"] = "background"
 
 
 class UserPrefsPatch(BaseModel):
@@ -140,6 +141,7 @@ class UserPrefsPatch(BaseModel):
     lang: Literal["zh", "en"] | None = None
     refresh_interval: int | None = Field(default=None, ge=0, le=300)
     logo_scrim: Literal["none", "left", "overlay", "glass"] | None = None
+    logo_display_mode: Literal["background", "box"] | None = None
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────

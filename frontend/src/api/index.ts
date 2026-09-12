@@ -204,6 +204,7 @@ export interface UserPrefs {
   lang: 'zh' | 'en'
   refresh_interval: number
   logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
+  logo_display_mode: 'background' | 'box'
 }
 
 export interface UserPrefsPatch {
@@ -212,6 +213,7 @@ export interface UserPrefsPatch {
   lang?: 'zh' | 'en'
   refresh_interval?: number
   logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
+  logo_display_mode?: 'background' | 'box'
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {

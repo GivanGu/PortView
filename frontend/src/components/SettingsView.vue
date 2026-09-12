@@ -5,7 +5,7 @@ import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, Layers } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, Layers, LayoutGrid } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -82,7 +82,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -157,6 +157,12 @@ function onLogoScrimChange(v: 'none' | 'left' | 'overlay' | 'glass') {
   void persistPartial({ logo_scrim: v })
 }
 
+// v1.5.11：卡片 Logo 展示模式（background / box）
+function onLogoDisplayModeChange(v: 'background' | 'box') {
+  setLogoDisplayMode(v)
+  void persistPartial({ logo_display_mode: v })
+}
+
 // ── 访问地址 ──
 const accessAddress = ref('')
 const accessAddrBusy = ref(false)
@@ -199,6 +205,7 @@ async function handleReset() {
   applyAccent('indigo')
   applyLang('zh')
   setLogoScrim('left')
+  setLogoDisplayMode('background')
   showToast(t('settings.resetDone'))
 }
 
@@ -213,6 +220,7 @@ onMounted(async () => {
       if (p.lang) applyLang(p.lang)
       setRefreshInterval(p.refresh_interval ?? 0)
       if (p.logo_scrim) setLogoScrim(p.logo_scrim)
+      if (p.logo_display_mode) setLogoDisplayMode(p.logo_display_mode)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -442,8 +450,39 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
           </div>
         </section>
 
-        <!-- v1.5.2：Logo 遮罩 -->
+        <!-- v1.5.11：Logo 展示模式（background / box） -->
         <section class="settings-card">
+          <header class="settings-card-title">
+            <LayoutGrid :size="16" class="card-ico" />
+            <span>{{ t('settings.logoDisplayMode') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.logoDisplayModeHint') }}</p>
+          <div class="radio-2col">
+            <label class="radio-pill" :class="{ active: logoDisplayMode === 'background' }">
+              <input
+                type="radio"
+                name="pv-logo-mode"
+                :value="'background'"
+                :checked="logoDisplayMode === 'background'"
+                @change="() => onLogoDisplayModeChange('background')"
+              />
+              <span>{{ t('settings.logoModeBackground') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: logoDisplayMode === 'box' }">
+              <input
+                type="radio"
+                name="pv-logo-mode"
+                :value="'box'"
+                :checked="logoDisplayMode === 'box'"
+                @change="() => onLogoDisplayModeChange('box')"
+              />
+              <span>{{ t('settings.logoModeBox') }}</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- v1.5.2：Logo 遮罩（仅 background 模式生效） -->
+        <section class="settings-card" :class="{ 'is-dimmed': logoDisplayMode === 'box' }">
           <header class="settings-card-title">
             <Layers :size="16" class="card-ico" />
             <span>{{ t('settings.logoScrim') }}</span>

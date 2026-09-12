@@ -13,6 +13,12 @@ const refreshTick = ref(0)
 export type LogoScrim = 'none' | 'left' | 'overlay' | 'glass'
 const logoScrim: Ref<LogoScrim> = ref('left')
 
+// v1.5.11：卡片 Logo 展示模式。
+// background = Logo 铺满整卡作背景（logoScrim 生效）；box = 64px Logo 框 + 信息列。
+// 默认 background。logoScrim 仅在 background 模式下有意义。
+export type LogoDisplayMode = 'background' | 'box'
+const logoDisplayMode: Ref<LogoDisplayMode> = ref('background')
+
 function setRefreshInterval(v: number) {
   refreshInterval.value = v
 }
@@ -25,6 +31,10 @@ function setLogoScrim(v: LogoScrim) {
   logoScrim.value = v
 }
 
+function setLogoDisplayMode(v: LogoDisplayMode) {
+  logoDisplayMode.value = v
+}
+
 export function usePrefs() {
   return {
     refreshInterval: readonly(refreshInterval),
@@ -33,6 +43,8 @@ export function usePrefs() {
     triggerRefresh,
     logoScrim: readonly(logoScrim),
     setLogoScrim,
+    logoDisplayMode: readonly(logoDisplayMode),
+    setLogoDisplayMode,
   }
 }
 

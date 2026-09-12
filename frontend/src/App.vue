@@ -68,6 +68,7 @@ function onPwDismissed() {
 const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
 const LOGO_SCRIM_KEY = 'portview.logoScrim'
+const LOGO_MODE_KEY = 'portview.logoDisplayMode'
 
 const ACCENTS = [
   { id: 'indigo', color: '#6366f1' },
@@ -131,7 +132,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -202,6 +203,28 @@ function initialLogoScrim(): string {
   return 'left'
 }
 
+// v1.5.11：卡片 Logo 展示模式（background / box）。仅落到 localStorage，
+// 模板直接读 store 值做条件渲染，无需 <html> 属性。
+const LOGO_MODES = ['background', 'box'] as const
+
+function applyLogoMode(m: string) {
+  try {
+    localStorage.setItem(LOGO_MODE_KEY, m)
+  } catch {
+    /* ignore */
+  }
+}
+
+function initialLogoMode(): 'background' | 'box' {
+  try {
+    const saved = localStorage.getItem(LOGO_MODE_KEY)
+    if (saved && LOGO_MODES.includes(saved as (typeof LOGO_MODES)[number])) return saved as 'background' | 'box'
+  } catch {
+    /* ignore */
+  }
+  return 'background'
+}
+
 function toggleTheme() {
   const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
   theme.value = next
@@ -268,6 +291,11 @@ watch(logoScrim, (v) => {
   applyLogoScrim(v)
 })
 
+// v1.5.11：Logo 展示模式切换后实时落到 localStorage（模板读 store 即时重渲染）
+watch(logoDisplayMode, (v) => {
+  applyLogoMode(v)
+})
+
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
 const visited = reactive<Record<Tab, boolean>>({
@@ -328,6 +356,7 @@ onMounted(async () => {
   accent.value = initialAccent()
   applyAccent(accent.value)
   applyLogoScrim(initialLogoScrim())
+  setLogoDisplayMode(initialLogoMode())
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -346,6 +375,7 @@ onMounted(async () => {
     if (prefs.success) {
       setRefreshInterval(prefs.data.refresh_interval ?? 0)
       if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
+      if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
     }
   } catch { /* ignore */ }
   applyStatsTimer()

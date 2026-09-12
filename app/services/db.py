@@ -188,6 +188,17 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: user_prefs.logo_scrim added (default 'left')")
 
+    # v1.5.11 迁移：user_prefs 加 logo_display_mode 列（卡片 Logo 展示模式）。
+    # 取值 background（Logo 铺满整卡作背景）/ box（64px Logo 框 + 信息列），默认 background。
+    # logo_scrim 仅在 background 模式下生效。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols4 = {row[1] for row in await cur.fetchall()}
+    if "logo_display_mode" not in pref_cols4:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN logo_display_mode TEXT NOT NULL DEFAULT 'background'"
+        )
+        logger.info("migration: user_prefs.logo_display_mode added (default 'background')")
+
     # v1.5.0 迁移：新增 service_logos 表（应用 Logo 持久化）。
     # 表由上方 _SCHEMA 的 CREATE TABLE IF NOT EXISTS 幂等创建；
     # 这里仅对「老库」bump schema_version 以追踪迁移（新库首次种入即为 1，随后升到 2）。

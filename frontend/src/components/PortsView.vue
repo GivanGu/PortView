@@ -24,7 +24,8 @@ import { appKey } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
-import { Search, Container, Cog, Server, Plus, Trash2, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
+import PortCardContent from '@/components/PortCardContent.vue'
+import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -359,7 +360,8 @@ function onAddrDismissed() {
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
-const { refreshInterval, refreshTick } = usePrefs()
+// v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
+const { refreshInterval, refreshTick, logoDisplayMode } = usePrefs()
 
 function applyPollTimer() {
   if (pollTimer) {
@@ -534,70 +536,36 @@ onBeforeUnmount(() => {
           <!-- 已用端口 -->
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
             <div class="port-card" :class="{ offline: card.is_running === false, editing: editingPort === card.port }">
-              <!-- v1.5.2：Logo 铺满整卡作为背景层（cover 填充，随卡片尺寸自动缩放） -->
-              <img
-                v-if="logoSrc(card)"
-                :src="logoSrc(card)!"
-                class="port-card-bg"
-                alt=""
-                @error="($event.target as HTMLImageElement).style.display = 'none'"
-              />
-              <div v-if="logoSrc(card)" class="port-card-scrim"></div>
+              <!-- v1.5.11：Logo 展示模式（background / box），内容统一走 PortCardContent -->
+              <template v-if="logoDisplayMode === 'background'">
+                <!-- background：Logo 铺满整卡作为背景层（contain 填充，随卡片尺寸自动缩放） -->
+                <img
+                  v-if="logoSrc(card)"
+                  :src="logoSrc(card)!"
+                  class="port-card-bg"
+                  alt=""
+                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                />
+                <div v-if="logoSrc(card)" class="port-card-scrim"></div>
 
-              <div class="port-card-content">
-                <div class="port-card-header">
-                  <span class="port-header-left">
-                    <span
-                      class="port-status-dot"
-                      :class="card.is_running === false ? 'is-offline' : 'is-online'"
-                      :title="card.is_running === false ? t('common.offline') : t('common.online')"
-                      :aria-label="card.is_running === false ? t('common.offline') : t('common.online')"
-                      role="img"
-                    ></span>
-                    <span class="port-number">{{ card.port }}</span>
-                  </span>
-                  <span
-                    class="port-protocol"
-                    :class="(card.protocol || '').toLowerCase()"
-                  >{{ card.protocol }}</span>
+                <div class="port-card-content">
+                  <PortCardContent :card="card" />
                 </div>
-
-                <div class="port-service">
-                  {{ card.service_name || t('ports.unknownService') }}
+              </template>
+              <div v-else class="port-card-body">
+                <!-- box：64px Logo 框 + 信息列 -->
+                <div class="port-logo">
+                  <img
+                    v-if="logoSrc(card)"
+                    :src="logoSrc(card)!"
+                    class="port-logo-img"
+                    :alt="card.service_name || 'logo'"
+                    @error="($event.target as HTMLImageElement).style.display = 'none'"
+                  />
+                  <span v-else class="port-logo-placeholder">🖼</span>
                 </div>
-
-                <!-- v1.2：用户备注 -->
-                <div v-if="card.remark" class="port-remark" :title="card.remark">
-                  <StickyNote :size="11" class="port-remark-icon" />
-                  <span class="port-remark-text">{{ card.remark }}</span>
-                </div>
-
-                <div class="port-detail">
-                  <span
-                    class="port-source"
-                    :class="card.source"
-                  >
-                    <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
-                    <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
-                    <Server v-else :size="13" class="port-source-icon" />
-                    <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
-                  </span>
-
-                  <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
-                       底行不再重复「在线/离线」文字，避免两处信号打架）。 -->
-                  <span
-                    v-if="card.container"
-                    class="port-status"
-                    :title="card.container"
-                  >
-                    <span class="port-status-container">{{ card.container }}</span>
-                  </span>
-                </div>
-
-                <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
-                <div v-if="card.image" class="port-image">
-                  <span class="port-image-label">{{ t('ports.image') }}</span>
-                  <span class="port-image-value">{{ card.image }}</span>
+                <div class="port-info">
+                  <PortCardContent :card="card" />
                 </div>
               </div>
 
