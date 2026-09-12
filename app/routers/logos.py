@@ -33,7 +33,7 @@ from app.models import (
     LogoUploadRequest,
 )
 from app.services import db as db_service
-from app.services import icon_discovery
+from app.services import default_logos, icon_discovery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/logos", tags=["logos"])
@@ -80,6 +80,24 @@ async def api_list_logos() -> APIResponse:
     rows = await cur.fetchall()
     data = [LogoMeta(app_key=r["app_key"], status=r["status"], mime=r["mime"]) for r in rows]
     return APIResponse(success=True, data=data)
+
+
+@router.get("/defaults", response_model=APIResponse)
+async def api_list_default_logos() -> APIResponse:
+    """内置默认 Logo 的归一化 key 列表（供前端判断某 service_name 是否有默认图标）。"""
+    return APIResponse(success=True, data=default_logos.available_keys())
+
+
+@router.get("/default/{key}")
+async def api_get_default_logo(key: str) -> Response:
+    """返回内置默认 Logo 的 SVG 字节；未知 key → 404。
+
+    纯只读静态资源，不查库、不写库；用户上传 Logo 始终优先于本回退。
+    """
+    path = default_logos.resolve(key)
+    if path is None:
+        return JSONResponse(status_code=404, content={"success": False, "error": "not found"})
+    return Response(content=path.read_bytes(), media_type="image/svg+xml")
 
 
 @router.get("/{app_key}")

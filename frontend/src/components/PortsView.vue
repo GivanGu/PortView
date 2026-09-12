@@ -15,12 +15,14 @@ import {
   deleteLogo,
   discoverLogo,
   logoUrl,
+  fetchDefaultLogos,
+  defaultLogoUrl,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
   type LogoMeta,
 } from '@/api'
-import { appKey } from '@/logo'
+import { appKey, normalizeServiceName } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
@@ -43,6 +45,8 @@ const logos = ref<Map<string, LogoMeta>>(new Map())
 const logoBusy = ref<Set<string>>(new Set())
 // v1.5.11：box 模式下 Logo 加载失败的 appKey 集合（用于回退到 🖼 占位符）
 const logoError = ref<Set<string>>(new Set())
+// v1.5.13：内置默认 Logo 的归一化 key 集合（用户上传 Logo 缺失时按 service_name 回退）
+const defaultLogos = ref<Set<string>>(new Set())
 
 async function loadLogos() {
   try {
@@ -56,6 +60,13 @@ async function loadLogos() {
   } catch (e) {
     console.error('加载 Logo 列表失败:', e)
   }
+  // v1.5.13：内置默认 Logo 列表（独立请求，失败不影响用户上传 Logo）
+  try {
+    const d = await fetchDefaultLogos()
+    if (d.success) defaultLogos.value = new Set(d.data)
+  } catch (e) {
+    console.error('加载默认 Logo 列表失败:', e)
+  }
 }
 
 function logoStatus(card: PortCard): string | null {
@@ -63,10 +74,22 @@ function logoStatus(card: PortCard): string | null {
   return logos.value.get(key)?.status ?? null
 }
 
+/** 按 service_name 匹配内置默认 Logo 的归一化 key；无匹配返回 null。 */
+function defaultLogoKey(card: PortCard): string | null {
+  const name = card.service_name
+  if (!name) return null
+  const norm = normalizeServiceName(name)
+  return defaultLogos.value.has(norm) ? norm : null
+}
+
 function logoSrc(card: PortCard): string | null {
   const key = appKey(card)
   const meta = logos.value.get(key)
+  // 1. 用户上传 / discover 的 Logo 始终优先
   if (meta?.status === 'found') return logoUrl(key)
+  // 2. 回退：内置默认 Logo（按 service_name 匹配）
+  const dkey = defaultLogoKey(card)
+  if (dkey) return defaultLogoUrl(dkey)
   return null
 }
 

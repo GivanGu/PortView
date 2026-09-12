@@ -42,3 +42,11 @@ export function appKey(card: PortCard): string {
   // 理论上不会到这里（used 卡片必有 port）
   return `port:${card.port ?? 0}`
 }
+
+/**
+ * 归一化 service_name（v1.5.13，与后端 default_logos.normalize 一致）：
+ * 小写 + 去除所有非字母数字字符。例："SQL Server" → "sqlserver"。
+ */
+export function normalizeServiceName(name: string): string {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
