@@ -5,7 +5,7 @@ import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, Layers, LayoutGrid } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -450,85 +450,87 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
           </div>
         </section>
 
-        <!-- v1.5.11：Logo 展示模式（background / box） -->
+        <!-- v1.5.15：Logo 展示（展示模式 + 遮罩 合并为一张卡片，遮罩为条件子区块） -->
         <section class="settings-card">
           <header class="settings-card-title">
             <LayoutGrid :size="16" class="card-ico" />
-            <span>{{ t('settings.logoDisplayMode') }}</span>
+            <span>{{ t('settings.logoDisplay') }}</span>
           </header>
-          <p class="settings-hint">{{ t('settings.logoDisplayModeHint') }}</p>
-          <div class="radio-2col">
-            <label class="radio-pill" :class="{ active: logoDisplayMode === 'background' }">
-              <input
-                type="radio"
-                name="pv-logo-mode"
-                :value="'background'"
-                :checked="logoDisplayMode === 'background'"
-                @change="() => onLogoDisplayModeChange('background')"
-              />
-              <span>{{ t('settings.logoModeBackground') }}</span>
-            </label>
-            <label class="radio-pill" :class="{ active: logoDisplayMode === 'box' }">
-              <input
-                type="radio"
-                name="pv-logo-mode"
-                :value="'box'"
-                :checked="logoDisplayMode === 'box'"
-                @change="() => onLogoDisplayModeChange('box')"
-              />
-              <span>{{ t('settings.logoModeBox') }}</span>
-            </label>
-          </div>
-        </section>
 
-        <!-- v1.5.2：Logo 遮罩（仅 background 模式生效） -->
-        <section class="settings-card" :class="{ 'is-dimmed': logoDisplayMode === 'box' }">
-          <header class="settings-card-title">
-            <Layers :size="16" class="card-ico" />
-            <span>{{ t('settings.logoScrim') }}</span>
-          </header>
-          <p class="settings-hint">{{ t('settings.logoScrimHint') }}</p>
-          <div class="radio-2col">
-            <label class="radio-pill" :class="{ active: logoScrim === 'left' }">
-              <input
-                type="radio"
-                name="pv-logo-scrim"
-                :value="'left'"
-                :checked="logoScrim === 'left'"
-                @change="() => onLogoScrimChange('left')"
-              />
-              <span>{{ t('settings.scrimLeft') }}</span>
-            </label>
-            <label class="radio-pill" :class="{ active: logoScrim === 'overlay' }">
-              <input
-                type="radio"
-                name="pv-logo-scrim"
-                :value="'overlay'"
-                :checked="logoScrim === 'overlay'"
-                @change="() => onLogoScrimChange('overlay')"
-              />
-              <span>{{ t('settings.scrimOverlay') }}</span>
-            </label>
-            <label class="radio-pill" :class="{ active: logoScrim === 'glass' }">
-              <input
-                type="radio"
-                name="pv-logo-scrim"
-                :value="'glass'"
-                :checked="logoScrim === 'glass'"
-                @change="() => onLogoScrimChange('glass')"
-              />
-              <span>{{ t('settings.scrimGlass') }}</span>
-            </label>
-            <label class="radio-pill" :class="{ active: logoScrim === 'none' }">
-              <input
-                type="radio"
-                name="pv-logo-scrim"
-                :value="'none'"
-                :checked="logoScrim === 'none'"
-                @change="() => onLogoScrimChange('none')"
-              />
-              <span>{{ t('settings.scrimNone') }}</span>
-            </label>
+          <!-- 子区块 1：展示模式 -->
+          <div class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.logoDisplayModeLabel') }}</div>
+            <p class="settings-hint">{{ t('settings.logoDisplayModeHint') }}</p>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: logoDisplayMode === 'background' }">
+                <input
+                  type="radio"
+                  name="pv-logo-mode"
+                  :value="'background'"
+                  :checked="logoDisplayMode === 'background'"
+                  @change="() => onLogoDisplayModeChange('background')"
+                />
+                <span>{{ t('settings.logoModeBackground') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoDisplayMode === 'box' }">
+                <input
+                  type="radio"
+                  name="pv-logo-mode"
+                  :value="'box'"
+                  :checked="logoDisplayMode === 'box'"
+                  @change="() => onLogoDisplayModeChange('box')"
+                />
+                <span>{{ t('settings.logoModeBox') }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 子区块 2：遮罩（仅背景展示模式生效，方框模式整块隐藏） -->
+          <div v-if="logoDisplayMode === 'background'" class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.logoScrimLabel') }}</div>
+            <p class="settings-hint">{{ t('settings.logoScrimHint') }}</p>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: logoScrim === 'left' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'left'"
+                  :checked="logoScrim === 'left'"
+                  @change="() => onLogoScrimChange('left')"
+                />
+                <span>{{ t('settings.scrimLeft') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'overlay' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'overlay'"
+                  :checked="logoScrim === 'overlay'"
+                  @change="() => onLogoScrimChange('overlay')"
+                />
+                <span>{{ t('settings.scrimOverlay') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'glass' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'glass'"
+                  :checked="logoScrim === 'glass'"
+                  @change="() => onLogoScrimChange('glass')"
+                />
+                <span>{{ t('settings.scrimGlass') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'none' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'none'"
+                  :checked="logoScrim === 'none'"
+                  @change="() => onLogoScrimChange('none')"
+                />
+                <span>{{ t('settings.scrimNone') }}</span>
+              </label>
+            </div>
           </div>
         </section>
 

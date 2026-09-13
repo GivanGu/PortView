@@ -2251,6 +2251,25 @@ html, body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
+/* v1.5.15：设置卡片内的条件子区块（如 Logo 展示 → 遮罩） */
+.settings-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-sub-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+/* 第二个子区块加分隔线，强化父子层级 */
+.settings-sub + .settings-sub {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
 .settings-card.is-dimmed {
   opacity: 0.5;
   pointer-events: none;
