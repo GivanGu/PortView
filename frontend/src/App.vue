@@ -111,7 +111,7 @@ async function checkLatestVersion() {
     const res = await fetch('https://api.github.com/repos/GivanGu/PortView/releases/latest')
     if (res.ok) {
       const data = await res.json()
-      latestVersion.value = data.tag_name || ''
+      latestVersion.value = (data.tag_name || '').replace(/^v/, '')
       latestReleaseUrl.value = data.html_url || ''
     }
   } catch { /* 离线时静默 */ }
