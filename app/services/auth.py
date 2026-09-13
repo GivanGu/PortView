@@ -49,6 +49,7 @@ def verify_password(plain: str, stored: str) -> bool:
 
 # --------------------- 密码管理 ---------------------
 
+
 async def create_user_if_absent(username: str = "admin", password: str = "") -> bool:
     """若 ``users`` 表为空则写入第一行；若已有行则更新密码。返回 True 表示写入。"""
     db = _db.get_db()
@@ -157,9 +158,7 @@ async def is_valid_session(token: str) -> bool:
     if db is None:
         return False
     now = int(time.time())
-    cur = await db.execute(
-        "SELECT expires_at FROM sessions WHERE token = ?", (token,)
-    )
+    cur = await db.execute("SELECT expires_at FROM sessions WHERE token = ?", (token,))
     row = await cur.fetchone()
     if row is None:
         return False
@@ -177,6 +176,7 @@ async def is_valid_session(token: str) -> bool:
 
 
 # --------------------- 关闭开关 ---------------------
+
 
 async def is_auth_required() -> bool:
     """优先级：env > user_prefs 行。

@@ -5,7 +5,7 @@ import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -82,7 +82,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -151,6 +151,18 @@ function onRefreshIntervalChange(v: number) {
   void persistPartial({ refresh_interval: v })
 }
 
+// v1.5.2：卡片 Logo 背景的可读性遮罩档位
+function onLogoScrimChange(v: 'none' | 'left' | 'overlay' | 'glass') {
+  setLogoScrim(v)
+  void persistPartial({ logo_scrim: v })
+}
+
+// v1.5.11：卡片 Logo 展示模式（background / box）
+function onLogoDisplayModeChange(v: 'background' | 'box') {
+  setLogoDisplayMode(v)
+  void persistPartial({ logo_display_mode: v })
+}
+
 // ── 访问地址 ──
 const accessAddress = ref('')
 const accessAddrBusy = ref(false)
@@ -167,6 +179,8 @@ async function handleSaveAccessAddress() {
   try {
     const resp = await setAccessAddress(accessAddress.value.trim())
     if (resp.success) {
+      // 后端会把裸 IP/域名自动补 http://，回传规范化地址后回填输入框
+      if (resp.data?.address) accessAddress.value = resp.data.address
       showToast(t('settings.accessAddrSaved'))
     } else {
       showToast(t('settings.saveFailed'))
@@ -190,6 +204,8 @@ async function handleReset() {
   applyTheme('dark')
   applyAccent('indigo')
   applyLang('zh')
+  setLogoScrim('left')
+  setLogoDisplayMode('background')
   showToast(t('settings.resetDone'))
 }
 
@@ -203,6 +219,8 @@ onMounted(async () => {
       if (p.accent && ACCENTS.some(a => a.id === p.accent)) applyAccent(p.accent)
       if (p.lang) applyLang(p.lang)
       setRefreshInterval(p.refresh_interval ?? 0)
+      if (p.logo_scrim) setLogoScrim(p.logo_scrim)
+      if (p.logo_display_mode) setLogoDisplayMode(p.logo_display_mode)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -432,8 +450,92 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
           </div>
         </section>
 
-        <!-- Access Address -->
+        <!-- v1.5.15：Logo 展示（展示模式 + 遮罩 合并为一张卡片，遮罩为条件子区块） -->
         <section class="settings-card">
+          <header class="settings-card-title">
+            <LayoutGrid :size="16" class="card-ico" />
+            <span>{{ t('settings.logoDisplay') }}</span>
+          </header>
+
+          <!-- 子区块 1：展示模式 -->
+          <div class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.logoDisplayModeLabel') }}</div>
+            <p class="settings-hint">{{ t('settings.logoDisplayModeHint') }}</p>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: logoDisplayMode === 'background' }">
+                <input
+                  type="radio"
+                  name="pv-logo-mode"
+                  :value="'background'"
+                  :checked="logoDisplayMode === 'background'"
+                  @change="() => onLogoDisplayModeChange('background')"
+                />
+                <span>{{ t('settings.logoModeBackground') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoDisplayMode === 'box' }">
+                <input
+                  type="radio"
+                  name="pv-logo-mode"
+                  :value="'box'"
+                  :checked="logoDisplayMode === 'box'"
+                  @change="() => onLogoDisplayModeChange('box')"
+                />
+                <span>{{ t('settings.logoModeBox') }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 子区块 2：遮罩（仅背景展示模式生效，方框模式整块隐藏） -->
+          <div v-if="logoDisplayMode === 'background'" class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.logoScrimLabel') }}</div>
+            <p class="settings-hint">{{ t('settings.logoScrimHint') }}</p>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: logoScrim === 'left' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'left'"
+                  :checked="logoScrim === 'left'"
+                  @change="() => onLogoScrimChange('left')"
+                />
+                <span>{{ t('settings.scrimLeft') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'overlay' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'overlay'"
+                  :checked="logoScrim === 'overlay'"
+                  @change="() => onLogoScrimChange('overlay')"
+                />
+                <span>{{ t('settings.scrimOverlay') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'glass' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'glass'"
+                  :checked="logoScrim === 'glass'"
+                  @change="() => onLogoScrimChange('glass')"
+                />
+                <span>{{ t('settings.scrimGlass') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: logoScrim === 'none' }">
+                <input
+                  type="radio"
+                  name="pv-logo-scrim"
+                  :value="'none'"
+                  :checked="logoScrim === 'none'"
+                  @change="() => onLogoScrimChange('none')"
+                />
+                <span>{{ t('settings.scrimNone') }}</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Access Address -->
+        <section class="settings-card" id="settings-access-address">
           <header class="settings-card-title">
             <Globe :size="16" class="card-ico" />
             <span>{{ t('settings.accessAddress') }}</span>

@@ -98,7 +98,7 @@ async def me(
                 "auth_required": False,
                 "logged_in": True,
                 "has_password": await auth_svc.has_password(),
-            }
+            },
         )
     valid = await auth_svc.is_valid_session(token or "")
     return APIResponse(
@@ -107,7 +107,7 @@ async def me(
             "auth_required": True,
             "logged_in": valid,
             "has_password": await auth_svc.has_password(),
-        }
+        },
     )
 
 
@@ -127,6 +127,7 @@ async def toggle(body: TogglePayload, response: Response) -> APIResponse:
 
 
 # ---------------------- 依赖：需登录（可关闭） ----------------------
+
 
 async def require_login(
     token: str | None = Cookie(default=None, alias=COOKIE_NAME),

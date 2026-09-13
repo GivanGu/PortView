@@ -117,7 +117,13 @@
     "dialogInputPlaceholder": "e.g. 80, 443, 22500-22600",
     "invalidRange": "Invalid range: {tok}",
     "invalidPort": "Invalid port: {tok}",
-    "addedRanges": "Added {n} range(s)"
+    "addedRanges": "Added {n} range(s)",
+    "logoDiscover": "Auto-detect logo",
+    "logoUpload": "Upload logo",
+    "logoDelete": "Delete logo",
+    "logoTooLarge": "Image exceeds 1MiB limit",
+    "logoAdded": "Logo added",
+    "logoDiscoverFailed": "No logo found for {service} — upload one manually"
   },
   "hidden": {
     "total": "{n} total",
@@ -147,7 +153,17 @@
     "deleteConfirm": "Delete the note for port {port}?",
     "unremarked": "Unremarked ports",
     "unremarkedHint": "Add a note for this port",
-    "unremarkedBtn": "Note"
+    "unremarkedBtn": "Note",
+    "noLogo": "Ports without a logo",
+    "noLogoHint": "Quickly add a logo for this port",
+    "noLogoDiscover": "Auto-discover logo",
+    "noLogoDiscoverBtn": "Discover",
+    "noLogoUploadBtn": "Upload logo",
+    "noLogoNoteBtn": "Add note",
+    "logoDiscovering": "Discovering…",
+    "logoAdded": "Logo added",
+    "logoDiscoverFailed": "No logo found for {service}, you can upload one manually",
+    "logoUploadFailed": "Failed to upload logo"
   },
   "settings": {
     "title": "Settings",
@@ -199,9 +215,22 @@
     "refresh10": "10s",
     "refresh15": "15s",
     "refresh30": "30s",
+    "logoDisplay": "Logo display",
+    "logoDisplayModeLabel": "Display mode",
+    "logoDisplayMode": "Logo display mode",
+    "logoDisplayModeHint": "Choose how the card logo is displayed: full background or boxed",
+    "logoModeBackground": "Background",
+    "logoModeBox": "Logo box",
+    "logoScrimLabel": "Scrim",
+    "logoScrim": "Logo scrim",
+    "logoScrimHint": "Readability overlay on top of the card logo background (background mode only)",
+    "scrimLeft": "Left gradient",
+    "scrimOverlay": "Full overlay",
+    "scrimGlass": "Frosted glass",
+    "scrimNone": "None",
     "accessAddress": "Access address",
-    "accessAddressHint": "After setting, the 'Open service' button on port cards will use this address to build the URL",
-    "accessAddressPlaceholder": "e.g. http://192.168.1.100",
+    "accessAddressHint": "After setting, the 'Open service' button on port cards will use this address to build the URL. You can enter a bare IP (e.g. 192.168.31.1); http:// is added automatically",
+    "accessAddressPlaceholder": "e.g. 192.168.31.1 or http://192.168.1.100",
     "accessAddrSaved": "Access address saved"
   },
   "login": {

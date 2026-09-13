@@ -5,6 +5,11 @@ services:
     # image: ghcr.io/givangu/portview:latest
     container_name: portview
     network_mode: host
+    # Logo 自动识别需从容器访问宿主机端口：
+    # host 网络下默认用 127.0.0.1（见 PORTVIEW_DISCOVER_HOST）；
+    # 若改用 bridge 网络，可设 PORTVIEW_DISCOVER_HOST=host.docker.internal 并依赖此映射。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./config:/app/config

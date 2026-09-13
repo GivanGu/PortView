@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 from collections.abc import Mapping
 from typing import Any
@@ -156,6 +157,20 @@ def save_raw_config(raw: Mapping[str, Any]) -> bool:
     return _write_json(CONFIG_FILE, dict(raw))
 
 
+def normalize_access_address(address: str) -> str:
+    """规范化访问地址：裸 IP / 域名（无协议前缀）自动补 ``http://``。
+
+    例如 ``192.168.31.1`` → ``http://192.168.31.1``；
+    已带 ``http://`` / ``https://`` 的地址原样保留；空串返回空串。
+    """
+    address = address.strip()
+    if not address:
+        return ""
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", address):
+        address = f"http://{address}"
+    return address
+
+
 def load_access_address() -> str:
     """读取全局访问地址（如 http://192.168.31.1）。未设置时返回空字符串。"""
     try:
@@ -164,17 +179,22 @@ def load_access_address() -> str:
         logger.warning("读取访问地址失败: %s", e)
         return ""
     value = raw.get(ACCESS_ADDRESS_KEY, "")
-    return value.strip() if isinstance(value, str) else ""
+    if not isinstance(value, str):
+        return ""
+    return normalize_access_address(value)
 
 
 def save_access_address(address: str) -> bool:
-    """保存全局访问地址。空字符串表示清除。"""
+    """保存全局访问地址。空字符串表示清除。
+
+    裸 IP / 域名（无协议前缀）会自动补 ``http://`` 后落盘。
+    """
     try:
         raw = load_raw_config()
     except Exception as e:
         logger.warning("读取配置失败，无法保存访问地址: %s", e)
         raw = {}
-    address = address.strip()
+    address = normalize_access_address(address)
     if address:
         raw[ACCESS_ADDRESS_KEY] = address
     else:

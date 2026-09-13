@@ -50,6 +50,10 @@
   --rail-width: 200px;
   --topbar-height: 56px;
   --statusbar-height: 32px;
+
+  /* v1.5.2：Logo 遮罩 */
+  --scrim: rgba(8, 10, 18, 0.55);
+  --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -80,6 +84,10 @@
 
   --shadow: 0 4px 24px rgba(30, 41, 59, 0.08);
   --shadow-sm: 0 2px 8px rgba(30, 41, 59, 0.06);
+
+  /* v1.5.2：Logo 遮罩（亮色） */
+  --scrim: rgba(255, 255, 255, 0.62);
+  --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* ── 主题切换按钮 ── */
@@ -423,8 +431,16 @@ html, body {
   font-size: 12px;
 }
 
-.unremarked-row .btn {
+.unremarked-row .row-actions {
   margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unremarked-row .row-actions .btn {
+  margin-left: 0;
   flex-shrink: 0;
 }
 
@@ -574,22 +590,86 @@ html, body {
   border: 1px solid var(--border);
   border-left: 3px solid var(--green);
   border-radius: var(--radius);
-  padding: 14px 16px;
   transition: all 0.15s;
   position: relative;
-  /* 卡片等高：min-height 精确覆盖最富 4 行场景（header+service+image+detail=135px），
-     信息齐全(135)与不全(≤135)视觉完全一致；
-     避免 grid stretch 在混合行把矮卡拉起来产生 ~17px 底部留白。 */
-  min-height: 135px;
+  overflow: hidden;
+  /* v1.5.2：固定高度，所有卡片等高 */
+  height: 130px;
   display: flex;
   flex-direction: column;
+  /* v1.5.2：3D 立体阴影 */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .port-card:hover {
-  background: var(--bg-card-hover);
   border-color: var(--border-light);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.12),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* 编辑模式：展开卡片高度，让输入框可见 */
+.port-card.editing {
+  height: auto;
+  min-height: 130px;
+  overflow: visible;
+}
+
+/* v1.5.2：3D 渐变描边（上亮下暗，模拟立体光感） */
+.port-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* v1.5.2：Logo 背景层（高度撑满卡片，水平居中，不拉伸） */
+.port-card-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* v1.5.2：可读性遮罩层（四档由 [data-logo-scrim] 控制） */
+.port-card-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* v1.5.2：内容层（叠在 bg + scrim 之上） */
+.port-card-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 16px;
 }
 
 .port-card-header {
@@ -629,10 +709,99 @@ html, body {
   color: var(--cyan);
 }
 
+/* v1.5.2：四档遮罩样式（由 <html data-logo-scrim> 驱动） */
+[data-logo-scrim="left"] .port-card-scrim {
+  background: linear-gradient(to right, var(--scrim) 0%, transparent 65%);
+}
+
+[data-logo-scrim="overlay"] .port-card-scrim {
+  background: var(--scrim);
+}
+
+[data-logo-scrim="glass"] .port-card-scrim {
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+[data-logo-scrim="none"] .port-card-scrim {
+  background: transparent;
+}
+
+/* 无遮罩时给文字加投影保证可读性 */
+[data-logo-scrim="none"] .port-card-content {
+  text-shadow: var(--text-shadow);
+}
+
+/* ── v1.5.11：Logo 框展示模式（box）──
+   64px Logo 框 + 信息列，与 background 模式互斥。
+   .port-card 本身是 flex column，.port-card-body 作为 flex:1 的行容器。 */
+.port-card-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 14px;
+  flex: 1;
+  padding: 14px 16px;
+}
+
+.port-logo {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.port-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.port-logo-placeholder {
+  font-size: 26px;
+  opacity: 0.4;
+  line-height: 1;
+}
+
+.port-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 离线卡：Logo 背景灰化 + 降低不透明度 */
+.port-card.offline .port-card-bg {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+/* 离线卡：box 模式 Logo 框同样灰化，与 background 模式一致 */
+.port-card.offline .port-logo-img {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
 .port-service {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .port-detail {
@@ -793,6 +962,29 @@ html, body {
   opacity: 0.75;
 }
 
+/* v1.5.2：亮色主题 3D 描边调整（白底上高光不明显，改用更柔和的阴影） */
+[data-theme="light"] .port-card {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.06),
+    0 2px 6px rgba(30, 41, 59, 0.08);
+}
+[data-theme="light"] .port-card:hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.06),
+    0 6px 16px rgba(30, 41, 59, 0.12);
+}
+[data-theme="light"] .port-card::after {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(200, 210, 230, 0.2) 40%,
+    transparent 60%,
+    rgba(30, 41, 59, 0.1) 100%
+  );
+}
+
 .port-status-text {
   font-size: 11px;
   font-weight: 500;
@@ -817,6 +1009,7 @@ html, body {
   gap: 4px;
   opacity: 0;
   transition: opacity 0.15s;
+  z-index: 3;
 }
 
 .port-card:hover .port-actions {
@@ -2058,6 +2251,29 @@ html, body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
+/* v1.5.15：设置卡片内的条件子区块（如 Logo 展示 → 遮罩） */
+.settings-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-sub-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+/* 第二个子区块加分隔线，强化父子层级 */
+.settings-sub + .settings-sub {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.settings-card.is-dimmed {
+  opacity: 0.5;
+  pointer-events: none;
+}
 .radio-pill {
   display: flex;
   align-items: center;
@@ -2127,21 +2343,21 @@ html, body {
 
 .save-toast {
   position: fixed;
-  bottom: 46px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 16px;
+  right: 16px;
   background: var(--accent);
   color: #fff;
   padding: 10px 18px;
-  border-radius: 24px;
+  border-radius: 10px;
   font-size: 13px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.24);
   animation: toast-in 0.24s ease;
   z-index: 300;
+  max-width: 320px;
 }
 @keyframes toast-in {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translate(8px, -8px); }
+  to   { opacity: 1; transform: translate(0, 0); }
 }
 
 /* ── 监控区间：入口按钮 + 选择器 + 对话框 ─────────────── */

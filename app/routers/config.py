@@ -56,13 +56,19 @@ def api_save_config(payload: dict) -> APIResponse:
             if not isinstance(value, str):
                 return APIResponse(success=False, error=f"配置项 {key} 的值必须是字符串")
             if ":" not in key:
-                return APIResponse(success=False, error=f"配置项 {key} 格式错误，应为「服务名:docker/host」")
+                return APIResponse(
+                    success=False, error=f"配置项 {key} 格式错误，应为「服务名:docker/host」"
+                )
             service_type = key.rsplit(":", 1)[-1]
             if service_type not in ("docker", "host"):
-                return APIResponse(success=False, error=f"配置项 {key} 的服务类型必须是 docker 或 host")
+                return APIResponse(
+                    success=False, error=f"配置项 {key} 的服务类型必须是 docker 或 host"
+                )
             parts = value.split(":")
             if len(parts) < 2:
-                return APIResponse(success=False, error=f"配置项 {key} 的值格式错误，应为「端口:协议」")
+                return APIResponse(
+                    success=False, error=f"配置项 {key} 的值格式错误，应为「端口:协议」"
+                )
             try:
                 port = int(parts[0])
             except ValueError:
@@ -92,10 +98,18 @@ def api_get_access_address() -> APIResponse:
 
 @router.post("/access_address", response_model=APIResponse)
 def api_save_access_address(req: AccessAddressRequest) -> APIResponse:
-    """保存全局访问地址。空字符串表示清除。"""
+    """保存全局访问地址。空字符串表示清除。
+
+    裸 IP / 域名（无协议前缀）会自动补 ``http://``，响应里回传规范化后的地址，
+    供前端即时回填输入框。
+    """
     try:
         if save_access_address(req.address):
-            return APIResponse(success=True, message="访问地址已保存")
+            return APIResponse(
+                success=True,
+                data={"address": load_access_address()},
+                message="访问地址已保存",
+            )
         return APIResponse(success=False, error="保存失败")
     except Exception as e:
         logger.error("保存访问地址失败: %s", e)
@@ -114,7 +128,9 @@ def api_edit_port(req: PortEditRequest) -> APIResponse:
             parts = str(raw[key]).split(":")
             if parts and parts[0] == str(req.port):
                 service_type = key.rsplit(":", 1)[-1] if ":" in key else req.service_type
-                raw[f"{req.service_name}:{service_type}"] = f"{req.port}:{parts[1] if len(parts) > 1 else 'tcp'}"
+                raw[f"{req.service_name}:{service_type}"] = (
+                    f"{req.port}:{parts[1] if len(parts) > 1 else 'tcp'}"
+                )
                 # 如果 key 变了，删掉旧 key
                 if key != f"{req.service_name}:{service_type}":
                     del raw[key]

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import {
   LayoutDashboard,
   Network,
@@ -67,6 +67,8 @@ function onPwDismissed() {
 
 const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
+const LOGO_SCRIM_KEY = 'portview.logoScrim'
+const LOGO_MODE_KEY = 'portview.logoDisplayMode'
 
 const ACCENTS = [
   { id: 'indigo', color: '#6366f1' },
@@ -130,7 +132,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -176,6 +178,51 @@ function initialAccent(): AccentId {
     /* ignore */
   }
   return 'indigo'
+}
+
+// v1.5.2：卡片 Logo 遮罩档位。落到 <html data-logo-scrim> 属性，
+// style.css 依据它给 .port-card-scrim 套对应渐变/毛玻璃/无遮罩样式。
+const LOGO_SCRIMS = ['none', 'left', 'overlay', 'glass'] as const
+
+function applyLogoScrim(s: string) {
+  document.documentElement.setAttribute('data-logo-scrim', s)
+  try {
+    localStorage.setItem(LOGO_SCRIM_KEY, s)
+  } catch {
+    /* ignore */
+  }
+}
+
+function initialLogoScrim(): string {
+  try {
+    const saved = localStorage.getItem(LOGO_SCRIM_KEY)
+    if (saved && LOGO_SCRIMS.includes(saved as (typeof LOGO_SCRIMS)[number])) return saved
+  } catch {
+    /* ignore */
+  }
+  return 'left'
+}
+
+// v1.5.11：卡片 Logo 展示模式（background / box）。仅落到 localStorage，
+// 模板直接读 store 值做条件渲染，无需 <html> 属性。
+const LOGO_MODES = ['background', 'box'] as const
+
+function applyLogoMode(m: string) {
+  try {
+    localStorage.setItem(LOGO_MODE_KEY, m)
+  } catch {
+    /* ignore */
+  }
+}
+
+function initialLogoMode(): 'background' | 'box' {
+  try {
+    const saved = localStorage.getItem(LOGO_MODE_KEY)
+    if (saved && LOGO_MODES.includes(saved as (typeof LOGO_MODES)[number])) return saved as 'background' | 'box'
+  } catch {
+    /* ignore */
+  }
+  return 'background'
 }
 
 function toggleTheme() {
@@ -239,6 +286,16 @@ watch(refreshInterval, () => {
   applyStatsTimer()
 })
 
+// v1.5.2：Logo 遮罩档位切换后实时落到 <html> 属性，卡片遮罩即时变化
+watch(logoScrim, (v) => {
+  applyLogoScrim(v)
+})
+
+// v1.5.11：Logo 展示模式切换后实时落到 localStorage（模板读 store 即时重渲染）
+watch(logoDisplayMode, (v) => {
+  applyLogoMode(v)
+})
+
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
 const visited = reactive<Record<Tab, boolean>>({
@@ -268,8 +325,27 @@ function onDocClick(e: MouseEvent) {
 
 // v1.4.8：跨组件导航事件（如 PortsView 点「打开服务」未设置地址时跳设置页）
 function onNavigate(e: Event) {
-  const tab = (e as CustomEvent).detail?.tab as Tab | undefined
-  if (tab) switchTab(tab)
+  const detail = (e as CustomEvent).detail ?? {}
+  const tab = detail.tab as Tab | undefined
+  const anchor = detail.anchor as string | undefined
+  if (!tab) return
+  switchTab(tab)
+  if (anchor) {
+    // 等视图渲染（v-if 挂载）后再滚动到目标锚点，带重试机制
+    const target = anchor
+    let attempts = 0
+    const maxAttempts = 5
+    function tryScroll() {
+      const el = document.getElementById(target)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } else if (attempts < maxAttempts) {
+        attempts++
+        setTimeout(tryScroll, 80)
+      }
+    }
+    nextTick(tryScroll)
+  }
 }
 
 onMounted(async () => {
@@ -279,6 +355,8 @@ onMounted(async () => {
   applyTheme(theme.value)
   accent.value = initialAccent()
   applyAccent(accent.value)
+  applyLogoScrim(initialLogoScrim())
+  setLogoDisplayMode(initialLogoMode())
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -294,7 +372,11 @@ onMounted(async () => {
   }
   try {
     const prefs = await getPrefs()
-    if (prefs.success) setRefreshInterval(prefs.data.refresh_interval ?? 0)
+    if (prefs.success) {
+      setRefreshInterval(prefs.data.refresh_interval ?? 0)
+      if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
+      if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
+    }
   } catch { /* ignore */ }
   applyStatsTimer()
   loading.value = false

@@ -1,7 +1,5 @@
 """PortMonitor 核心逻辑测试。"""
 
-
-
 from app.services.port_monitor import PortMonitor
 
 
@@ -13,6 +11,7 @@ def _make_monitor() -> PortMonitor:
     monitor.cache_timestamp = 0.0
     monitor.cache_ttl = 30
     monitor.default_ports = {22: "SSH", 80: "HTTP", 443: "HTTPS", 3306: "MySQL"}
+    monitor.self_port = 8081
     return monitor
 
 
@@ -31,13 +30,28 @@ class TestGetServiceName:
         monitor = _make_monitor()
         assert monitor.get_service_name(12345, {}) == "未知服务"
 
+    def test_self_port_always_portview(self):
+        """PortView 自身端口（8081）恒识别为 PortView，通用端口库标注不覆盖。"""
+        monitor = _make_monitor()
+        # 无配置
+        assert monitor.get_service_name(8081, {}) == "PortView"
+        # 通用端口库把 8081 标注为 "模式注册:host"，仍应识别为 PortView
+        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        assert monitor.get_service_name(8081, config) == "PortView"
+
 
 class TestMergeUnknownAndGaps:
     def test_single_used_port(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         # 应该有: gap(1-79), 80(used), gap(81-100)
@@ -55,8 +69,14 @@ class TestMergeUnknownAndGaps:
         """区间起始到第一个已用端口之间的可用端口应生成头部 gap 卡片。"""
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         head = result[0]
@@ -69,8 +89,14 @@ class TestMergeUnknownAndGaps:
         """第一个已用端口恰为区间起始时，不应生成头部 gap。"""
         monitor = _make_monitor()
         cards = [
-            {"port": 1, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
+            {
+                "port": 1,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 100)
         assert result[0]["type"] == "used"
@@ -79,12 +105,30 @@ class TestMergeUnknownAndGaps:
     def test_consecutive_unknown_merges(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 1000, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
-            {"port": 1001, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
-            {"port": 1002, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
+            {
+                "port": 1000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+            {
+                "port": 1001,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+            {
+                "port": 1002,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
         # 1000-1002 应合并为 unknown_range
@@ -97,8 +141,14 @@ class TestMergeUnknownAndGaps:
     def test_single_unknown_not_merged(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 1000, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "未知服务", "container": None},
+            {
+                "port": 1000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
         # 单个未知服务不合并，保持 used
@@ -107,10 +157,22 @@ class TestMergeUnknownAndGaps:
     def test_gap_between_cards(self):
         monitor = _make_monitor()
         cards = [
-            {"port": 80, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "HTTP", "container": None},
-            {"port": 8080, "type": "used", "source": "system", "protocol": "TCP",
-             "service_name": "App", "container": None},
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
+            {
+                "port": 8080,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "App",
+                "container": None,
+            },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 10000)
         # 应该有 head gap(1-79)、中间 gap(81-8079)、尾部 gap(8081-10000)
@@ -161,8 +223,12 @@ class TestPortAnalysis:
     def test_protocol_filter(self):
         monitor = _make_monitor()
         config = {}
-        result_tcp = monitor.get_port_analysis(config, start_port=1, end_port=100, protocol_filter="TCP")
-        result_udp = monitor.get_port_analysis(config, start_port=1, end_port=100, protocol_filter="UDP")
+        result_tcp = monitor.get_port_analysis(
+            config, start_port=1, end_port=100, protocol_filter="TCP"
+        )
+        result_udp = monitor.get_port_analysis(
+            config, start_port=1, end_port=100, protocol_filter="UDP"
+        )
         assert result_tcp["protocol_filter"] == "TCP"
         assert result_udp["protocol_filter"] == "UDP"
 
@@ -214,3 +280,57 @@ class TestPortAnalysis:
         assert card["source"] == "docker"
         assert card["container"] == "1p-mysql"
         assert card["image"] == "mysql:8.4.11"
+
+    def test_self_port_host_network_identified_as_portview(self, monkeypatch):
+        """回归：PortView 自身端口（host 网络容器 8081）即使配置标注 host，
+        也应识别为 docker / PortView，而非「主机 / 未知服务」。
+
+        复现场景：PortView 以 network_mode: host 运行，无 PortBindings，
+        8081 经 EXPOSE 检测为 host 网络容器；config.json 里 "模式注册:host"
+        把 8081 标注为 host。修复前该卡片 source="host"、service_name="未知服务"。
+        """
+        monitor = _make_monitor()
+        # host 网络容器：无 PortBindings → docker SDK 无命中
+        monkeypatch.setattr(monitor, "get_docker_ports", lambda: [])
+        monkeypatch.setattr(
+            monitor,
+            "get_host_ports",
+            lambda config: {
+                8081: {
+                    "protocol": "TCP",
+                    "service_name": "未知服务",
+                    "container_name": "portview",
+                }
+            },
+        )
+        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+
+        card = next(c for c in result["port_cards"] if c.get("port") == 8081)
+        assert card["type"] == "used"
+        assert card["source"] == "docker"
+        assert card["service_name"] == "PortView"
+        assert card["container"] == "portview"
+
+    def test_host_network_container_wins_over_config_host(self, monkeypatch):
+        """回归：非自身端口的 host 网络容器，检测结果（docker）应优先于配置标注（host）。"""
+        monitor = _make_monitor()
+        monkeypatch.setattr(monitor, "get_docker_ports", lambda: [])
+        monkeypatch.setattr(
+            monitor,
+            "get_host_ports",
+            lambda config: {
+                9090: {
+                    "protocol": "TCP",
+                    "service_name": "未知服务",
+                    "container_name": "some-app",
+                }
+            },
+        )
+        config = {"监控系统": {"port": 9090, "protocol": "TCP", "service_type": "host"}}
+        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+
+        card = next(c for c in result["port_cards"] if c.get("port") == 9090)
+        assert card["type"] == "used"
+        assert card["source"] == "docker"
+        assert card["container"] == "some-app"

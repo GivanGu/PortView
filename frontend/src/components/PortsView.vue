@@ -10,14 +10,24 @@ import {
   createRange,
   deleteRange,
   getAccessAddress,
+  fetchLogos,
+  uploadLogo,
+  deleteLogo,
+  discoverLogo,
+  logoUrl,
+  fetchDefaultLogos,
+  defaultLogoUrl,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
+  type LogoMeta,
 } from '@/api'
+import { appKey, normalizeServiceName } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs from '@/store/prefs'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
-import { Search, Container, Cog, Server, Plus, Trash2, StickyNote, SlidersHorizontal } from 'lucide-vue-next'
+import PortCardContent from '@/components/PortCardContent.vue'
+import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -29,6 +39,156 @@ const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
+
+// ── Logo 状态 (v1.5.0) ──
+const logos = ref<Map<string, LogoMeta>>(new Map())
+const logoBusy = ref<Set<string>>(new Set())
+// v1.5.11：box 模式下 Logo 加载失败的 appKey 集合（用于回退到 🖼 占位符）
+const logoError = ref<Set<string>>(new Set())
+// v1.5.13：内置默认 Logo 匹配表（用户上传 Logo 缺失时回退）
+// ports 优先（知名端口最可靠），names 兜底（按 service_name 归一化匹配）
+const defaultLogoPorts = ref<Map<number, string>>(new Map())
+const defaultLogoNames = ref<Set<string>>(new Set())
+
+async function loadLogos() {
+  try {
+    const resp = await fetchLogos()
+    if (resp.success) {
+      const m = new Map<string, LogoMeta>()
+      for (const meta of resp.data) m.set(meta.app_key, meta)
+      logos.value = m
+      logoError.value = new Set()
+    }
+  } catch (e) {
+    console.error('加载 Logo 列表失败:', e)
+  }
+  // v1.5.13：内置默认 Logo 匹配表（独立请求，失败不影响用户上传 Logo）
+  try {
+    const d = await fetchDefaultLogos()
+    if (d.success) {
+      const pm = new Map<number, string>()
+      for (const [p, k] of Object.entries(d.data.ports)) pm.set(Number(p), k)
+      defaultLogoPorts.value = pm
+      defaultLogoNames.value = new Set(d.data.names)
+    }
+  } catch (e) {
+    console.error('加载默认 Logo 列表失败:', e)
+  }
+}
+
+function logoStatus(card: PortCard): string | null {
+  const key = appKey(card)
+  return logos.value.get(key)?.status ?? null
+}
+
+/** 匹配内置默认 Logo 的 key：端口优先（知名端口最可靠），service_name 兜底；无匹配返回 null。 */
+function defaultLogoKey(card: PortCard): string | null {
+  if (card.port != null && defaultLogoPorts.value.has(card.port)) {
+    return defaultLogoPorts.value.get(card.port)!
+  }
+  const name = card.service_name
+  if (name) {
+    const norm = normalizeServiceName(name)
+    if (defaultLogoNames.value.has(norm)) return norm
+  }
+  return null
+}
+
+function logoSrc(card: PortCard): string | null {
+  const key = appKey(card)
+  const meta = logos.value.get(key)
+  // 1. 用户上传 / discover 的 Logo 始终优先
+  if (meta?.status === 'found') return logoUrl(key)
+  // 2. 回退：内置默认 Logo（按 service_name 匹配）
+  const dkey = defaultLogoKey(card)
+  if (dkey) return defaultLogoUrl(dkey)
+  return null
+}
+
+function isLogoBusy(card: PortCard): boolean {
+  return logoBusy.value.has(appKey(card))
+}
+
+function hasLogoError(card: PortCard): boolean {
+  return logoError.value.has(appKey(card))
+}
+
+function markLogoError(card: PortCard) {
+  logoError.value = new Set(logoError.value).add(appKey(card))
+}
+
+async function handleDiscoverLogo(card: PortCard) {
+  const key = appKey(card)
+  if (!card.port) return
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    const resp = await discoverLogo(key, card.port)
+    if (resp.success) {
+      await loadLogos()
+      if (resp.data.status === 'not_found') {
+        showToast(t('ports.logoDiscoverFailed', { service: card.service_name || card.port }))
+      } else {
+        showToast(t('ports.logoAdded'))
+      }
+    } else {
+      showToast(resp.error || t('ports.logoDiscoverFailed', { service: card.service_name || card.port }))
+    }
+  } catch (e) {
+    console.error('Logo 识别失败:', e)
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
+
+async function handleUploadLogo(card: PortCard) {
+  const key = appKey(card)
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/png,image/jpeg,image/svg+xml,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    if (file.size > 1024 * 1024) {
+      showToast(t('ports.logoTooLarge'))
+      return
+    }
+    logoBusy.value = new Set(logoBusy.value).add(key)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1]
+        await uploadLogo(key, file.type, base64)
+        await loadLogos()
+        showToast(t('ports.logoAdded'))
+      }
+      reader.readAsDataURL(file)
+    } catch (e) {
+      console.error('Logo 上传失败:', e)
+    } finally {
+      const s = new Set(logoBusy.value)
+      s.delete(key)
+      logoBusy.value = s
+    }
+  }
+  input.click()
+}
+
+async function handleDeleteLogo(card: PortCard) {
+  const key = appKey(card)
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    await deleteLogo(key)
+    await loadLogos()
+  } catch (e) {
+    console.error('Logo 删除失败:', e)
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
 
 // ── 监控区间状态 ──
 const ranges = ref<RangeRead[]>([])
@@ -213,7 +373,9 @@ function startEdit(card: PortCard) {
 const showAddrPrompt = ref(false)
 
 function navigateToSettings() {
-  window.dispatchEvent(new CustomEvent('portview:navigate', { detail: { tab: 'settings' } }))
+  document.dispatchEvent(new CustomEvent('portview:navigate', {
+    detail: { tab: 'settings', anchor: 'settings-access-address' },
+  }))
 }
 
 async function handleOpenService(card: PortCard) {
@@ -244,7 +406,8 @@ function onAddrDismissed() {
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
-const { refreshInterval, refreshTick } = usePrefs()
+// v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
+const { refreshInterval, refreshTick, logoDisplayMode } = usePrefs()
 
 function applyPollTimer() {
   if (pollTimer) {
@@ -266,6 +429,7 @@ watch(refreshTick, () => {
 onMounted(() => {
   loadData()
   void reloadRanges()
+  void loadLogos()
   applyPollTimer()
 })
 
@@ -417,7 +581,41 @@ onBeforeUnmount(() => {
         <template v-for="(card, idx) in analysis.port_cards" :key="idx">
           <!-- 已用端口 -->
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
-            <div class="port-card" :class="{ offline: card.is_running === false }">
+            <div class="port-card" :class="{ offline: card.is_running === false, editing: editingPort === card.port }">
+              <!-- v1.5.11：Logo 展示模式（background / box），内容统一走 PortCardContent -->
+              <template v-if="logoDisplayMode === 'background'">
+                <!-- background：Logo 铺满整卡作为背景层（contain 填充，随卡片尺寸自动缩放） -->
+                <img
+                  v-if="logoSrc(card)"
+                  :src="logoSrc(card)!"
+                  class="port-card-bg"
+                  alt=""
+                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                />
+                <div v-if="logoSrc(card)" class="port-card-scrim"></div>
+
+                <div class="port-card-content">
+                  <PortCardContent :card="card" />
+                </div>
+              </template>
+              <div v-else class="port-card-body">
+                <!-- box：64px Logo 框 + 信息列 -->
+                <div class="port-logo">
+                  <img
+                    v-if="logoSrc(card)"
+                    :src="logoSrc(card)!"
+                    class="port-logo-img"
+                    :style="{ display: hasLogoError(card) ? 'none' : '' }"
+                    :alt="card.service_name || 'logo'"
+                    @error="markLogoError(card)"
+                  />
+                  <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
+                </div>
+                <div class="port-info">
+                  <PortCardContent :card="card" />
+                </div>
+              </div>
+
               <div class="port-actions">
               <button
                 class="port-action-btn"
@@ -430,65 +628,30 @@ onBeforeUnmount(() => {
                 @click="startEdit(card)"
               >✏️</button>
               <button
+                v-if="logoStatus(card) !== 'found'"
+                class="port-action-btn"
+                :title="t('ports.logoDiscover')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDiscoverLogo(card)"
+              >🔍</button>
+              <button
+                class="port-action-btn"
+                :title="t('ports.logoUpload')"
+                :disabled="isLogoBusy(card)"
+                @click="handleUploadLogo(card)"
+              >🖼</button>
+              <button
+                v-if="logoStatus(card) === 'found'"
+                class="port-action-btn danger"
+                :title="t('ports.logoDelete')"
+                :disabled="isLogoBusy(card)"
+                @click="handleDeleteLogo(card)"
+              >🗑</button>
+              <button
                 class="port-action-btn danger"
                 :title="t('ports.hidePort')"
                 @click="handleHide(card)"
               >🙈</button>
-            </div>
-
-            <div class="port-card-header">
-              <span class="port-header-left">
-                <span
-                  class="port-status-dot"
-                  :class="card.is_running === false ? 'is-offline' : 'is-online'"
-                  :title="card.is_running === false ? t('common.offline') : t('common.online')"
-                  :aria-label="card.is_running === false ? t('common.offline') : t('common.online')"
-                  role="img"
-                ></span>
-                <span class="port-number">{{ card.port }}</span>
-              </span>
-              <span
-                class="port-protocol"
-                :class="(card.protocol || '').toLowerCase()"
-              >{{ card.protocol }}</span>
-            </div>
-
-            <div class="port-service">
-              {{ card.service_name || t('ports.unknownService') }}
-            </div>
-
-            <!-- v1.2：用户备注 -->
-            <div v-if="card.remark" class="port-remark" :title="card.remark">
-              <StickyNote :size="11" class="port-remark-icon" />
-              <span class="port-remark-text">{{ card.remark }}</span>
-            </div>
-
-            <div class="port-detail">
-              <span
-                class="port-source"
-                :class="card.source"
-              >
-                <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
-                <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
-                <Server v-else :size="13" class="port-source-icon" />
-                <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
-              </span>
-
-              <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达，
-                   底行不再重复「在线/离线」文字，避免两处信号打架）。 -->
-              <span
-                v-if="card.container"
-                class="port-status"
-                :title="card.container"
-              >
-                <span class="port-status-container">{{ card.container }}</span>
-              </span>
-            </div>
-
-            <!-- 镜像信息独立成一行，不再挤进 port-detail，避免卡片高度不齐 -->
-            <div v-if="card.image" class="port-image">
-              <span class="port-image-label">{{ t('ports.image') }}</span>
-              <span class="port-image-value">{{ card.image }}</span>
             </div>
 
             <!-- 编辑模式 -->

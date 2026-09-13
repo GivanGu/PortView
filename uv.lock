@@ -520,6 +520,7 @@ dependencies = [
     { name = "argon2-cffi" },
     { name = "docker" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "psutil" },
     { name = "pydantic" },
     { name = "uvicorn", extra = ["standard"] },
@@ -528,7 +529,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "basedpyright" },
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -541,7 +541,7 @@ requires-dist = [
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.9.0" },
     { name = "docker", specifier = ">=7.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "psutil", specifier = ">=6.0.0" },
     { name = "pydantic", specifier = ">=2.7.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },

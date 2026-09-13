@@ -106,8 +106,8 @@ export function getAccessAddress(): Promise<ApiResponse<{ address: string }>> {
   return request<{ address: string }>('/api/config/access_address')
 }
 
-export function setAccessAddress(address: string): Promise<ApiResponse> {
-  return request('/api/config/access_address', {
+export function setAccessAddress(address: string): Promise<ApiResponse<{ address: string }>> {
+  return request<{ address: string }>('/api/config/access_address', {
     method: 'POST',
     body: JSON.stringify({ address }),
   })
@@ -203,6 +203,8 @@ export interface UserPrefs {
   accent: string
   lang: 'zh' | 'en'
   refresh_interval: number
+  logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
+  logo_display_mode: 'background' | 'box'
 }
 
 export interface UserPrefsPatch {
@@ -210,6 +212,8 @@ export interface UserPrefsPatch {
   accent?: string
   lang?: 'zh' | 'en'
   refresh_interval?: number
+  logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
+  logo_display_mode?: 'background' | 'box'
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {
@@ -283,3 +287,53 @@ export function deleteRange(id: number): Promise<ApiResponse> {
 
 // ── notes (upsert with remark) ──────────────────────
 // NotePayload / upsertNote 已存在；此处仅确保 remark 字段被允许。
+
+// ── logos (v1.5.0) ──────────────────────────────────
+
+export interface LogoMeta {
+  app_key: string
+  status: 'found' | 'not_found'
+  mime: string | null
+}
+
+export function fetchLogos(): Promise<ApiResponse<LogoMeta[]>> {
+  return request<LogoMeta[]>('/api/logos')
+}
+
+export function uploadLogo(appKey: string, mime: string, dataBase64: string): Promise<ApiResponse> {
+  return request(`/api/logos/${encodeURIComponent(appKey)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ mime, data: dataBase64 }),
+  })
+}
+
+export function deleteLogo(appKey: string): Promise<ApiResponse> {
+  return request(`/api/logos/${encodeURIComponent(appKey)}`, { method: 'DELETE' })
+}
+
+export function discoverLogo(appKey: string, port: number, path = '/'): Promise<ApiResponse<{ status: string; mime: string | null }>> {
+  return request<{ status: string; mime: string | null }>('/api/logos/discover', {
+    method: 'POST',
+    body: JSON.stringify({ app_key: appKey, port, path }),
+  })
+}
+
+/** 构建 logo 图片 URL（供 <img src> 使用）。 */
+export function logoUrl(appKey: string): string {
+  return `/api/logos/${encodeURIComponent(appKey)}`
+}
+
+/** 内置默认 Logo 匹配表（v1.5.13）：ports 优先 + names 兜底。 */
+export interface DefaultLogos {
+  names: string[]
+  ports: Record<string, string>
+}
+
+export function fetchDefaultLogos(): Promise<ApiResponse<DefaultLogos>> {
+  return request<DefaultLogos>('/api/logos/defaults')
+}
+
+/** 构建内置默认 Logo 图片 URL（供 <img src> 使用）。 */
+export function defaultLogoUrl(key: string): string {
+  return `/api/logos/default/${encodeURIComponent(key)}`
+}

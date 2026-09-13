@@ -6,11 +6,16 @@ import {
   upsertNote,
   deleteNote,
   fetchPorts,
+  fetchLogos,
+  discoverLogo,
+  uploadLogo,
   type NoteRead,
   type NotePayload,
   type PortCard,
+  type LogoMeta,
 } from '@/api'
-import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle } from 'lucide-vue-next'
+import { appKey } from '@/logo'
+import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -19,9 +24,25 @@ const loading = ref(false)
 const saving = ref(false)
 const searchQuery = ref('')
 
+// 轻提示（Logo 发现/上传结果反馈）
+const toast = ref('')
+const toastVisible = ref(false)
+let toastTimer: ReturnType<typeof setTimeout>
+function showToast(msg: string) {
+  toast.value = msg
+  toastVisible.value = true
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastVisible.value = false }, 2600)
+}
+
 // v1.3：未备注端口 —— 展示所有已用但无 note 记录的端口，
 // 方便用户「看到→点开→补备注」的一站式快速流。
 const allUsedPorts = ref<PortCard[]>([])
+
+// v1.5.0：无 Logo 端口 —— 展示所有已用但未设置 Logo 的端口，
+// 方便用户「看到→快速补 Logo」的一站式快速流。
+const logos = ref<Map<string, LogoMeta>>(new Map())
+const logoBusy = ref<Set<string>>(new Set())
 
 // 编辑器状态（新建/编辑共用 modal）
 const editorOpen = ref(false)
@@ -58,6 +79,25 @@ const shownUnremarked = computed(() => {
   )
 })
 
+// v1.5.0：无 Logo 端口 = 已用端口中 logo 状态非 'found' 的
+const noLogo = computed(() => {
+  return allUsedPorts.value
+    .filter(c => c.type === 'used' && c.port != null &&
+      logos.value.get(appKey(c))?.status !== 'found')
+    .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
+})
+
+const shownNoLogo = computed(() => {
+  if (!searchQuery.value) return noLogo.value
+  const q = searchQuery.value.toLowerCase()
+  return noLogo.value.filter(c =>
+    String(c.port ?? '').includes(q) ||
+    (c.service_name ?? '').toLowerCase().includes(q) ||
+    (c.container ?? '').toLowerCase().includes(q) ||
+    (c.remark ?? '').toLowerCase().includes(q)
+  )
+})
+
 async function loadData() {
   loading.value = true
   try {
@@ -82,6 +122,81 @@ async function loadAllPorts() {
   } catch (e) {
     console.error('load all ports failed:', e)
   }
+}
+
+// v1.5.0：加载 Logo 状态，供"无 Logo"分区判断
+async function loadLogos() {
+  try {
+    const resp = await fetchLogos()
+    if (resp.success) {
+      const m = new Map<string, LogoMeta>()
+      for (const meta of resp.data) m.set(meta.app_key, meta)
+      logos.value = m
+    }
+  } catch (e) {
+    console.error('load logos failed:', e)
+  }
+}
+
+function isLogoBusy(card: PortCard): boolean {
+  return logoBusy.value.has(appKey(card))
+}
+
+async function handleDiscoverLogo(card: PortCard) {
+  const key = appKey(card)
+  if (!card.port) return
+  logoBusy.value = new Set(logoBusy.value).add(key)
+  try {
+    const resp = await discoverLogo(key, card.port)
+    if (resp.success) {
+      await loadLogos()
+      if (resp.data?.status === 'not_found') {
+        showToast(t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
+      } else {
+        showToast(t('notes.logoAdded'))
+      }
+    } else {
+      showToast(resp.error || t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
+    }
+  } catch (e) {
+    console.error('Logo discover failed:', e)
+    showToast(t('notes.logoDiscoverFailed', { service: card.service_name || card.port }))
+  } finally {
+    const s = new Set(logoBusy.value)
+    s.delete(key)
+    logoBusy.value = s
+  }
+}
+
+async function handleUploadLogo(card: PortCard) {
+  const key = appKey(card)
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/png,image/jpeg,image/svg+xml,image/gif,image/webp,image/x-icon,image/vnd.microsoft.icon'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    if (file.size > 1024 * 1024) return
+    logoBusy.value = new Set(logoBusy.value).add(key)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1]
+        await uploadLogo(key, file.type, base64)
+        await loadLogos()
+        showToast(t('notes.logoAdded'))
+      }
+      reader.readAsDataURL(file)
+    } catch (e) {
+      console.error('Logo upload failed:', e)
+      showToast(t('notes.logoUploadFailed'))
+    } finally {
+      const s = new Set(logoBusy.value)
+      s.delete(key)
+      logoBusy.value = s
+    }
+  }
+  input.click()
 }
 
 function openEditByPort(port: number, preset?: string) {
@@ -173,6 +288,7 @@ function exportNotesJson() {
 onMounted(() => {
   loadData()
   loadAllPorts()
+  loadLogos()
 })
 
 // 保存/删除 note 后，"未备注"分区需要即时反映 ——
@@ -240,7 +356,56 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="notes.length === 0 && shownUnremarked.length === 0" class="empty-state">
+        <!-- v1.5.0：无 Logo 端口分区 —— 让"看到就补 Logo"成为一条主路径 -->
+        <div v-if="shownNoLogo.length" class="unremarked-panel" style="margin-bottom: 16px;">
+          <div class="unremarked-header">
+            <ImageOff :size="15" class="unremarked-icon" />
+            <span class="unremarked-title">{{ t('notes.noLogo') }} <span class="unremarked-count">{{ shownNoLogo.length }}</span></span>
+          </div>
+          <div class="unremarked-list">
+            <div
+              v-for="c in shownNoLogo"
+              :key="'nl-' + c.port"
+              class="unremarked-row"
+            >
+              <span class="unremarked-port">{{ c.port }}</span>
+              <span class="unremarked-src" :class="(c.source || '').toLowerCase()">
+                {{ c.source === 'docker' ? t('common.sourceDocker') : c.source === 'system' ? t('common.sourceSystem') : (c.source === 'host' ? t('common.sourceHost') : t('common.sourceUnknown')) }}
+              </span>
+              <span class="unremarked-svc">{{ c.service_name || (c.container || '—') }}</span>
+              <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
+              <div class="row-actions">
+                <button
+                  class="btn btn-sm btn-primary"
+                  :disabled="isLogoBusy(c)"
+                  @click="handleDiscoverLogo(c)"
+                  :title="t('notes.noLogoDiscover')"
+                >
+                  <Search :size="13" class="spinning" v-if="isLogoBusy(c)" />
+                  <Search :size="13" v-else />
+                  {{ isLogoBusy(c) ? t('notes.logoDiscovering') : t('notes.noLogoDiscoverBtn') }}
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :disabled="isLogoBusy(c)"
+                  @click="handleUploadLogo(c)"
+                  :title="t('notes.noLogoUploadBtn')"
+                >
+                  <ImagePlus :size="13" /> {{ t('notes.noLogoUploadBtn') }}
+                </button>
+                <button
+                  class="btn btn-sm"
+                  @click="openEditByPort(c.port!)"
+                  :title="t('notes.noLogoNoteBtn')"
+                >
+                  <StickyNote :size="13" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="notes.length === 0 && shownUnremarked.length === 0 && shownNoLogo.length === 0" class="empty-state">
           <div class="empty-icon"><StickyNote :size="32" /></div>
           <div class="empty-text">{{ t('notes.empty') }}</div>
           <button class="btn btn-primary" :style="{ marginTop: '12px' }" @click="openCreate">
@@ -337,5 +502,10 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 轻提示 -->
+    <Teleport to="body">
+      <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
+    </Teleport>
   </div>
 </template>
