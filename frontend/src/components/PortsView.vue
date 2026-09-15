@@ -217,7 +217,10 @@ function toggleSettingsMenu(card: PortCard, event: MouseEvent) {
   const estHeight = 260
   const top =
     rect.bottom + estHeight + 8 > window.innerHeight ? Math.max(8, rect.top - estHeight - 4) : rect.bottom + 4
-  settingsMenuPos.value = { top, right: window.innerWidth - rect.right }
+  // 钳制 right，防止卡片靠近左缘时菜单溢出视口左边界（菜单宽约 180px）
+  const menuWidth = 180
+  const right = Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - 8 - menuWidth))
+  settingsMenuPos.value = { top, right }
   settingsMenuPort.value = card.port ?? null
 }
 
@@ -606,8 +609,16 @@ watch(refreshTick, () => {
   if (!loading.value) loadData(true)
 })
 
-// 滚动时关闭设置菜单（菜单 fixed 定位，滚动会错位）
+// 滚动 / 缩放 / Esc 时关闭设置菜单（菜单 fixed 定位，视口变化会错位）
 function onScrollCloseMenu() {
+  if (settingsMenuPort.value != null) closeSettingsMenu()
+}
+
+function onKeydownCloseMenu(e: KeyboardEvent) {
+  if (e.key === 'Escape' && settingsMenuPort.value != null) closeSettingsMenu()
+}
+
+function onResizeCloseMenu() {
   if (settingsMenuPort.value != null) closeSettingsMenu()
 }
 
@@ -617,11 +628,15 @@ onMounted(() => {
   void loadLogos()
   applyPollTimer()
   window.addEventListener('scroll', onScrollCloseMenu, true)
+  window.addEventListener('keydown', onKeydownCloseMenu)
+  window.addEventListener('resize', onResizeCloseMenu)
 })
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   window.removeEventListener('scroll', onScrollCloseMenu, true)
+  window.removeEventListener('keydown', onKeydownCloseMenu)
+  window.removeEventListener('resize', onResizeCloseMenu)
 })
 </script>
 
@@ -933,8 +948,8 @@ onBeforeUnmount(() => {
 
           <div class="settings-menu-group">
             <div class="settings-menu-label">{{ t('ports.menuLogo') }}</div>
+            <!-- 识别按钮常显：已有 Logo 时作为「重新识别」，避免按钮凭空消失 -->
             <button
-              v-if="logoStatus(settingsMenuCard) !== 'found'"
               class="settings-menu-item"
               :disabled="isLogoBusy(settingsMenuCard)"
               @click="runMenuAction(settingsMenuCard!, (c) => handleDiscoverLogo(c))"
