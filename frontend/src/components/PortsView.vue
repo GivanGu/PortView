@@ -225,10 +225,12 @@ function closeSettingsMenu() {
   settingsMenuPort.value = null
 }
 
-// 执行菜单项动作后关闭菜单
-function runMenuAction(fn: () => void) {
+// 执行菜单项动作后关闭菜单。
+// 注意：必须在 close 之前把 card 捕获出来——close 后 settingsMenuCard
+// computed 会失效返回 null，若动作函数内再引用它就会拿到 null 导致动作静默失败。
+function runMenuAction(card: PortCard, fn: (card: PortCard) => void) {
   closeSettingsMenu()
-  fn()
+  fn(card)
 }
 
 // ── 监控区间状态 ──
@@ -922,7 +924,7 @@ onBeforeUnmount(() => {
             <div class="settings-menu-label">{{ t('ports.menuService') }}</div>
             <button
               class="settings-menu-item"
-              @click="runMenuAction(() => startEdit(settingsMenuCard!))"
+              @click="runMenuAction(settingsMenuCard!, (c) => startEdit(c))"
             >
               <span class="settings-menu-ico">✏️</span>
               <span>{{ t('ports.editService') }}</span>
@@ -935,7 +937,7 @@ onBeforeUnmount(() => {
               v-if="logoStatus(settingsMenuCard) !== 'found'"
               class="settings-menu-item"
               :disabled="isLogoBusy(settingsMenuCard)"
-              @click="runMenuAction(() => handleDiscoverLogo(settingsMenuCard!))"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleDiscoverLogo(c))"
             >
               <span class="settings-menu-ico">🔍</span>
               <span>{{ t('ports.logoDiscover') }}</span>
@@ -943,7 +945,7 @@ onBeforeUnmount(() => {
             <button
               class="settings-menu-item"
               :disabled="isLogoBusy(settingsMenuCard)"
-              @click="runMenuAction(() => handleUploadLogo(settingsMenuCard!))"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleUploadLogo(c))"
             >
               <span class="settings-menu-ico">🖼</span>
               <span>{{ t('ports.logoUpload') }}</span>
@@ -952,7 +954,7 @@ onBeforeUnmount(() => {
               v-if="logoStatus(settingsMenuCard) === 'found'"
               class="settings-menu-item danger"
               :disabled="isLogoBusy(settingsMenuCard)"
-              @click="runMenuAction(() => handleDeleteLogo(settingsMenuCard!))"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleDeleteLogo(c))"
             >
               <span class="settings-menu-ico">🗑</span>
               <span>{{ t('ports.logoDelete') }}</span>
@@ -963,7 +965,7 @@ onBeforeUnmount(() => {
             <div class="settings-menu-label">{{ t('ports.menuOther') }}</div>
             <button
               class="settings-menu-item danger"
-              @click="runMenuAction(() => handleHide(settingsMenuCard!))"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleHide(c))"
             >
               <span class="settings-menu-ico">🙈</span>
               <span>{{ t('ports.hidePort') }}</span>
