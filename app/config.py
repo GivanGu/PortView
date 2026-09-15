@@ -159,18 +159,20 @@ def save_raw_config(raw: Mapping[str, Any]) -> bool:
 
 
 def normalize_access_address(address: str) -> str:
-    """规范化访问地址：只保留主机部分（IP/域名），剥离协议前缀。
+    """规范化访问地址：只保留主机部分（IP/域名），剥离协议前缀与端口。
 
-    例如 ``http://192.168.31.1`` → ``192.168.31.1``；裸 IP / 域名原样保留。
+    例如 ``http://192.168.31.1:8081`` → ``192.168.31.1``；
+    ``192.168.31.1:8081``（旧数据手填 IP:端口）→ ``192.168.31.1``。
     http/https 不再随地址存储，由打开服务时的实时探测决定。
     """
     address = address.strip()
     if not address:
         return ""
-    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", address):
-        # 兼容旧数据 / 用户手填了协议前缀：只取主机部分
-        address = urlparse(address).hostname or ""
-    return address
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", address):
+        # 无协议前缀（裸 IP / 域名 / IP:端口）：统一补 http:// 再按 URL 解析，
+        # 保证端口号被剥离（否则 "IP:8081" 会被当作主机名导致探测全部失败）
+        address = f"http://{address}"
+    return urlparse(address).hostname or ""
 
 
 def load_access_address() -> str:

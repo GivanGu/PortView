@@ -156,6 +156,13 @@ class TestAccessAddress:
     def test_normalize_strips_path(self):
         assert normalize_access_address("http://192.168.1.100:8081/") == "192.168.1.100"
 
+    def test_normalize_bare_ip_with_port(self):
+        """旧数据 / 手填「IP:端口」（无协议）→ 剥离端口，否则探测主机非法全部失败"""
+        assert normalize_access_address("192.168.31.1:8081") == "192.168.31.1"
+
+    def test_normalize_schemed_ip_with_port(self):
+        assert normalize_access_address("http://192.168.31.1:8081") == "192.168.31.1"
+
     def test_normalize_empty(self):
         assert normalize_access_address("") == ""
         assert normalize_access_address("   ") == ""
