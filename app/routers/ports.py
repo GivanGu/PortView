@@ -150,21 +150,33 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
         return APIResponse(success=False, error=str(e))
 
 
+def _probe_hosts() -> list[str]:
+    """构造探测主机列表：访问地址优先（与浏览器访问目标一致），
+    127.0.0.1 兜底（host 网络下即宿主机回环，覆盖只监听回环的服务）。"""
+    hosts: list[str] = []
+    access = load_access_host()
+    if access:
+        hosts.append(access)
+    if "127.0.0.1" not in hosts:
+        hosts.append("127.0.0.1")
+    return hosts
+
+
 @router.post("/ports/probe_scheme", response_model=APIResponse)
 async def api_probe_scheme(req: ProbeSchemeRequest) -> APIResponse:
     """探测某主机端口对外提供的协议（http/https/unknown）。
 
-    host 取自全局访问地址（与浏览器访问目标一致），未设置时回退 127.0.0.1。
+    按「访问地址 → 127.0.0.1」顺序尝试，取第一个能判定的结果。
     阻塞 socket 通过 asyncio.to_thread 跑，避免卡事件循环。
     """
     try:
-        host = load_access_host() or "127.0.0.1"
+        hosts = _probe_hosts()
         scheme = await asyncio.to_thread(
-            scheme_probe.probe_scheme, host, req.port, req.container_id
+            scheme_probe.probe_scheme, hosts, req.port, req.container_id
         )
         if scheme == "unknown":
             scheme = scheme_probe.port_scheme_fallback(req.container_port, req.port) or "unknown"
-        return APIResponse(success=True, data={"scheme": scheme, "host": host})
+        return APIResponse(success=True, data={"scheme": scheme, "host": hosts[0]})
     except Exception as e:
         logger.error("协议探测失败: %s", e)
         return APIResponse(success=False, error=str(e))
@@ -174,14 +186,14 @@ async def api_probe_scheme(req: ProbeSchemeRequest) -> APIResponse:
 async def api_probe_schemes(req: ProbeSchemesRequest) -> APIResponse:
     """批量探测多个主机端口的协议（卡片 http/https 徽章一次取回）。
 
-    host 取自全局访问地址，未设置时回退 127.0.0.1。
-    后端 16 并发并行探测；unknown 时按端口号兜底（容器端口优先）。
+    按「访问地址 → 127.0.0.1」顺序尝试；后端 16 并发并行探测；
+    unknown 时按端口号兜底（容器端口优先）。
     """
     try:
-        host = load_access_host() or "127.0.0.1"
+        hosts = _probe_hosts()
         items = [(i.port, i.container_id, i.container_port) for i in req.items]
-        schemes = await asyncio.to_thread(scheme_probe.probe_schemes_batch, host, items)
-        return APIResponse(success=True, data={"schemes": schemes, "host": host})
+        schemes = await asyncio.to_thread(scheme_probe.probe_schemes_batch, hosts, items)
+        return APIResponse(success=True, data={"schemes": schemes, "host": hosts[0]})
     except Exception as e:
         logger.error("批量协议探测失败: %s", e)
         return APIResponse(success=False, error=str(e))

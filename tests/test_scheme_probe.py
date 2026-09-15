@@ -151,6 +151,52 @@ class TestProbeSchemesBatch:
         assert scheme_probe.probe_schemes_batch("127.0.0.1", []) == {}
 
 
+class TestMultiHostProbe:
+    """多主机探测：按顺序尝试，取第一个能判定的（覆盖只监听回环/局域网 IP 的场景）。"""
+
+    def test_fallback_to_second_host(self):
+        calls = []
+
+        def fake_classify(host, port):
+            calls.append(host)
+            return "unknown" if host == "bad.host" else "http"
+
+        scheme_probe.clear_cache()
+        with patch.object(scheme_probe, "_classify", side_effect=fake_classify):
+            result = scheme_probe.probe_scheme(["bad.host", "127.0.0.1"], 8080)
+        assert result == "http"
+        assert calls == ["bad.host", "127.0.0.1"]
+
+    def test_stops_at_first_definitive(self):
+        calls = []
+
+        def fake_classify(host, port):
+            calls.append(host)
+            return "https"
+
+        scheme_probe.clear_cache()
+        with patch.object(scheme_probe, "_classify", side_effect=fake_classify):
+            result = scheme_probe.probe_scheme(["h1", "h2"], 443)
+        assert result == "https"
+        assert calls == ["h1"]  # 第一个主机已判定，不再试第二个
+
+    def test_all_unknown(self):
+        scheme_probe.clear_cache()
+        with patch.object(scheme_probe, "_classify", return_value="unknown"):
+            result = scheme_probe.probe_scheme(["h1", "h2"], 22)
+        assert result == "unknown"
+
+    def test_string_host_still_works(self):
+        scheme_probe.clear_cache()
+        with patch.object(scheme_probe, "_classify", return_value="http"):
+            assert scheme_probe.probe_scheme("127.0.0.1", 80) == "http"
+
+    def test_host_list_dedup(self):
+        assert scheme_probe._host_list(["a", "a", "b"]) == ["a", "b"]
+        assert scheme_probe._host_list("a") == ["a"]
+        assert scheme_probe._host_list(["", "  ", "b"]) == ["b"]
+
+
 class TestProbeCache:
     def test_cache_hit(self):
         scheme_probe.clear_cache()

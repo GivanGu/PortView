@@ -161,40 +161,64 @@ def _classify(host: str, port: int) -> str:
     return "unknown"
 
 
-def probe_scheme(host: str, port: int, container_id: str | None = None) -> str:
+def _host_list(host: str | list[str]) -> list[str]:
+    """把单个主机或主机列表规范化为去重后的列表（保持顺序）。"""
+    if isinstance(host, str):
+        host = [host]
+    seen: set[str] = set()
+    result: list[str] = []
+    for h in host:
+        h = (h or "").strip()
+        if h and h not in seen:
+            seen.add(h)
+            result.append(h)
+    return result
+
+
+def probe_scheme(host: str | list[str], port: int, container_id: str | None = None) -> str:
     """带缓存的协议探测。返回 'http' / 'https' / 'unknown'。
+
+    ``host`` 可以是单个主机，或按顺序尝试的主机列表（取第一个能判定的）。
+    多主机用于覆盖「服务只监听回环 / 只监听局域网 IP」等不同绑定场景。
 
     缓存 key=(port, container_id)，TTL 60s。容器重部署产生新 container_id → 缓存未命中。
     """
+    hosts = _host_list(host)
     key = (port, container_id or "")
     now = time.time()
     with _LOCK:
         cached = _CACHE.get(key)
         if cached and now - cached[1] < _TTL:
             return cached[0]
-        result = _classify(host, port)
+        result = "unknown"
+        for h in hosts:
+            r = _classify(h, port)
+            if r != "unknown":
+                result = r
+                break
         _CACHE[key] = (result, now)
         return result
 
 
 def probe_schemes_batch(
-    host: str,
+    host: str | list[str],
     items: list[tuple[int, str | None, int | None]],
 ) -> dict[int, str]:
     """批量探测多个端口的协议（供卡片徽章一次取回全部结果）。
 
-    :param host: 探测主机（访问地址的主机部分）
+    :param host: 探测主机（单个或按顺序尝试的列表，如 [访问地址, 127.0.0.1]）
     :param items: ``[(port, container_id, container_port), ...]``
     :return: ``{port: 'http' | 'https' | 'unknown'}``
 
     16 并发并行探测；探测 unknown 时按端口号兜底推断（容器端口优先于主机端口）。
     """
+    hosts = _host_list(host)
     if not items:
         return {}
 
     def _one(item: tuple[int, str | None, int | None]) -> tuple[int, str]:
         port, container_id, container_port = item
-        scheme = probe_scheme(host, port, container_id)
+        scheme = probe_scheme(hosts, port, container_id)
         if scheme == "unknown":
             scheme = port_scheme_fallback(container_port, port) or "unknown"
         return port, scheme
