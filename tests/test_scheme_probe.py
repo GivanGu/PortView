@@ -78,6 +78,79 @@ class TestClassify:
             assert scheme_probe._classify("127.0.0.1", 1234) == "unknown"
 
 
+class TestClassifyTwoStage:
+    """两段式探测：第一段 ClientHello 无响应时，第二段发真实 GET 再判。"""
+
+    def test_stage2_http_after_silent_stage1(self):
+        """第一段静默（部分 HTTP 服务对乱码不回应），第二段回 HTTP 状态行 → http"""
+        sockets = iter([FakeSocket(b""), FakeSocket(b"HTTP/1.1 200 OK\r\n\r\n")])
+        with patch.object(
+            scheme_probe.socket, "create_connection", side_effect=lambda *a, **k: next(sockets)
+        ):
+            assert scheme_probe._classify("127.0.0.1", 8080) == "http"
+
+    def test_stage2_non_http(self):
+        """两段都非 HTTP（如数据库握手包）→ unknown"""
+        sockets = iter([FakeSocket(b"\x0a\x00\x00\x00\x0a"), FakeSocket(b"\xff\xff")])
+        with patch.object(
+            scheme_probe.socket, "create_connection", side_effect=lambda *a, **k: next(sockets)
+        ):
+            assert scheme_probe._classify("127.0.0.1", 3306) == "unknown"
+
+    def test_stage1_tls_short_circuits(self):
+        """第一段判定 TLS 后不再开第二段连接"""
+        sockets = iter([FakeSocket(b"\x16\x03\x03\x01\x02AB")])
+        with patch.object(
+            scheme_probe.socket, "create_connection", side_effect=lambda *a, **k: next(sockets)
+        ):
+            assert scheme_probe._classify("127.0.0.1", 443) == "https"
+
+
+class TestPortSchemeFallback:
+    def test_https_ports(self):
+        assert scheme_probe.port_scheme_fallback(443) == "https"
+        assert scheme_probe.port_scheme_fallback(8443) == "https"
+
+    def test_http_port(self):
+        assert scheme_probe.port_scheme_fallback(80) == "http"
+
+    def test_unknown_port_returns_none(self):
+        assert scheme_probe.port_scheme_fallback(22, 3306) is None
+
+    def test_call_order_is_priority(self):
+        # 容器端口在前 → 容器端口命中优先
+        assert scheme_probe.port_scheme_fallback(443, 80) == "https"
+        assert scheme_probe.port_scheme_fallback(None, 443) == "https"
+
+    def test_all_none(self):
+        assert scheme_probe.port_scheme_fallback(None, None) is None
+
+
+class TestProbeSchemesBatch:
+    def test_batch_returns_map(self):
+        def fake_probe(host, port, container_id=None):
+            return "https" if port == 443 else "unknown"
+
+        with patch.object(scheme_probe, "probe_scheme", side_effect=fake_probe):
+            result = scheme_probe.probe_schemes_batch(
+                "127.0.0.1", [(443, "cid", None), (8080, None, None)]
+            )
+        assert result == {443: "https", 8080: "unknown"}
+
+    def test_batch_applies_port_fallback(self):
+        """探测 unknown 时按端口号兜底：容器端口 443 → https"""
+
+        def fake_probe(host, port, container_id=None):
+            return "unknown"
+
+        with patch.object(scheme_probe, "probe_scheme", side_effect=fake_probe):
+            result = scheme_probe.probe_schemes_batch("127.0.0.1", [(22500, "cid", 443)])
+        assert result == {22500: "https"}
+
+    def test_batch_empty(self):
+        assert scheme_probe.probe_schemes_batch("127.0.0.1", []) == {}
+
+
 class TestProbeCache:
     def test_cache_hit(self):
         scheme_probe.clear_cache()
@@ -140,3 +213,40 @@ class TestProbeEndpoint:
         # 端口越界 → 422
         resp = client.post("/api/ports/probe_scheme", json={"port": 0})
         assert resp.status_code == 422
+
+    def test_probe_endpoint_fallback(self, client: TestClient):
+        """探测 unknown 时按容器端口兜底：443 → https"""
+        with patch.object(scheme_probe, "probe_scheme", return_value="unknown"):
+            resp = client.post(
+                "/api/ports/probe_scheme",
+                json={"port": 22500, "container_id": "abc", "container_port": 443},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["scheme"] == "https"
+
+
+class TestProbeSchemesEndpoint:
+    def test_batch_endpoint_success(self, client: TestClient):
+        with patch.object(
+            scheme_probe, "probe_schemes_batch", return_value={80: "http", 443: "https"}
+        ):
+            resp = client.post(
+                "/api/ports/probe_schemes",
+                json={
+                    "items": [
+                        {"port": 80, "container_id": None, "container_port": None},
+                        {"port": 443, "container_id": "abc", "container_port": 443},
+                    ]
+                },
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["data"]["schemes"] == {"80": "http", "443": "https"}
+        assert "host" in data["data"]
+
+    def test_batch_endpoint_empty_items(self, client: TestClient):
+        with patch.object(scheme_probe, "probe_schemes_batch", return_value={}):
+            resp = client.post("/api/ports/probe_schemes", json={"items": []})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["schemes"] == {}

@@ -1,13 +1,18 @@
 """服务链接协议探测：判定某端口对外提供的是 http 还是 https。
 
-背景：访问地址是全局单一协议（默认 http），但同一台主机上可能同时跑 HTTP（80）
-和 HTTPS（443）服务，单一协议无法同时适配。Docker 端口映射还会让主机端口与服务
-实际端口解耦（如容器 443 → 主机 22500），仅凭端口号无法可靠推断。
+背景：访问地址只存主机（IP/域名），不存协议；同一台主机上可能同时跑 HTTP（80）
+和 HTTPS（443）服务，Docker 端口映射还会让主机端口与服务实际端口解耦
+（如容器 443 → 主机 22500），仅凭端口号无法可靠推断。
 
-方案：对目标端口发起最小 TLS ClientHello，按响应前缀三态判定：
-- 收到 TLS 记录（0x16/0x15/0x14/0x17）→ https（对端是 TLS 服务）
-- 收到明文 HTTP 状态行（``HTTP/``）→ http
-- 超时 / 拒绝 / 其他（SSH、MySQL 等非 Web 服务）→ unknown（调用方回退默认协议）
+方案：对目标端口两段式探测：
+1. 发最小 TLS ClientHello：
+   - 收到 TLS 记录（0x16/0x15/0x14/0x17）→ https（对端是 TLS 服务）
+   - 收到明文 HTTP 状态行（``HTTP/``）→ http
+2. 第一段未判定且端口可连时，新开连接发真实 ``GET / HTTP/1.0`` 请求：
+   部分 HTTP 服务对乱码数据不响应，但对合法请求会回状态行 → http
+
+仍 unknown 时（如容器已停止、端口未监听）按端口号兜底推断：
+容器端口优先于主机端口，443/8443 → https，80 → http。
 
 「unknown 回退默认」保证探测的最坏情况 = 现状，绝不会比不探测更差。
 """
@@ -19,6 +24,7 @@ import os
 import socket
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,26 @@ logger = logging.getLogger(__name__)
 _TTL = 60.0
 _CACHE: dict[tuple[int, str], tuple[str, float]] = {}
 _LOCK = threading.Lock()
+
+# 端口号 → 协议 兜底推断表（探测 unknown 时使用，如已停止的容器无法探测）
+_PORT_SCHEME_FALLBACK: dict[int, str] = {
+    80: "http",
+    443: "https",
+    8443: "https",
+}
+
+
+def port_scheme_fallback(*ports: int | None) -> str | None:
+    """按端口号推断协议（调用顺序即优先级，如容器端口在前、主机端口在后）。
+
+    无匹配返回 ``None``。
+    """
+    for port in ports:
+        if port is not None:
+            scheme = _PORT_SCHEME_FALLBACK.get(port)
+            if scheme:
+                return scheme
+    return None
 
 
 def _build_client_hello() -> bytes:
@@ -102,10 +128,11 @@ _CLIENT_HELLO = _build_client_hello()
 
 
 def _classify(host: str, port: int) -> str:
-    """阻塞式探测：连 host:port，发 ClientHello，按响应前缀判定。
+    """阻塞式两段探测：连 host:port，先发 ClientHello，未判定再发真实 GET。
 
     返回 'https' / 'http' / 'unknown'。
     """
+    # 第一段：TLS ClientHello
     try:
         with socket.create_connection((host, port), timeout=2.0) as sock:
             sock.settimeout(2.0)
@@ -113,12 +140,22 @@ def _classify(host: str, port: int) -> str:
             data = sock.recv(5)
     except (TimeoutError, OSError):
         return "unknown"
-    if not data:
+    if data:
+        first = data[0]
+        # TLS 记录类型：0x16 握手 / 0x15 alert / 0x14 change_cipher_spec / 0x17 application_data
+        if first in (0x16, 0x15, 0x14, 0x17):
+            return "https"
+        if data.startswith(b"HTTP/"):
+            return "http"
+    # 第二段：端口可连但第一段无响应（部分 HTTP 服务对乱码不回应），
+    # 新开连接发合法 GET 请求再试一次
+    try:
+        with socket.create_connection((host, port), timeout=2.0) as sock:
+            sock.settimeout(2.0)
+            sock.sendall(b"GET / HTTP/1.0\r\nHost: " + host.encode() + b"\r\n\r\n")
+            data = sock.recv(5)
+    except (TimeoutError, OSError):
         return "unknown"
-    first = data[0]
-    # TLS 记录类型：0x16 握手 / 0x15 alert / 0x14 change_cipher_spec / 0x17 application_data
-    if first in (0x16, 0x15, 0x14, 0x17):
-        return "https"
     if data.startswith(b"HTTP/"):
         return "http"
     return "unknown"
@@ -138,6 +175,35 @@ def probe_scheme(host: str, port: int, container_id: str | None = None) -> str:
         result = _classify(host, port)
         _CACHE[key] = (result, now)
         return result
+
+
+def probe_schemes_batch(
+    host: str,
+    items: list[tuple[int, str | None, int | None]],
+) -> dict[int, str]:
+    """批量探测多个端口的协议（供卡片徽章一次取回全部结果）。
+
+    :param host: 探测主机（访问地址的主机部分）
+    :param items: ``[(port, container_id, container_port), ...]``
+    :return: ``{port: 'http' | 'https' | 'unknown'}``
+
+    16 并发并行探测；探测 unknown 时按端口号兜底推断（容器端口优先于主机端口）。
+    """
+    if not items:
+        return {}
+
+    def _one(item: tuple[int, str | None, int | None]) -> tuple[int, str]:
+        port, container_id, container_port = item
+        scheme = probe_scheme(host, port, container_id)
+        if scheme == "unknown":
+            scheme = port_scheme_fallback(container_port, port) or "unknown"
+        return port, scheme
+
+    results: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for port, scheme in pool.map(_one, items):
+            results[port] = scheme
+    return results
 
 
 def clear_cache() -> None:

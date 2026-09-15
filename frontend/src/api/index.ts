@@ -98,10 +98,29 @@ export interface ProbeSchemeResult {
   host: string
 }
 
-export function probeScheme(port: number, containerId?: string): Promise<ApiResponse<ProbeSchemeResult>> {
+export function probeScheme(port: number, containerId?: string, containerPort?: number | null): Promise<ApiResponse<ProbeSchemeResult>> {
   return request<ProbeSchemeResult>('/api/ports/probe_scheme', {
     method: 'POST',
-    body: JSON.stringify({ port, container_id: containerId || null }),
+    body: JSON.stringify({ port, container_id: containerId || null, container_port: containerPort ?? null }),
+  })
+}
+
+export interface ProbeSchemesResult {
+  schemes: Record<string, 'http' | 'https' | 'unknown'>
+  host: string
+}
+
+export interface ProbeSchemeItem {
+  port: number
+  container_id?: string | null
+  container_port?: number | null
+}
+
+/** 批量探测端口协议（卡片 http/https 徽章）。 */
+export function probeSchemes(items: ProbeSchemeItem[]): Promise<ApiResponse<ProbeSchemesResult>> {
+  return request<ProbeSchemesResult>('/api/ports/probe_schemes', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
   })
 }
 

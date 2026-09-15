@@ -102,6 +102,8 @@
     "statDocker": "Docker 容器",
     "loading": "加载端口数据...",
     "openService": "打开服务",
+    "schemeHttpTip": "服务使用 HTTP 明文连接",
+    "schemeHttpsTip": "服务使用 HTTPS 加密连接",
     "editService": "编辑服务名",
     "hidePort": "隐藏端口",
     "hideRange": "隐藏范围",
@@ -229,8 +231,8 @@
     "scrimGlass": "毛玻璃",
     "scrimNone": "无遮罩",
     "accessAddress": "访问地址",
-    "accessAddressHint": "设置后，端口卡片上的「打开服务」按钮将使用此地址拼接端口号。可直接填 IP（如 192.168.31.1），自动按 http 协议处理",
-    "accessAddressPlaceholder": "如 192.168.31.1 或 http://192.168.1.100",
+    "accessAddressHint": "设置后，端口卡片上的「打开服务」按钮将使用此地址拼接端口号。只需填 IP 或域名（如 192.168.31.1），http/https 由打开时自动检测",
+    "accessAddressPlaceholder": "如 192.168.31.1",
     "accessAddrSaved": "访问地址已保存"
   },
   "login": {

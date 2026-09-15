@@ -62,9 +62,7 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     if patch.accent is not None and patch.accent not in _ACCENTS:
         return APIResponse(success=False, error=f"accent must be one of {sorted(_ACCENTS)}")
     if patch.logo_scrim is not None and patch.logo_scrim not in _LOGO_SCRIMS:
-        return APIResponse(
-            success=False, error=f"logo_scrim must be one of {sorted(_LOGO_SCRIMS)}"
-        )
+        return APIResponse(success=False, error=f"logo_scrim must be one of {sorted(_LOGO_SCRIMS)}")
     if patch.logo_display_mode is not None and patch.logo_display_mode not in _LOGO_DISPLAY_MODES:
         return APIResponse(
             success=False,

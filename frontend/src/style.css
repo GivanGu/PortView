@@ -867,6 +867,39 @@ html, body {
   color: var(--orange);
 }
 
+/* 来源 + 协议徽章的左侧分组（保持与容器名 space-between 布局） */
+.port-detail-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 服务协议徽章（http/https） */
+.port-scheme {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.port-scheme-icon {
+  flex-shrink: 0;
+}
+.port-scheme.https {
+  background: var(--green-light);
+  color: var(--green);
+}
+.port-scheme.http {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
 .port-status {
   display: inline-flex;
   align-items: center;

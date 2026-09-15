@@ -136,36 +136,41 @@ class TestSaveConfig:
 
 
 class TestAccessAddress:
+    """v1.5.18 起访问地址只存主机部分（IP/域名），协议由打开时实时探测。"""
+
     def test_normalize_bare_ip(self):
-        assert normalize_access_address("192.168.31.1") == "http://192.168.31.1"
+        assert normalize_access_address("192.168.31.1") == "192.168.31.1"
 
     def test_normalize_bare_domain(self):
-        assert normalize_access_address("nas.example.com") == "http://nas.example.com"
+        assert normalize_access_address("nas.example.com") == "nas.example.com"
 
-    def test_normalize_keeps_http(self):
-        assert normalize_access_address("http://192.168.1.100") == "http://192.168.1.100"
+    def test_normalize_strips_http(self):
+        assert normalize_access_address("http://192.168.1.100") == "192.168.1.100"
 
-    def test_normalize_keeps_https(self):
-        assert normalize_access_address("https://nas.example.com") == "https://nas.example.com"
+    def test_normalize_strips_https(self):
+        assert normalize_access_address("https://nas.example.com") == "nas.example.com"
 
-    def test_normalize_keeps_custom_scheme(self):
-        assert normalize_access_address("ftp://files.local") == "ftp://files.local"
+    def test_normalize_strips_custom_scheme(self):
+        assert normalize_access_address("ftp://files.local") == "files.local"
+
+    def test_normalize_strips_path(self):
+        assert normalize_access_address("http://192.168.1.100:8081/") == "192.168.1.100"
 
     def test_normalize_empty(self):
         assert normalize_access_address("") == ""
         assert normalize_access_address("   ") == ""
 
     def test_normalize_strips_whitespace(self):
-        assert normalize_access_address("  192.168.31.1  ") == "http://192.168.31.1"
+        assert normalize_access_address("  192.168.31.1  ") == "192.168.31.1"
 
-    def test_save_bare_ip_persists_with_scheme(self):
+    def test_save_bare_ip_persists_bare(self):
         assert save_access_address("192.168.31.1") is True
-        assert load_raw_config()["__access_address__"] == "http://192.168.31.1"
-        assert load_access_address() == "http://192.168.31.1"
+        assert load_raw_config()["__access_address__"] == "192.168.31.1"
+        assert load_access_address() == "192.168.31.1"
 
-    def test_save_with_scheme_unchanged(self):
+    def test_save_with_scheme_strips_scheme(self):
         assert save_access_address("https://nas.example.com") is True
-        assert load_access_address() == "https://nas.example.com"
+        assert load_access_address() == "nas.example.com"
 
     def test_save_empty_clears(self):
         save_access_address("192.168.31.1")
@@ -174,10 +179,16 @@ class TestAccessAddress:
         assert "__access_address__" not in load_raw_config()
 
     def test_load_normalizes_legacy_bare_value(self):
-        """旧版本可能已落盘裸 IP，读取时应自动补 http://。"""
+        """旧版本可能已落盘裸 IP，读取时原样保留。"""
         with open(CONFIG_FILE, "w") as f:
             json.dump({"__access_address__": "10.0.0.5"}, f)
-        assert load_access_address() == "http://10.0.0.5"
+        assert load_access_address() == "10.0.0.5"
+
+    def test_load_normalizes_legacy_schemed_value(self):
+        """更旧的版本落盘了 http:// 前缀，读取时剥离为裸主机。"""
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"__access_address__": "http://10.0.0.5"}, f)
+        assert load_access_address() == "10.0.0.5"
 
 
 class TestHiddenPorts:

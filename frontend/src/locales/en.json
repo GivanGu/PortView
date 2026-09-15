@@ -102,6 +102,8 @@
     "statDocker": "Docker containers",
     "loading": "Loading port data...",
     "openService": "Open service",
+    "schemeHttpTip": "Service uses plain HTTP",
+    "schemeHttpsTip": "Service uses HTTPS (encrypted)",
     "editService": "Edit service name",
     "hidePort": "Hide port",
     "hideRange": "Hide range",
@@ -229,8 +231,8 @@
     "scrimGlass": "Frosted glass",
     "scrimNone": "None",
     "accessAddress": "Access address",
-    "accessAddressHint": "After setting, the 'Open service' button on port cards will use this address to build the URL. You can enter a bare IP (e.g. 192.168.31.1); http:// is added automatically",
-    "accessAddressPlaceholder": "e.g. 192.168.31.1 or http://192.168.1.100",
+    "accessAddressHint": "After setting, the 'Open service' button on port cards will use this address to build the URL. Enter a bare IP or hostname (e.g. 192.168.31.1); http/https is auto-detected when opening",
+    "accessAddressPlaceholder": "e.g. 192.168.31.1",
     "accessAddrSaved": "Access address saved"
   },
   "login": {

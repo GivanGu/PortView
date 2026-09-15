@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server } from 'lucide-vue-next'
+import { StickyNote, Container, Cog, Server, Lock, Globe } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
 
-defineProps<{ card: PortCard }>()
+defineProps<{
+  card: PortCard
+  // 实时探测到的服务协议（http/https）；unknown 或未探测时不传
+  scheme?: 'http' | 'https' | 'unknown'
+}>()
 
 const { t } = useI18n()
 </script>
@@ -37,14 +41,34 @@ const { t } = useI18n()
   </div>
 
   <div class="port-detail">
-    <span
-      class="port-source"
-      :class="card.source"
-    >
-      <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
-      <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
-      <Server v-else :size="13" class="port-source-icon" />
-      <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
+    <span class="port-detail-left">
+      <span
+        class="port-source"
+        :class="card.source"
+      >
+        <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
+        <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
+        <Server v-else :size="13" class="port-source-icon" />
+        <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
+      </span>
+
+      <!-- 服务协议徽章：实时探测结果（unknown 不显示） -->
+      <span
+        v-if="scheme === 'https'"
+        class="port-scheme https"
+        :title="t('ports.schemeHttpsTip')"
+      >
+        <Lock :size="11" class="port-scheme-icon" />
+        <span>HTTPS</span>
+      </span>
+      <span
+        v-else-if="scheme === 'http'"
+        class="port-scheme http"
+        :title="t('ports.schemeHttpTip')"
+      >
+        <Globe :size="11" class="port-scheme-icon" />
+        <span>HTTP</span>
+      </span>
     </span>
 
     <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达） -->

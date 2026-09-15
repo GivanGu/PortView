@@ -11,6 +11,7 @@ import {
   deleteRange,
   getAccessAddress,
   probeScheme,
+  probeSchemes,
   fetchLogos,
   uploadLogo,
   deleteLogo,
@@ -299,11 +300,42 @@ async function loadData(silent = false) {
     })
     if (resp.success) {
       analysis.value = resp.data
+      void probeCardSchemes()
     }
   } catch (e) {
     console.error('加载端口数据失败:', e)
   } finally {
     if (!silent) loading.value = false
+  }
+}
+
+// ── http/https 徽章：批量探测卡片端口协议 ──
+// 后端 16 并发探测 + 60s 缓存，重复调用命中缓存，开销很小。
+const schemeMap = ref<Record<number, 'http' | 'https' | 'unknown'>>({})
+let probingSchemes = false
+
+async function probeCardSchemes() {
+  if (!analysis.value || probingSchemes) return
+  const items = analysis.value.port_cards
+    .filter((c): c is PortCard & { port: number } => c.type === 'used' && c.port != null)
+    .map((c) => ({
+      port: c.port,
+      container_id: c.container_id || null,
+      container_port: parseContainerPort(c.container_port),
+    }))
+  if (!items.length) return
+  probingSchemes = true
+  try {
+    const resp = await probeSchemes(items)
+    if (resp.success && resp.data?.schemes) {
+      const m: Record<number, 'http' | 'https' | 'unknown'> = {}
+      for (const [p, s] of Object.entries(resp.data.schemes)) m[Number(p)] = s
+      schemeMap.value = m
+    }
+  } catch (e) {
+    console.error('批量协议探测失败:', e)
+  } finally {
+    probingSchemes = false
   }
 }
 
@@ -401,21 +433,24 @@ function parseContainerPort(cp?: string): number | null {
   return m ? parseInt(m[1], 10) : null
 }
 
-// 决定服务链接协议：443/80 规则快路径（容器端口或主机端口），否则探测，未知回退默认
+// 决定服务链接协议：实时批量探测结果 > 单端口探测 > 端口号推断 > 默认
 async function decideScheme(card: PortCard, defaultScheme: string): Promise<string> {
-  const cport = parseContainerPort(card.container_port)
-  const hport = card.port ?? null
-  if (cport === 443 || hport === 443) return 'https'
-  if (cport === 80 || hport === 80) return 'http'
+  const probed = card.port != null ? schemeMap.value[card.port] : undefined
+  if (probed === 'http' || probed === 'https') return probed
   if (card.port) {
     try {
-      const resp = await probeScheme(card.port, card.container_id)
+      const resp = await probeScheme(card.port, card.container_id, parseContainerPort(card.container_port))
       const s = resp.data?.scheme
       if (resp.success && (s === 'http' || s === 'https')) return s
     } catch {
       /* 探测失败回退默认 */
     }
   }
+  // 端口号推断兜底（批量/单端口探测都不可用时）
+  const cport = parseContainerPort(card.container_port)
+  const hport = card.port ?? null
+  if (cport === 443 || hport === 443) return 'https'
+  if (cport === 80 || hport === 80) return 'http'
   return defaultScheme
 }
 
@@ -641,7 +676,7 @@ onBeforeUnmount(() => {
                 <div v-if="logoSrc(card)" class="port-card-scrim"></div>
 
                 <div class="port-card-content">
-                  <PortCardContent :card="card" />
+                  <PortCardContent :card="card" :scheme="card.port != null ? schemeMap[card.port] : undefined" />
                 </div>
               </template>
               <div v-else class="port-card-body">
@@ -658,7 +693,7 @@ onBeforeUnmount(() => {
                   <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
                 </div>
                 <div class="port-info">
-                  <PortCardContent :card="card" />
+                  <PortCardContent :card="card" :scheme="card.port != null ? schemeMap[card.port] : undefined" />
                 </div>
               </div>
 

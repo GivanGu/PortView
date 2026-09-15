@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 
-from app.config import load_access_address, load_config, load_hidden_ports
+from app.config import load_access_host, load_config, load_hidden_ports
 from app.dependencies import get_monitor
-from app.models import APIResponse, ProbeSchemeRequest
+from app.models import APIResponse, ProbeSchemeRequest, ProbeSchemesRequest
 from app.services import db as db_service
 from app.services import scheme_probe
 from app.services.port_monitor import PortMonitor
@@ -159,16 +158,32 @@ async def api_probe_scheme(req: ProbeSchemeRequest) -> APIResponse:
     阻塞 socket 通过 asyncio.to_thread 跑，避免卡事件循环。
     """
     try:
-        address = load_access_address()
-        host = urlparse(address).hostname if address else ""
-        if not host:
-            host = "127.0.0.1"
+        host = load_access_host() or "127.0.0.1"
         scheme = await asyncio.to_thread(
             scheme_probe.probe_scheme, host, req.port, req.container_id
         )
+        if scheme == "unknown":
+            scheme = scheme_probe.port_scheme_fallback(req.container_port, req.port) or "unknown"
         return APIResponse(success=True, data={"scheme": scheme, "host": host})
     except Exception as e:
         logger.error("协议探测失败: %s", e)
+        return APIResponse(success=False, error=str(e))
+
+
+@router.post("/ports/probe_schemes", response_model=APIResponse)
+async def api_probe_schemes(req: ProbeSchemesRequest) -> APIResponse:
+    """批量探测多个主机端口的协议（卡片 http/https 徽章一次取回）。
+
+    host 取自全局访问地址，未设置时回退 127.0.0.1。
+    后端 16 并发并行探测；unknown 时按端口号兜底（容器端口优先）。
+    """
+    try:
+        host = load_access_host() or "127.0.0.1"
+        items = [(i.port, i.container_id, i.container_port) for i in req.items]
+        schemes = await asyncio.to_thread(scheme_probe.probe_schemes_batch, host, items)
+        return APIResponse(success=True, data={"schemes": schemes, "host": host})
+    except Exception as e:
+        logger.error("批量协议探测失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
 

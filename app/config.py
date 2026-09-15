@@ -20,6 +20,7 @@ import re
 import shutil
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -158,21 +159,22 @@ def save_raw_config(raw: Mapping[str, Any]) -> bool:
 
 
 def normalize_access_address(address: str) -> str:
-    """规范化访问地址：裸 IP / 域名（无协议前缀）自动补 ``http://``。
+    """规范化访问地址：只保留主机部分（IP/域名），剥离协议前缀。
 
-    例如 ``192.168.31.1`` → ``http://192.168.31.1``；
-    已带 ``http://`` / ``https://`` 的地址原样保留；空串返回空串。
+    例如 ``http://192.168.31.1`` → ``192.168.31.1``；裸 IP / 域名原样保留。
+    http/https 不再随地址存储，由打开服务时的实时探测决定。
     """
     address = address.strip()
     if not address:
         return ""
-    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", address):
-        address = f"http://{address}"
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", address):
+        # 兼容旧数据 / 用户手填了协议前缀：只取主机部分
+        address = urlparse(address).hostname or ""
     return address
 
 
 def load_access_address() -> str:
-    """读取全局访问地址（如 http://192.168.31.1）。未设置时返回空字符串。"""
+    """读取全局访问地址（主机部分，如 192.168.31.1）。未设置时返回空字符串。"""
     try:
         raw = load_raw_config()
     except Exception as e:
@@ -184,10 +186,19 @@ def load_access_address() -> str:
     return normalize_access_address(value)
 
 
+def load_access_host() -> str:
+    """读取访问地址的主机部分（供协议探测连接使用）。未设置时返回空字符串。
+
+    与 :func:`load_access_address` 等价（地址现在只存主机），
+    单独抽出便于调用方表达意图。
+    """
+    return load_access_address()
+
+
 def save_access_address(address: str) -> bool:
     """保存全局访问地址。空字符串表示清除。
 
-    裸 IP / 域名（无协议前缀）会自动补 ``http://`` 后落盘。
+    自动剥离协议前缀，只落盘主机部分（IP/域名）。
     """
     try:
         raw = load_raw_config()

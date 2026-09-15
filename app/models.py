@@ -92,10 +92,25 @@ class AccessAddressRequest(BaseModel):
 
 
 class ProbeSchemeRequest(BaseModel):
-    """服务链接协议探测请求：给定主机端口（+ 可选容器 ID），判定 http/https/unknown。"""
+    """服务链接协议探测请求：给定主机端口（+ 可选容器 ID / 容器端口），判定 http/https/unknown。"""
 
     port: int = Field(ge=1, le=65535)
     container_id: str | None = None
+    container_port: int | None = Field(default=None, ge=0, le=65535)
+
+
+class ProbeSchemeItem(BaseModel):
+    """批量探测中的单个端口条目。"""
+
+    port: int = Field(ge=1, le=65535)
+    container_id: str | None = None
+    container_port: int | None = Field(default=None, ge=0, le=65535)
+
+
+class ProbeSchemesRequest(BaseModel):
+    """批量协议探测请求：卡片徽章一次取回所有端口卡片的 http/https。"""
+
+    items: list[ProbeSchemeItem]
 
 
 class HiddenPortsBatchRequest(BaseModel):
