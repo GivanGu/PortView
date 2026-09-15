@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   fetchPorts,
@@ -193,6 +193,42 @@ async function handleDeleteLogo(card: PortCard) {
     s.delete(key)
     logoBusy.value = s
   }
+}
+
+// ── 卡片设置菜单（右上角 ⚙️ 下拉，Teleport 到 body 避免被卡片 overflow 裁剪）──
+// 原 6 个按钮收敛为「🔗 打开服务（快速跳转）+ ⚙️ 设置（分层下拉）」两个。
+const settingsMenuPort = ref<number | null>(null)
+const settingsMenuPos = ref({ top: 0, right: 0 })
+
+const settingsMenuCard = computed<PortCard | null>(() => {
+  if (settingsMenuPort.value == null || !analysis.value) return null
+  return (
+    analysis.value.port_cards.find((c) => c.type === 'used' && c.port === settingsMenuPort.value) ?? null
+  )
+})
+
+function toggleSettingsMenu(card: PortCard, event: MouseEvent) {
+  if (settingsMenuPort.value === card.port) {
+    settingsMenuPort.value = null
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  // 菜单右边缘对齐按钮右边缘，向下展开；靠近视口底部时向上翻
+  const estHeight = 260
+  const top =
+    rect.bottom + estHeight + 8 > window.innerHeight ? Math.max(8, rect.top - estHeight - 4) : rect.bottom + 4
+  settingsMenuPos.value = { top, right: window.innerWidth - rect.right }
+  settingsMenuPort.value = card.port ?? null
+}
+
+function closeSettingsMenu() {
+  settingsMenuPort.value = null
+}
+
+// 执行菜单项动作后关闭菜单
+function runMenuAction(fn: () => void) {
+  closeSettingsMenu()
+  fn()
 }
 
 // ── 监控区间状态 ──
@@ -568,15 +604,22 @@ watch(refreshTick, () => {
   if (!loading.value) loadData(true)
 })
 
+// 滚动时关闭设置菜单（菜单 fixed 定位，滚动会错位）
+function onScrollCloseMenu() {
+  if (settingsMenuPort.value != null) closeSettingsMenu()
+}
+
 onMounted(() => {
   loadData()
   void reloadRanges()
   void loadLogos()
   applyPollTimer()
+  window.addEventListener('scroll', onScrollCloseMenu, true)
 })
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
+  window.removeEventListener('scroll', onScrollCloseMenu, true)
 })
 </script>
 
@@ -769,41 +812,19 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="port-actions">
+              <!-- 快速跳转：打开服务 -->
               <button
                 class="port-action-btn"
                 :title="t('ports.openService')"
                 @click="handleOpenService(card)"
               >🔗</button>
+              <!-- 通用设置：分层下拉（服务 / Logo / 其他） -->
               <button
                 class="port-action-btn"
-                :title="t('ports.editService')"
-                @click="startEdit(card)"
-              >✏️</button>
-              <button
-                v-if="logoStatus(card) !== 'found'"
-                class="port-action-btn"
-                :title="t('ports.logoDiscover')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDiscoverLogo(card)"
-              >🔍</button>
-              <button
-                class="port-action-btn"
-                :title="t('ports.logoUpload')"
-                :disabled="isLogoBusy(card)"
-                @click="handleUploadLogo(card)"
-              >🖼</button>
-              <button
-                v-if="logoStatus(card) === 'found'"
-                class="port-action-btn danger"
-                :title="t('ports.logoDelete')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDeleteLogo(card)"
-              >🗑</button>
-              <button
-                class="port-action-btn danger"
-                :title="t('ports.hidePort')"
-                @click="handleHide(card)"
-              >🙈</button>
+                :class="{ active: settingsMenuPort === card.port }"
+                :title="t('ports.cardSettings')"
+                @click="toggleSettingsMenu(card, $event)"
+              >⚙️</button>
             </div>
 
             <!-- 编辑模式 -->
@@ -887,6 +908,69 @@ onBeforeUnmount(() => {
     <!-- 轻提示 -->
     <Teleport to="body">
       <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
+    </Teleport>
+
+    <!-- 卡片设置菜单（⚙️ 下拉，按功能分层：服务 / Logo / 其他） -->
+    <Teleport to="body">
+      <template v-if="settingsMenuCard">
+        <div class="settings-menu-overlay" @click="closeSettingsMenu"></div>
+        <div
+          class="settings-menu"
+          :style="{ top: settingsMenuPos.top + 'px', right: settingsMenuPos.right + 'px' }"
+        >
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuService') }}</div>
+            <button
+              class="settings-menu-item"
+              @click="runMenuAction(() => startEdit(settingsMenuCard!))"
+            >
+              <span class="settings-menu-ico">✏️</span>
+              <span>{{ t('ports.editService') }}</span>
+            </button>
+          </div>
+
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuLogo') }}</div>
+            <button
+              v-if="logoStatus(settingsMenuCard) !== 'found'"
+              class="settings-menu-item"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(() => handleDiscoverLogo(settingsMenuCard!))"
+            >
+              <span class="settings-menu-ico">🔍</span>
+              <span>{{ t('ports.logoDiscover') }}</span>
+            </button>
+            <button
+              class="settings-menu-item"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(() => handleUploadLogo(settingsMenuCard!))"
+            >
+              <span class="settings-menu-ico">🖼</span>
+              <span>{{ t('ports.logoUpload') }}</span>
+            </button>
+            <button
+              v-if="logoStatus(settingsMenuCard) === 'found'"
+              class="settings-menu-item danger"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(() => handleDeleteLogo(settingsMenuCard!))"
+            >
+              <span class="settings-menu-ico">🗑</span>
+              <span>{{ t('ports.logoDelete') }}</span>
+            </button>
+          </div>
+
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuOther') }}</div>
+            <button
+              class="settings-menu-item danger"
+              @click="runMenuAction(() => handleHide(settingsMenuCard!))"
+            >
+              <span class="settings-menu-ico">🙈</span>
+              <span>{{ t('ports.hidePort') }}</span>
+            </button>
+          </div>
+        </div>
+      </template>
     </Teleport>
 
     <!-- 未配置访问地址提示 -->
