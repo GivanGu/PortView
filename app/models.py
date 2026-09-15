@@ -30,6 +30,7 @@ class PortCard(BaseModel):
     source: str | None = Field(default=None, description="docker / system")
     protocol: str | None = None
     container: str | None = None
+    container_id: str | None = None
     service_name: str | None = None
     process: str | None = None
     image: str | None = None
@@ -88,6 +89,13 @@ class AccessAddressRequest(BaseModel):
     """全局访问地址保存请求（如 http://192.168.31.1）。空字符串表示清除。"""
 
     address: str = ""
+
+
+class ProbeSchemeRequest(BaseModel):
+    """服务链接协议探测请求：给定主机端口（+ 可选容器 ID），判定 http/https/unknown。"""
+
+    port: int = Field(ge=1, le=65535)
+    container_id: str | None = None
 
 
 class HiddenPortsBatchRequest(BaseModel):

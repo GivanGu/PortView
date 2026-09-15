@@ -13,6 +13,7 @@ export interface PortCard {
   source?: string
   protocol?: string
   container?: string
+  container_id?: string
   service_name?: string
   process?: string
   image?: string
@@ -90,6 +91,18 @@ export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAn
 
 export function refreshPorts(): Promise<ApiResponse<PortAnalysis>> {
   return request<PortAnalysis>('/api/refresh', { method: 'POST' })
+}
+
+export interface ProbeSchemeResult {
+  scheme: 'http' | 'https' | 'unknown'
+  host: string
+}
+
+export function probeScheme(port: number, containerId?: string): Promise<ApiResponse<ProbeSchemeResult>> {
+  return request<ProbeSchemeResult>('/api/ports/probe_scheme', {
+    method: 'POST',
+    body: JSON.stringify({ port, container_id: containerId || null }),
+  })
 }
 
 // ── 配置 ──────────────────────────────────────────────

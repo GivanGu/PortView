@@ -193,6 +193,7 @@ class PortMonitor:
                 {
                     "port": host_port,
                     "container_name": name,
+                    "container_id": getattr(container, "id", "") or "",
                     "container_port": container_port,
                     "type": "docker_mapped",
                     "container_image": container_image,
@@ -495,6 +496,7 @@ class PortMonitor:
                     "source": source,
                     "protocol": protocol,
                     "container": docker_info["container_name"],
+                    "container_id": docker_info.get("container_id", ""),
                     "process": f"Docker: {docker_info['container_name']}",
                     "image": docker_info.get("container_image", ""),
                     "container_port": docker_info["container_port"],

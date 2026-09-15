@@ -10,6 +10,7 @@ import {
   createRange,
   deleteRange,
   getAccessAddress,
+  probeScheme,
   fetchLogos,
   uploadLogo,
   deleteLogo,
@@ -378,13 +379,58 @@ function navigateToSettings() {
   }))
 }
 
+// 解析访问地址为 { scheme, host }。裸 IP/域名自动按 http 处理（与后端一致）。
+function parseAccessAddress(address: string): { scheme: string; host: string } | null {
+  let normalized = address.trim()
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(normalized)) {
+    normalized = `http://${normalized}`
+  }
+  try {
+    const u = new URL(normalized)
+    if (!u.hostname) return null
+    return { scheme: u.protocol.replace(/:$/, ''), host: u.hostname }
+  } catch {
+    return null
+  }
+}
+
+// 从 container_port（如 "443/tcp"、"3001"、"host模式"）提取端口号
+function parseContainerPort(cp?: string): number | null {
+  if (!cp) return null
+  const m = cp.match(/(\d+)/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+// 决定服务链接协议：443/80 规则快路径（容器端口或主机端口），否则探测，未知回退默认
+async function decideScheme(card: PortCard, defaultScheme: string): Promise<string> {
+  const cport = parseContainerPort(card.container_port)
+  const hport = card.port ?? null
+  if (cport === 443 || hport === 443) return 'https'
+  if (cport === 80 || hport === 80) return 'http'
+  if (card.port) {
+    try {
+      const resp = await probeScheme(card.port, card.container_id)
+      const s = resp.data?.scheme
+      if (resp.success && (s === 'http' || s === 'https')) return s
+    } catch {
+      /* 探测失败回退默认 */
+    }
+  }
+  return defaultScheme
+}
+
 async function handleOpenService(card: PortCard) {
   if (!card.port) return
   try {
     const resp = await getAccessAddress()
     if (resp.success && resp.data?.address) {
-      const base = resp.data.address.replace(/\/+$/, '')
-      window.open(`${base}:${card.port}`, '_blank')
+      const parsed = parseAccessAddress(resp.data.address)
+      if (!parsed) {
+        showAddrPrompt.value = true
+        return
+      }
+      const scheme = await decideScheme(card, parsed.scheme)
+      window.open(`${scheme}://${parsed.host}:${card.port}`, '_blank')
     } else {
       showAddrPrompt.value = true
     }

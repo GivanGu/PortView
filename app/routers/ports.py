@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 
-from app.config import load_config, load_hidden_ports
+from app.config import load_access_address, load_config, load_hidden_ports
 from app.dependencies import get_monitor
-from app.models import APIResponse
+from app.models import APIResponse, ProbeSchemeRequest
 from app.services import db as db_service
+from app.services import scheme_probe
 from app.services.port_monitor import PortMonitor
 
 logger = logging.getLogger(__name__)
@@ -145,6 +148,27 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
         return APIResponse(success=True, data=port_data, message="端口信息已刷新")
     except Exception as e:
         logger.error("刷新失败: %s", e)
+        return APIResponse(success=False, error=str(e))
+
+
+@router.post("/ports/probe_scheme", response_model=APIResponse)
+async def api_probe_scheme(req: ProbeSchemeRequest) -> APIResponse:
+    """探测某主机端口对外提供的协议（http/https/unknown）。
+
+    host 取自全局访问地址（与浏览器访问目标一致），未设置时回退 127.0.0.1。
+    阻塞 socket 通过 asyncio.to_thread 跑，避免卡事件循环。
+    """
+    try:
+        address = load_access_address()
+        host = urlparse(address).hostname if address else ""
+        if not host:
+            host = "127.0.0.1"
+        scheme = await asyncio.to_thread(
+            scheme_probe.probe_scheme, host, req.port, req.container_id
+        )
+        return APIResponse(success=True, data={"scheme": scheme, "host": host})
+    except Exception as e:
+        logger.error("协议探测失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
 
