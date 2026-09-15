@@ -60,7 +60,7 @@ async def _filter_cards_by_ports(port_data: dict, ports: set[int] | None) -> dic
         if t == "used":
             if card.get("port") in ports:
                 filtered.append(card)
-        elif t in ("unknown_range", "gap"):
+        elif t == "gap":
             sp = card.get("start_port", 0)
             ep = card.get("end_port", 0)
             # 区间与 ports 集合有交集 → 收窄到交集区间
@@ -75,9 +75,7 @@ async def _filter_cards_by_ports(port_data: dict, ports: set[int] | None) -> dic
             filtered.append(new_card)
     filtered.sort(key=lambda c: c.get("port", c.get("start_port", 0)))
     port_data["port_cards"] = filtered
-    port_data["total_used"] = len(
-        [c for c in filtered if c.get("type") in ("used", "unknown_range")]
-    )
+    port_data["total_used"] = len([c for c in filtered if c.get("type") == "used"])
     # v1.4.5：按区间收窄后，可用端口数也要跟着收窄（此前沿用全段值，
     # 导致选中区间时统计栏「可用端口」与「已用端口」口径不一致）。
     port_data["total_available"] = sum(
@@ -272,7 +270,7 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
             ).lower()
             if search_term in text:
                 filtered.append(card)
-        elif card["type"] in ("unknown_range", "gap"):
+        elif card["type"] == "gap":
             text = " ".join(
                 [
                     f"{card.get('start_port', '')}-{card.get('end_port', '')}",
@@ -295,7 +293,7 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
                 filtered.append(card)
 
     filtered.sort(key=lambda x: x.get("port", x.get("start_port", 0)))
-    filtered_used = len([c for c in filtered if c["type"] in ("used", "unknown_range")])
+    filtered_used = len([c for c in filtered if c["type"] == "used"])
 
     port_data["port_cards"] = filtered
     port_data["total_used"] = filtered_used

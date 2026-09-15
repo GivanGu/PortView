@@ -1066,14 +1066,6 @@ html, body {
   opacity: 1;
 }
 
-/* unknown-card 里的 port-actions 已 inline 改成 static 布局，
-   直接常显（否则被上面的 opacity:0 一直藏住按钮） */
-.unknown-card .port-actions {
-  opacity: 1;
-  position: static;
-  margin-bottom: 8px;
-}
-
 .port-action-btn {
   width: 28px;
   height: 28px;
@@ -1201,7 +1193,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 与 port-card / unknown-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
+  /* 与 port-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
   min-height: 135px;
 }
 
@@ -1230,34 +1222,6 @@ html, body {
   background: var(--green-light);
   color: var(--green);
   font-weight: 500;
-}
-
-/* ── 未知范围卡片 ── */
-.unknown-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--yellow);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  /* 与 port-card 同步（135px = 最富 4 行场景） */
-  min-height: 135px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-}
-
-.unknown-range {
-  font-size: 14px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-  color: var(--yellow);
-  margin-bottom: 4px;
-}
-
-.unknown-count {
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 /* ── 可用端口间隙卡片 ── */

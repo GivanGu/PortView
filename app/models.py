@@ -1,11 +1,10 @@
 """API 数据模型（Pydantic）。
 
-端口卡片有三种形态，用一个带可选字段的统一模型表达，保持与旧版
+端口卡片有两种形态，用一个带可选字段的统一模型表达，保持与旧版
 Flask 版本完全一致的 JSON 契约，前端无需改动字段名：
 
-- ``used``          单个已占用端口
-- ``gap``           可用端口范围
-- ``unknown_range`` 连续未知服务端口（合并展示）
+- ``used``  单个已占用端口（含未知服务，逐端口独立展示）
+- ``gap``   可用端口范围
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ class PortCard(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    type: Literal["used", "gap", "unknown_range"]
+    type: Literal["used", "gap"]
 
     # --- used ---
     port: int | None = None
@@ -39,11 +38,10 @@ class PortCard(BaseModel):
     container_status: str | None = None
     is_host_network: bool | None = None
 
-    # --- gap / unknown_range ---
+    # --- gap ---
     start_port: int | None = None
     end_port: int | None = None
     available_count: int | None = None
-    port_count: int | None = None
 
     # --- 前端虚拟卡片（已隐藏但当前不在数据中）---
     is_virtual: bool | None = None

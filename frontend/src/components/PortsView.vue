@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import {
   fetchPorts,
   hidePort,
-  batchHidePorts,
   editPort,
   fetchRanges,
   createRange,
@@ -472,14 +471,7 @@ function cardVisible(card: PortCard): boolean {
 
 // ── 端口操作 ──
 async function handleHide(card: PortCard) {
-  if (card.type === 'unknown_range') {
-    // 隐藏整个范围：把区间内所有端口都记入 hidden_ports
-    if (card.start_port && card.end_port) {
-      const ports: number[] = []
-      for (let p = card.start_port; p <= card.end_port; p++) ports.push(p)
-      await batchHidePorts(ports)
-    }
-  } else if (card.port) {
+  if (card.port) {
     await hidePort(card.port)
   }
   await loadData()
@@ -867,20 +859,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- 未知范围：仅在无源类型过滤时显示 -->
-          <div v-else-if="card.type === 'unknown_range'" v-show="sourceFilter === ''">
-            <div class="unknown-card">
-              <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
-                <button
-                  class="port-action-btn danger"
-                  :title="t('ports.hideRange')"
-                  @click="handleHide(card)"
-                >🙈</button>
-              </div>
-              <div class="unknown-range">{{ card.start_port }} — {{ card.end_port }}</div>
-              <div class="unknown-count">{{ t('ports.unknownCount', { n: card.port_count }) }}</div>
-            </div>
-          </div>
+
         </template>
       </div>
 

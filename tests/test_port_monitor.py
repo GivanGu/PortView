@@ -102,7 +102,7 @@ class TestMergeUnknownAndGaps:
         assert result[0]["type"] == "used"
         assert result[0]["port"] == 1
 
-    def test_consecutive_unknown_merges(self):
+    def test_consecutive_unknown_not_merged(self):
         monitor = _make_monitor()
         cards = [
             {
@@ -131,12 +131,10 @@ class TestMergeUnknownAndGaps:
             },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
-        # 1000-1002 应合并为 unknown_range
-        unknown = [c for c in result if c["type"] == "unknown_range"]
-        assert len(unknown) == 1
-        assert unknown[0]["start_port"] == 1000
-        assert unknown[0]["end_port"] == 1002
-        assert unknown[0]["port_count"] == 3
+        # 连续未知端口不合并，逐端口独立成卡
+        used = [c for c in result if c["type"] == "used"]
+        assert [c["port"] for c in used] == [1000, 1001, 1002]
+        assert not any(c["type"] == "unknown_range" for c in result)
 
     def test_single_unknown_not_merged(self):
         monitor = _make_monitor()
@@ -197,11 +195,6 @@ class TestCardHidden:
         card = {"type": "used", "port": 80}
         assert PortMonitor._card_hidden(card, [80]) is True
         assert PortMonitor._card_hidden(card, [443]) is False
-
-    def test_unknown_range_hidden(self):
-        card = {"type": "unknown_range", "start_port": 1000, "end_port": 1005}
-        assert PortMonitor._card_hidden(card, [1003]) is True
-        assert PortMonitor._card_hidden(card, [2000]) is False
 
     def test_gap_never_hidden(self):
         card = {"type": "gap", "start_port": 1, "end_port": 100}

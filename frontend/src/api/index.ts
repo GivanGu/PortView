@@ -4,7 +4,7 @@
 
 // ── 类型定义 ──────────────────────────────────────────
 
-export type PortCardType = 'used' | 'gap' | 'unknown_range'
+export type PortCardType = 'used' | 'gap'
 
 export interface PortCard {
   type: PortCardType
@@ -22,11 +22,10 @@ export interface PortCard {
   container_status?: string
   is_host_network?: boolean
   remark?: string
-  // gap / unknown_range
+  // gap
   start_port?: number
   end_port?: number
   available_count?: number
-  port_count?: number
 }
 
 export interface PortAnalysis {
