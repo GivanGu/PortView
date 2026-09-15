@@ -124,6 +124,26 @@ export function probeSchemes(items: ProbeSchemeItem[]): Promise<ApiResponse<Prob
   })
 }
 
+// ── 人工指定端口协议（探测不准时手动覆盖）─────────────────
+
+/** 获取全部人工指定 {port: 'http'|'https'}（key 为字符串）。 */
+export function fetchPortSchemes(): Promise<ApiResponse<Record<string, 'http' | 'https'>>> {
+  return request<Record<string, 'http' | 'https'>>('/api/ports/schemes')
+}
+
+/** 人工指定某端口协议。 */
+export function setPortScheme(port: number, scheme: 'http' | 'https'): Promise<ApiResponse> {
+  return request('/api/ports/scheme', {
+    method: 'POST',
+    body: JSON.stringify({ port, scheme }),
+  })
+}
+
+/** 清除某端口的人工指定，恢复自动探测。 */
+export function clearPortScheme(port: number): Promise<ApiResponse> {
+  return request(`/api/ports/scheme/${port}`, { method: 'DELETE' })
+}
+
 // ── 配置 ──────────────────────────────────────────────
 
 export function fetchConfig(): Promise<ApiResponse<ConfigEntry>> {

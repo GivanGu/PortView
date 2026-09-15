@@ -113,6 +113,13 @@ class ProbeSchemesRequest(BaseModel):
     items: list[ProbeSchemeItem]
 
 
+class PortSchemeRequest(BaseModel):
+    """人工指定端口协议请求（探测不准时手动覆盖，优先级高于自动探测）。"""
+
+    port: int = Field(ge=1, le=65535)
+    scheme: Literal["http", "https"]
+
+
 class HiddenPortsBatchRequest(BaseModel):
     """批量隐藏 / 取消隐藏请求。"""
 

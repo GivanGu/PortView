@@ -109,6 +109,13 @@ _SCHEMA = [
     "  created_at INTEGER NOT NULL DEFAULT 0,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
+    # 人工指定的服务协议（v1.5.21）：探测不准时用户手动指定 http/https，
+    # 优先级高于自动探测。1 个端口 ≤ 1 行，删行 = 恢复自动检测。
+    "CREATE TABLE IF NOT EXISTS port_schemes ("
+    "  port       INTEGER PRIMARY KEY CHECK (port BETWEEN 0 AND 65535),"
+    "  scheme     TEXT NOT NULL CHECK (scheme IN ('http', 'https')),"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
 ]
 
 
@@ -210,6 +217,17 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
             (int(time.time()), " v1.5.0 service_logos"),
         )
         logger.info("migration: schema_version -> 2 (service_logos)")
+
+    # v1.5.21 迁移：新增 port_schemes 表（人工指定端口协议）。
+    # 表由上方 _SCHEMA 幂等创建；老库 bump schema_version 追踪迁移。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 3:
+        await conn.execute(
+            "UPDATE schema_version SET version = 3, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.5.21 port_schemes"),
+        )
+        logger.info("migration: schema_version -> 3 (port_schemes)")
 
     await conn.commit()
     if _db is not None:

@@ -875,7 +875,7 @@ html, body {
   min-width: 0;
 }
 
-/* 服务协议徽章（http/https） */
+/* 服务协议徽章（http/https）：可点击循环切换 自动 → HTTP → HTTPS → 自动 */
 .port-scheme {
   display: inline-flex;
   align-items: center;
@@ -886,6 +886,14 @@ html, body {
   padding: 2px 6px;
   border-radius: 4px;
   flex-shrink: 0;
+  /* 按钮重置（徽章本身是 <button>） */
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.port-scheme:hover {
+  filter: brightness(1.15);
 }
 .port-scheme-icon {
   flex-shrink: 0;
@@ -898,6 +906,15 @@ html, body {
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
+}
+/* 人工指定标记：铅笔图标 + 强调色描边，区别于自动探测 */
+.port-scheme.manual {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
+}
+.port-scheme-manual-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
 .port-status {

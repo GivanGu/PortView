@@ -12,6 +12,9 @@ import {
   getAccessAddress,
   probeScheme,
   probeSchemes,
+  fetchPortSchemes,
+  setPortScheme,
+  clearPortScheme,
   fetchLogos,
   uploadLogo,
   deleteLogo,
@@ -301,6 +304,7 @@ async function loadData(silent = false) {
     if (resp.success) {
       analysis.value = resp.data
       void probeCardSchemes()
+      void loadManualSchemes()
     }
   } catch (e) {
     console.error('加载端口数据失败:', e)
@@ -336,6 +340,61 @@ async function probeCardSchemes() {
     console.error('批量协议探测失败:', e)
   } finally {
     probingSchemes = false
+  }
+}
+
+// ── 人工指定协议：优先级高于自动探测 ──
+// manualSchemes[port] = 'http' | 'https'；无条目 = 跟随自动探测。
+const manualSchemes = ref<Record<number, 'http' | 'https'>>({})
+
+async function loadManualSchemes() {
+  try {
+    const resp = await fetchPortSchemes()
+    if (resp.success) {
+      const m: Record<number, 'http' | 'https'> = {}
+      for (const [p, s] of Object.entries(resp.data || {})) m[Number(p)] = s
+      manualSchemes.value = m
+    }
+  } catch (e) {
+    console.error('加载人工协议失败:', e)
+  }
+}
+
+// 卡片最终展示的协议：人工指定 > 自动探测
+function effectiveScheme(card: PortCard): 'http' | 'https' | 'unknown' | undefined {
+  if (card.port == null) return undefined
+  const manual = manualSchemes.value[card.port]
+  if (manual) return manual
+  return schemeMap.value[card.port]
+}
+
+function isManualScheme(card: PortCard): boolean {
+  return card.port != null && manualSchemes.value[card.port] != null
+}
+
+// 点击徽章循环切换：自动 → http → https → 自动（清除人工指定）
+async function handleSchemeToggle(card: PortCard) {
+  if (card.port == null) return
+  const port = card.port
+  const current = manualSchemes.value[port]
+  let next: 'http' | 'https' | null
+  if (current === undefined) next = 'http'
+  else if (current === 'http') next = 'https'
+  else next = null
+  // 乐观更新，失败回滚
+  const prev = { ...manualSchemes.value }
+  if (next) manualSchemes.value = { ...manualSchemes.value, [port]: next }
+  else {
+    const m = { ...manualSchemes.value }
+    delete m[port]
+    manualSchemes.value = m
+  }
+  try {
+    if (next) await setPortScheme(port, next)
+    else await clearPortScheme(port)
+  } catch (e) {
+    console.error('保存人工协议失败:', e)
+    manualSchemes.value = prev
   }
 }
 
@@ -433,8 +492,10 @@ function parseContainerPort(cp?: string): number | null {
   return m ? parseInt(m[1], 10) : null
 }
 
-// 决定服务链接协议：实时批量探测结果 > 单端口探测 > 端口号推断 > 默认
+// 决定服务链接协议：人工指定 > 实时批量探测 > 单端口探测 > 端口号推断 > 默认
 async function decideScheme(card: PortCard, defaultScheme: string): Promise<string> {
+  const manual = card.port != null ? manualSchemes.value[card.port] : undefined
+  if (manual === 'http' || manual === 'https') return manual
   const probed = card.port != null ? schemeMap.value[card.port] : undefined
   if (probed === 'http' || probed === 'https') return probed
   if (card.port) {
@@ -676,7 +737,12 @@ onBeforeUnmount(() => {
                 <div v-if="logoSrc(card)" class="port-card-scrim"></div>
 
                 <div class="port-card-content">
-                  <PortCardContent :card="card" :scheme="card.port != null ? schemeMap[card.port] : undefined" />
+                  <PortCardContent
+                    :card="card"
+                    :scheme="effectiveScheme(card)"
+                    :manual="isManualScheme(card)"
+                    @scheme-toggle="handleSchemeToggle(card)"
+                  />
                 </div>
               </template>
               <div v-else class="port-card-body">
@@ -693,7 +759,12 @@ onBeforeUnmount(() => {
                   <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
                 </div>
                 <div class="port-info">
-                  <PortCardContent :card="card" :scheme="card.port != null ? schemeMap[card.port] : undefined" />
+                  <PortCardContent
+                    :card="card"
+                    :scheme="effectiveScheme(card)"
+                    :manual="isManualScheme(card)"
+                    @scheme-toggle="handleSchemeToggle(card)"
+                  />
                 </div>
               </div>
 
