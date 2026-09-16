@@ -56,6 +56,7 @@ cd frontend && npm install && npm run dev
 
 ### 发版流程
 1. 在 `dev` 分支 bump `app/__init__.py` 版本号（如 `1.4.8` → `1.4.9`），作为本次开发目标版本
+   - **版本号只在当前版本基础上 +1（patch 位）**，不要跳号或回退；每次更新都基于上一个已发布版本递增
 2. 开发功能，push 触发 `docker-dev.yml` 构建开发镜像（tag: `dev` + `dev-1.4.9`）
 3. 验证 `dev` 镜像（`docker pull <registry>/portview:dev-1.4.9`）
 4. 合并 `dev` → `main`

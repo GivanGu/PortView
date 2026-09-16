@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   fetchPorts,
   hidePort,
-  batchHidePorts,
   editPort,
   fetchRanges,
   createRange,
   deleteRange,
   getAccessAddress,
+  probeScheme,
+  probeSchemes,
+  fetchPortSchemes,
+  setPortScheme,
+  clearPortScheme,
   fetchLogos,
   uploadLogo,
   deleteLogo,
@@ -190,6 +194,47 @@ async function handleDeleteLogo(card: PortCard) {
   }
 }
 
+// ── 卡片设置菜单（右上角 ⚙️ 下拉，Teleport 到 body 避免被卡片 overflow 裁剪）──
+// 原 6 个按钮收敛为「🔗 打开服务（快速跳转）+ ⚙️ 设置（分层下拉）」两个。
+const settingsMenuPort = ref<number | null>(null)
+const settingsMenuPos = ref({ top: 0, right: 0 })
+
+const settingsMenuCard = computed<PortCard | null>(() => {
+  if (settingsMenuPort.value == null || !analysis.value) return null
+  return (
+    analysis.value.port_cards.find((c) => c.type === 'used' && c.port === settingsMenuPort.value) ?? null
+  )
+})
+
+function toggleSettingsMenu(card: PortCard, event: MouseEvent) {
+  if (settingsMenuPort.value === card.port) {
+    settingsMenuPort.value = null
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  // 菜单右边缘对齐按钮右边缘，向下展开；靠近视口底部时向上翻
+  const estHeight = 260
+  const top =
+    rect.bottom + estHeight + 8 > window.innerHeight ? Math.max(8, rect.top - estHeight - 4) : rect.bottom + 4
+  // 钳制 right，防止卡片靠近左缘时菜单溢出视口左边界（菜单宽约 180px）
+  const menuWidth = 180
+  const right = Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - 8 - menuWidth))
+  settingsMenuPos.value = { top, right }
+  settingsMenuPort.value = card.port ?? null
+}
+
+function closeSettingsMenu() {
+  settingsMenuPort.value = null
+}
+
+// 执行菜单项动作后关闭菜单。
+// 注意：必须在 close 之前把 card 捕获出来——close 后 settingsMenuCard
+// computed 会失效返回 null，若动作函数内再引用它就会拿到 null 导致动作静默失败。
+function runMenuAction(card: PortCard, fn: (card: PortCard) => void) {
+  closeSettingsMenu()
+  fn(card)
+}
+
 // ── 监控区间状态 ──
 const ranges = ref<RangeRead[]>([])
 const selectedRangeId = ref<number>(0) // 0 = 全部
@@ -298,11 +343,98 @@ async function loadData(silent = false) {
     })
     if (resp.success) {
       analysis.value = resp.data
+      void probeCardSchemes()
+      void loadManualSchemes()
     }
   } catch (e) {
     console.error('加载端口数据失败:', e)
   } finally {
     if (!silent) loading.value = false
+  }
+}
+
+// ── http/https 徽章：批量探测卡片端口协议 ──
+// 后端 16 并发探测 + 60s 缓存，重复调用命中缓存，开销很小。
+const schemeMap = ref<Record<number, 'http' | 'https' | 'unknown'>>({})
+let probingSchemes = false
+
+async function probeCardSchemes() {
+  if (!analysis.value || probingSchemes) return
+  const items = analysis.value.port_cards
+    .filter((c): c is PortCard & { port: number } => c.type === 'used' && c.port != null)
+    .map((c) => ({
+      port: c.port,
+      container_id: c.container_id || null,
+      container_port: parseContainerPort(c.container_port),
+    }))
+  if (!items.length) return
+  probingSchemes = true
+  try {
+    const resp = await probeSchemes(items)
+    if (resp.success && resp.data?.schemes) {
+      const m: Record<number, 'http' | 'https' | 'unknown'> = {}
+      for (const [p, s] of Object.entries(resp.data.schemes)) m[Number(p)] = s
+      schemeMap.value = m
+    }
+  } catch (e) {
+    console.error('批量协议探测失败:', e)
+  } finally {
+    probingSchemes = false
+  }
+}
+
+// ── 人工指定协议：优先级高于自动探测 ──
+// manualSchemes[port] = 'http' | 'https'；无条目 = 跟随自动探测。
+const manualSchemes = ref<Record<number, 'http' | 'https'>>({})
+
+async function loadManualSchemes() {
+  try {
+    const resp = await fetchPortSchemes()
+    if (resp.success) {
+      const m: Record<number, 'http' | 'https'> = {}
+      for (const [p, s] of Object.entries(resp.data || {})) m[Number(p)] = s
+      manualSchemes.value = m
+    }
+  } catch (e) {
+    console.error('加载人工协议失败:', e)
+  }
+}
+
+// 卡片最终展示的协议：人工指定 > 自动探测
+function effectiveScheme(card: PortCard): 'http' | 'https' | 'unknown' | undefined {
+  if (card.port == null) return undefined
+  const manual = manualSchemes.value[card.port]
+  if (manual) return manual
+  return schemeMap.value[card.port]
+}
+
+function isManualScheme(card: PortCard): boolean {
+  return card.port != null && manualSchemes.value[card.port] != null
+}
+
+// 点击徽章循环切换：自动 → http → https → 自动（清除人工指定）
+async function handleSchemeToggle(card: PortCard) {
+  if (card.port == null) return
+  const port = card.port
+  const current = manualSchemes.value[port]
+  let next: 'http' | 'https' | null
+  if (current === undefined) next = 'http'
+  else if (current === 'http') next = 'https'
+  else next = null
+  // 乐观更新，失败回滚
+  const prev = { ...manualSchemes.value }
+  if (next) manualSchemes.value = { ...manualSchemes.value, [port]: next }
+  else {
+    const m = { ...manualSchemes.value }
+    delete m[port]
+    manualSchemes.value = m
+  }
+  try {
+    if (next) await setPortScheme(port, next)
+    else await clearPortScheme(port)
+  } catch (e) {
+    console.error('保存人工协议失败:', e)
+    manualSchemes.value = prev
   }
 }
 
@@ -339,14 +471,7 @@ function cardVisible(card: PortCard): boolean {
 
 // ── 端口操作 ──
 async function handleHide(card: PortCard) {
-  if (card.type === 'unknown_range') {
-    // 隐藏整个范围：把区间内所有端口都记入 hidden_ports
-    if (card.start_port && card.end_port) {
-      const ports: number[] = []
-      for (let p = card.start_port; p <= card.end_port; p++) ports.push(p)
-      await batchHidePorts(ports)
-    }
-  } else if (card.port) {
+  if (card.port) {
     await hidePort(card.port)
   }
   await loadData()
@@ -378,13 +503,63 @@ function navigateToSettings() {
   }))
 }
 
+// 解析访问地址为 { scheme, host }。裸 IP/域名自动按 http 处理（与后端一致）。
+function parseAccessAddress(address: string): { scheme: string; host: string } | null {
+  let normalized = address.trim()
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(normalized)) {
+    normalized = `http://${normalized}`
+  }
+  try {
+    const u = new URL(normalized)
+    if (!u.hostname) return null
+    return { scheme: u.protocol.replace(/:$/, ''), host: u.hostname }
+  } catch {
+    return null
+  }
+}
+
+// 从 container_port（如 "443/tcp"、"3001"、"host模式"）提取端口号
+function parseContainerPort(cp?: string): number | null {
+  if (!cp) return null
+  const m = cp.match(/(\d+)/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+// 决定服务链接协议：人工指定 > 实时批量探测 > 单端口探测 > 端口号推断 > 默认
+async function decideScheme(card: PortCard, defaultScheme: string): Promise<string> {
+  const manual = card.port != null ? manualSchemes.value[card.port] : undefined
+  if (manual === 'http' || manual === 'https') return manual
+  const probed = card.port != null ? schemeMap.value[card.port] : undefined
+  if (probed === 'http' || probed === 'https') return probed
+  if (card.port) {
+    try {
+      const resp = await probeScheme(card.port, card.container_id, parseContainerPort(card.container_port))
+      const s = resp.data?.scheme
+      if (resp.success && (s === 'http' || s === 'https')) return s
+    } catch {
+      /* 探测失败回退默认 */
+    }
+  }
+  // 端口号推断兜底（批量/单端口探测都不可用时）
+  const cport = parseContainerPort(card.container_port)
+  const hport = card.port ?? null
+  if (cport === 443 || hport === 443) return 'https'
+  if (cport === 80 || hport === 80) return 'http'
+  return defaultScheme
+}
+
 async function handleOpenService(card: PortCard) {
   if (!card.port) return
   try {
     const resp = await getAccessAddress()
     if (resp.success && resp.data?.address) {
-      const base = resp.data.address.replace(/\/+$/, '')
-      window.open(`${base}:${card.port}`, '_blank')
+      const parsed = parseAccessAddress(resp.data.address)
+      if (!parsed) {
+        showAddrPrompt.value = true
+        return
+      }
+      const scheme = await decideScheme(card, parsed.scheme)
+      window.open(`${scheme}://${parsed.host}:${card.port}`, '_blank')
     } else {
       showAddrPrompt.value = true
     }
@@ -426,15 +601,34 @@ watch(refreshTick, () => {
   if (!loading.value) loadData(true)
 })
 
+// 滚动 / 缩放 / Esc 时关闭设置菜单（菜单 fixed 定位，视口变化会错位）
+function onScrollCloseMenu() {
+  if (settingsMenuPort.value != null) closeSettingsMenu()
+}
+
+function onKeydownCloseMenu(e: KeyboardEvent) {
+  if (e.key === 'Escape' && settingsMenuPort.value != null) closeSettingsMenu()
+}
+
+function onResizeCloseMenu() {
+  if (settingsMenuPort.value != null) closeSettingsMenu()
+}
+
 onMounted(() => {
   loadData()
   void reloadRanges()
   void loadLogos()
   applyPollTimer()
+  window.addEventListener('scroll', onScrollCloseMenu, true)
+  window.addEventListener('keydown', onKeydownCloseMenu)
+  window.addEventListener('resize', onResizeCloseMenu)
 })
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
+  window.removeEventListener('scroll', onScrollCloseMenu, true)
+  window.removeEventListener('keydown', onKeydownCloseMenu)
+  window.removeEventListener('resize', onResizeCloseMenu)
 })
 </script>
 
@@ -595,7 +789,12 @@ onBeforeUnmount(() => {
                 <div v-if="logoSrc(card)" class="port-card-scrim"></div>
 
                 <div class="port-card-content">
-                  <PortCardContent :card="card" />
+                  <PortCardContent
+                    :card="card"
+                    :scheme="effectiveScheme(card)"
+                    :manual="isManualScheme(card)"
+                    @scheme-toggle="handleSchemeToggle(card)"
+                  />
                 </div>
               </template>
               <div v-else class="port-card-body">
@@ -612,46 +811,29 @@ onBeforeUnmount(() => {
                   <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
                 </div>
                 <div class="port-info">
-                  <PortCardContent :card="card" />
+                  <PortCardContent
+                    :card="card"
+                    :scheme="effectiveScheme(card)"
+                    :manual="isManualScheme(card)"
+                    @scheme-toggle="handleSchemeToggle(card)"
+                  />
                 </div>
               </div>
 
               <div class="port-actions">
+              <!-- 快速跳转：打开服务 -->
               <button
                 class="port-action-btn"
                 :title="t('ports.openService')"
                 @click="handleOpenService(card)"
               >🔗</button>
+              <!-- 通用设置：分层下拉（服务 / Logo / 其他） -->
               <button
                 class="port-action-btn"
-                :title="t('ports.editService')"
-                @click="startEdit(card)"
-              >✏️</button>
-              <button
-                v-if="logoStatus(card) !== 'found'"
-                class="port-action-btn"
-                :title="t('ports.logoDiscover')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDiscoverLogo(card)"
-              >🔍</button>
-              <button
-                class="port-action-btn"
-                :title="t('ports.logoUpload')"
-                :disabled="isLogoBusy(card)"
-                @click="handleUploadLogo(card)"
-              >🖼</button>
-              <button
-                v-if="logoStatus(card) === 'found'"
-                class="port-action-btn danger"
-                :title="t('ports.logoDelete')"
-                :disabled="isLogoBusy(card)"
-                @click="handleDeleteLogo(card)"
-              >🗑</button>
-              <button
-                class="port-action-btn danger"
-                :title="t('ports.hidePort')"
-                @click="handleHide(card)"
-              >🙈</button>
+                :class="{ active: settingsMenuPort === card.port }"
+                :title="t('ports.cardSettings')"
+                @click="toggleSettingsMenu(card, $event)"
+              >⚙️</button>
             </div>
 
             <!-- 编辑模式 -->
@@ -677,20 +859,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- 未知范围：仅在无源类型过滤时显示 -->
-          <div v-else-if="card.type === 'unknown_range'" v-show="sourceFilter === ''">
-            <div class="unknown-card">
-              <div class="port-actions" style="position: static; margin-bottom: 8px; justify-content: flex-end;">
-                <button
-                  class="port-action-btn danger"
-                  :title="t('ports.hideRange')"
-                  @click="handleHide(card)"
-                >🙈</button>
-              </div>
-              <div class="unknown-range">{{ card.start_port }} — {{ card.end_port }}</div>
-              <div class="unknown-count">{{ t('ports.unknownCount', { n: card.port_count }) }}</div>
-            </div>
-          </div>
+
         </template>
       </div>
 
@@ -735,6 +904,69 @@ onBeforeUnmount(() => {
     <!-- 轻提示 -->
     <Teleport to="body">
       <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
+    </Teleport>
+
+    <!-- 卡片设置菜单（⚙️ 下拉，按功能分层：服务 / Logo / 其他） -->
+    <Teleport to="body">
+      <template v-if="settingsMenuCard">
+        <div class="settings-menu-overlay" @click="closeSettingsMenu"></div>
+        <div
+          class="settings-menu"
+          :style="{ top: settingsMenuPos.top + 'px', right: settingsMenuPos.right + 'px' }"
+        >
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuService') }}</div>
+            <button
+              class="settings-menu-item"
+              @click="runMenuAction(settingsMenuCard!, (c) => startEdit(c))"
+            >
+              <span class="settings-menu-ico">✏️</span>
+              <span>{{ t('ports.editService') }}</span>
+            </button>
+          </div>
+
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuLogo') }}</div>
+            <!-- 识别按钮常显：已有 Logo 时作为「重新识别」，避免按钮凭空消失 -->
+            <button
+              class="settings-menu-item"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleDiscoverLogo(c))"
+            >
+              <span class="settings-menu-ico">🔍</span>
+              <span>{{ t('ports.logoDiscover') }}</span>
+            </button>
+            <button
+              class="settings-menu-item"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleUploadLogo(c))"
+            >
+              <span class="settings-menu-ico">🖼</span>
+              <span>{{ t('ports.logoUpload') }}</span>
+            </button>
+            <button
+              v-if="logoStatus(settingsMenuCard) === 'found'"
+              class="settings-menu-item danger"
+              :disabled="isLogoBusy(settingsMenuCard)"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleDeleteLogo(c))"
+            >
+              <span class="settings-menu-ico">🗑</span>
+              <span>{{ t('ports.logoDelete') }}</span>
+            </button>
+          </div>
+
+          <div class="settings-menu-group">
+            <div class="settings-menu-label">{{ t('ports.menuOther') }}</div>
+            <button
+              class="settings-menu-item danger"
+              @click="runMenuAction(settingsMenuCard!, (c) => handleHide(c))"
+            >
+              <span class="settings-menu-ico">🙈</span>
+              <span>{{ t('ports.hidePort') }}</span>
+            </button>
+          </div>
+        </div>
+      </template>
     </Teleport>
 
     <!-- 未配置访问地址提示 -->

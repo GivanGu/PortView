@@ -102,7 +102,7 @@ class TestMergeUnknownAndGaps:
         assert result[0]["type"] == "used"
         assert result[0]["port"] == 1
 
-    def test_consecutive_unknown_merges(self):
+    def test_consecutive_unknown_not_merged(self):
         monitor = _make_monitor()
         cards = [
             {
@@ -131,12 +131,10 @@ class TestMergeUnknownAndGaps:
             },
         ]
         result = monitor._merge_unknown_and_gaps(cards, 1, 2000)
-        # 1000-1002 应合并为 unknown_range
-        unknown = [c for c in result if c["type"] == "unknown_range"]
-        assert len(unknown) == 1
-        assert unknown[0]["start_port"] == 1000
-        assert unknown[0]["end_port"] == 1002
-        assert unknown[0]["port_count"] == 3
+        # 连续未知端口不合并，逐端口独立成卡
+        used = [c for c in result if c["type"] == "used"]
+        assert [c["port"] for c in used] == [1000, 1001, 1002]
+        assert not any(c["type"] == "unknown_range" for c in result)
 
     def test_single_unknown_not_merged(self):
         monitor = _make_monitor()
@@ -182,6 +180,60 @@ class TestMergeUnknownAndGaps:
         assert mid["end_port"] == 8079
         assert mid["available_count"] == 8079 - 81 + 1
 
+    def test_gap_order_interleaved_ascending(self):
+        """gap 卡片必须落在前后两个已用端口之间，整体严格按端口升序交错排列。
+
+        回归：03a261b 重构后 gap 先 append 当前卡片再补，
+        导致 gap(81-8079) 落在 8080 之后，页面排序错乱。
+        """
+        monitor = _make_monitor()
+        cards = [
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
+            {
+                "port": 8080,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "App",
+                "container": None,
+            },
+            {
+                "port": 9000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+        ]
+        result = monitor._merge_unknown_and_gaps(cards, 1, 10000)
+        # 期望顺序：gap(1-79), 80, gap(81-8079), 8080, gap(8081-8999), 9000, gap(9001-10000)
+        expected = [
+            ("gap", 1, 79),
+            ("used", 80, None),
+            ("gap", 81, 8079),
+            ("used", 8080, None),
+            ("gap", 8081, 8999),
+            ("used", 9000, None),
+            ("gap", 9001, 10000),
+        ]
+        actual = [
+            (
+                c["type"],
+                c.get("port", c.get("start_port")),
+                c.get("end_port"),
+            )
+            for c in result
+        ]
+        assert actual == expected
+
     def test_empty_cards(self):
         monitor = _make_monitor()
         result = monitor._merge_unknown_and_gaps([], 1, 100)
@@ -197,11 +249,6 @@ class TestCardHidden:
         card = {"type": "used", "port": 80}
         assert PortMonitor._card_hidden(card, [80]) is True
         assert PortMonitor._card_hidden(card, [443]) is False
-
-    def test_unknown_range_hidden(self):
-        card = {"type": "unknown_range", "start_port": 1000, "end_port": 1005}
-        assert PortMonitor._card_hidden(card, [1003]) is True
-        assert PortMonitor._card_hidden(card, [2000]) is False
 
     def test_gap_never_hidden(self):
         card = {"type": "gap", "start_port": 1, "end_port": 100}

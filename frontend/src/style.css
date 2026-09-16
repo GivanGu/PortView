@@ -867,6 +867,56 @@ html, body {
   color: var(--orange);
 }
 
+/* 来源 + 协议徽章的左侧分组（保持与容器名 space-between 布局） */
+.port-detail-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 服务协议徽章（http/https）：可点击循环切换 自动 → HTTP → HTTPS → 自动 */
+.port-scheme {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  /* 按钮重置（徽章本身是 <button>） */
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.port-scheme:hover {
+  filter: brightness(1.15);
+}
+.port-scheme-icon {
+  flex-shrink: 0;
+}
+.port-scheme.https {
+  background: var(--green-light);
+  color: var(--green);
+}
+.port-scheme.http {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+/* 人工指定标记：铅笔图标 + 强调色描边，区别于自动探测 */
+.port-scheme.manual {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
+}
+.port-scheme-manual-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
 .port-status {
   display: inline-flex;
   align-items: center;
@@ -1016,14 +1066,6 @@ html, body {
   opacity: 1;
 }
 
-/* unknown-card 里的 port-actions 已 inline 改成 static 布局，
-   直接常显（否则被上面的 opacity:0 一直藏住按钮） */
-.unknown-card .port-actions {
-  opacity: 1;
-  position: static;
-  margin-bottom: 8px;
-}
-
 .port-action-btn {
   width: 28px;
   height: 28px;
@@ -1051,6 +1093,97 @@ html, body {
   border-color: var(--red);
 }
 
+.port-action-btn.active {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* ── 卡片设置菜单（⚙️ 下拉，Teleport 到 body，固定定位） ── */
+.settings-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+}
+
+.settings-menu {
+  position: fixed;
+  z-index: 999;
+  min-width: 172px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  animation: settings-menu-in 0.12s ease-out;
+}
+
+@keyframes settings-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-menu-group {
+  padding: 2px 0;
+}
+
+.settings-menu-group + .settings-menu-group {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.settings-menu-label {
+  padding: 4px 12px 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.settings-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.settings-menu-item:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.settings-menu-item.danger:hover:not(:disabled) {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.settings-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-menu-ico {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* ── 间隙卡片 ── */
 .gap-card {
   background: var(--bg-secondary);
@@ -1060,7 +1193,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 与 port-card / unknown-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
+  /* 与 port-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
   min-height: 135px;
 }
 
@@ -1089,34 +1222,6 @@ html, body {
   background: var(--green-light);
   color: var(--green);
   font-weight: 500;
-}
-
-/* ── 未知范围卡片 ── */
-.unknown-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--yellow);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  /* 与 port-card 同步（135px = 最富 4 行场景） */
-  min-height: 135px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-}
-
-.unknown-range {
-  font-size: 14px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-  color: var(--yellow);
-  margin-bottom: 4px;
-}
-
-.unknown-count {
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 /* ── 可用端口间隙卡片 ── */

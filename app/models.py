@@ -1,11 +1,10 @@
 """API 数据模型（Pydantic）。
 
-端口卡片有三种形态，用一个带可选字段的统一模型表达，保持与旧版
+端口卡片有两种形态，用一个带可选字段的统一模型表达，保持与旧版
 Flask 版本完全一致的 JSON 契约，前端无需改动字段名：
 
-- ``used``          单个已占用端口
-- ``gap``           可用端口范围
-- ``unknown_range`` 连续未知服务端口（合并展示）
+- ``used``  单个已占用端口（含未知服务，逐端口独立展示）
+- ``gap``   可用端口范围
 """
 
 from __future__ import annotations
@@ -23,13 +22,14 @@ class PortCard(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    type: Literal["used", "gap", "unknown_range"]
+    type: Literal["used", "gap"]
 
     # --- used ---
     port: int | None = None
     source: str | None = Field(default=None, description="docker / system")
     protocol: str | None = None
     container: str | None = None
+    container_id: str | None = None
     service_name: str | None = None
     process: str | None = None
     image: str | None = None
@@ -38,11 +38,10 @@ class PortCard(BaseModel):
     container_status: str | None = None
     is_host_network: bool | None = None
 
-    # --- gap / unknown_range ---
+    # --- gap ---
     start_port: int | None = None
     end_port: int | None = None
     available_count: int | None = None
-    port_count: int | None = None
 
     # --- 前端虚拟卡片（已隐藏但当前不在数据中）---
     is_virtual: bool | None = None
@@ -88,6 +87,35 @@ class AccessAddressRequest(BaseModel):
     """全局访问地址保存请求（如 http://192.168.31.1）。空字符串表示清除。"""
 
     address: str = ""
+
+
+class ProbeSchemeRequest(BaseModel):
+    """服务链接协议探测请求：给定主机端口（+ 可选容器 ID / 容器端口），判定 http/https/unknown。"""
+
+    port: int = Field(ge=1, le=65535)
+    container_id: str | None = None
+    container_port: int | None = Field(default=None, ge=0, le=65535)
+
+
+class ProbeSchemeItem(BaseModel):
+    """批量探测中的单个端口条目。"""
+
+    port: int = Field(ge=1, le=65535)
+    container_id: str | None = None
+    container_port: int | None = Field(default=None, ge=0, le=65535)
+
+
+class ProbeSchemesRequest(BaseModel):
+    """批量协议探测请求：卡片徽章一次取回所有端口卡片的 http/https。"""
+
+    items: list[ProbeSchemeItem]
+
+
+class PortSchemeRequest(BaseModel):
+    """人工指定端口协议请求（探测不准时手动覆盖，优先级高于自动探测）。"""
+
+    port: int = Field(ge=1, le=65535)
+    scheme: Literal["http", "https"]
 
 
 class HiddenPortsBatchRequest(BaseModel):

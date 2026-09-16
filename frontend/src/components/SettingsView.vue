@@ -179,7 +179,7 @@ async function handleSaveAccessAddress() {
   try {
     const resp = await setAccessAddress(accessAddress.value.trim())
     if (resp.success) {
-      // 后端会把裸 IP/域名自动补 http://，回传规范化地址后回填输入框
+      // 后端只保留主机部分（剥离协议前缀），回传规范化地址后回填输入框
       if (resp.data?.address) accessAddress.value = resp.data.address
       showToast(t('settings.accessAddrSaved'))
     } else {

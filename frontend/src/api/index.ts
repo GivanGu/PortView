@@ -4,7 +4,7 @@
 
 // ── 类型定义 ──────────────────────────────────────────
 
-export type PortCardType = 'used' | 'gap' | 'unknown_range'
+export type PortCardType = 'used' | 'gap'
 
 export interface PortCard {
   type: PortCardType
@@ -13,6 +13,7 @@ export interface PortCard {
   source?: string
   protocol?: string
   container?: string
+  container_id?: string
   service_name?: string
   process?: string
   image?: string
@@ -21,11 +22,10 @@ export interface PortCard {
   container_status?: string
   is_host_network?: boolean
   remark?: string
-  // gap / unknown_range
+  // gap
   start_port?: number
   end_port?: number
   available_count?: number
-  port_count?: number
 }
 
 export interface PortAnalysis {
@@ -90,6 +90,57 @@ export function fetchPorts(params: PortsParams = {}): Promise<ApiResponse<PortAn
 
 export function refreshPorts(): Promise<ApiResponse<PortAnalysis>> {
   return request<PortAnalysis>('/api/refresh', { method: 'POST' })
+}
+
+export interface ProbeSchemeResult {
+  scheme: 'http' | 'https' | 'unknown'
+  host: string
+}
+
+export function probeScheme(port: number, containerId?: string, containerPort?: number | null): Promise<ApiResponse<ProbeSchemeResult>> {
+  return request<ProbeSchemeResult>('/api/ports/probe_scheme', {
+    method: 'POST',
+    body: JSON.stringify({ port, container_id: containerId || null, container_port: containerPort ?? null }),
+  })
+}
+
+export interface ProbeSchemesResult {
+  schemes: Record<string, 'http' | 'https' | 'unknown'>
+  host: string
+}
+
+export interface ProbeSchemeItem {
+  port: number
+  container_id?: string | null
+  container_port?: number | null
+}
+
+/** 批量探测端口协议（卡片 http/https 徽章）。 */
+export function probeSchemes(items: ProbeSchemeItem[]): Promise<ApiResponse<ProbeSchemesResult>> {
+  return request<ProbeSchemesResult>('/api/ports/probe_schemes', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  })
+}
+
+// ── 人工指定端口协议（探测不准时手动覆盖）─────────────────
+
+/** 获取全部人工指定 {port: 'http'|'https'}（key 为字符串）。 */
+export function fetchPortSchemes(): Promise<ApiResponse<Record<string, 'http' | 'https'>>> {
+  return request<Record<string, 'http' | 'https'>>('/api/ports/schemes')
+}
+
+/** 人工指定某端口协议。 */
+export function setPortScheme(port: number, scheme: 'http' | 'https'): Promise<ApiResponse> {
+  return request('/api/ports/scheme', {
+    method: 'POST',
+    body: JSON.stringify({ port, scheme }),
+  })
+}
+
+/** 清除某端口的人工指定，恢复自动探测。 */
+export function clearPortScheme(port: number): Promise<ApiResponse> {
+  return request(`/api/ports/scheme/${port}`, { method: 'DELETE' })
 }
 
 // ── 配置 ──────────────────────────────────────────────

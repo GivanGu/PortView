@@ -193,6 +193,7 @@ class PortMonitor:
                 {
                     "port": host_port,
                     "container_name": name,
+                    "container_id": getattr(container, "id", "") or "",
                     "container_port": container_port,
                     "type": "docker_mapped",
                     "container_image": container_image,
@@ -495,6 +496,7 @@ class PortMonitor:
                     "source": source,
                     "protocol": protocol,
                     "container": docker_info["container_name"],
+                    "container_id": docker_info.get("container_id", ""),
                     "process": f"Docker: {docker_info['container_name']}",
                     "image": docker_info.get("container_image", ""),
                     "container_port": docker_info["container_port"],
@@ -560,18 +562,9 @@ class PortMonitor:
             available_ports = total_ports_in_range - len(all_used_ports)
 
         # A3：把用户备注（port_notes.remark）注入到"已使用"卡片的 remark 字段。
-        # 单端口 → 直接用；区间卡片 → 若区间内恰有 1 个备注端口则取，否则空串。
         for card in port_cards:
             if card["type"] == "used":
                 card["remark"] = notes_map.get(card.get("port"), "")
-            elif card["type"] == "unknown_range":
-                sp = card.get("start_port", 0)
-                ep = card.get("end_port", 0)
-                hit = next(
-                    (notes_map[p] for p in range(sp, ep + 1) if notes_map.get(p)),
-                    "",
-                )
-                card["remark"] = hit
             else:  # gap
                 card["remark"] = ""
 
@@ -592,8 +585,6 @@ class PortMonitor:
         hidden = set(hidden_ports)
         if card["type"] == "used":
             return card["port"] in hidden
-        if card["type"] == "unknown_range":
-            return any(p in hidden for p in range(card["start_port"], card["end_port"] + 1))
         return False
 
     def _merge_unknown_and_gaps(
@@ -602,105 +593,56 @@ class PortMonitor:
         start_port: int,
         end_port: int,
     ) -> list[dict[str, Any]]:
-        """合并连续未知端口，并插入可用端口间隙卡片。"""
+        """插入可用端口间隙卡片。
+
+        每个已用端口（含未知服务）都是独立卡片，不做连续合并——
+        用户要求已启用端口逐端口展示，而不是连成一段。
+        """
         port_cards: list[dict[str, Any]] = []
 
         # 头部间隙：区间起始端口到第一个已用端口之间的可用端口
         # （port_data_list 已按端口升序，首元素即最小端口）
         if port_data_list and port_data_list[0]["port"] > start_port:
-            head_gap = port_data_list[0]["port"] - start_port
             port_cards.append(
                 {
                     "type": "gap",
                     "start_port": start_port,
                     "end_port": port_data_list[0]["port"] - 1,
-                    "available_count": head_gap,
+                    "available_count": port_data_list[0]["port"] - start_port,
                 }
             )
 
-        i = 0
-        while i < len(port_data_list):
-            current = port_data_list[i]
-
-            if current["service_name"] == "未知服务":
-                consecutive = [current]
-                j = i + 1
-                while (
-                    j < len(port_data_list)
-                    and port_data_list[j]["service_name"] == "未知服务"
-                    and port_data_list[j]["port"] == port_data_list[j - 1]["port"] + 1
-                ):
-                    consecutive.append(port_data_list[j])
-                    j += 1
-
-                if len(consecutive) >= 2:
-                    port_cards.append(
-                        {
-                            "type": "unknown_range",
-                            "start_port": consecutive[0]["port"],
-                            "end_port": consecutive[-1]["port"],
-                            "port_count": len(consecutive),
-                            "source": consecutive[0]["source"],
-                            "protocol": consecutive[0]["protocol"],
-                            "service_name": "未知服务",
-                            "container": consecutive[0].get("container"),
-                            "is_host_network": consecutive[0].get("is_host_network", False),
-                        }
-                    )
-                    i = j
-                else:
-                    port_cards.append(current)
-                    i += 1
-            else:
-                port_cards.append(current)
-                i += 1
-
-            # 间隙卡片
-            if i < len(port_data_list):
-                last_card = port_cards[-1]
-                current_last_port = (
-                    last_card["end_port"]
-                    if last_card["type"] == "unknown_range"
-                    else last_card.get("port")
-                )
-                next_port = port_data_list[i]["port"]
-                gap = next_port - current_last_port - 1
+        prev_port: int | None = None
+        for current in port_data_list:
+            # 间隙卡片：相邻两个已用端口之间的可用端口。
+            # 必须先于当前卡片插入，保证「已用/可用」严格按端口升序交错排列
+            # （此前先 append 当前卡片再补 gap，导致 gap 落在其后一个已用端口之后）。
+            if prev_port is not None:
+                gap = current["port"] - prev_port - 1
                 if gap > 0:
                     port_cards.append(
                         {
                             "type": "gap",
-                            "start_port": current_last_port + 1,
-                            "end_port": next_port - 1,
+                            "start_port": prev_port + 1,
+                            "end_port": current["port"] - 1,
                             "available_count": gap,
                         }
                     )
+            port_cards.append(current)
+            prev_port = current["port"]
 
         # 末尾到 end_port 的间隙
-        if port_cards:
-            last_card = port_cards[-1]
-            if last_card["type"] == "gap":
-                if last_card["end_port"] < end_port:
-                    last_card["end_port"] = end_port
-                    last_card["available_count"] = (
-                        last_card["end_port"] - last_card["start_port"] + 1
-                    )
-            else:
-                last_port = (
-                    last_card["end_port"]
-                    if last_card["type"] == "unknown_range"
-                    else last_card.get("port", 0)
+        if port_data_list:
+            last_port = port_data_list[-1]["port"]
+            if last_port < end_port:
+                port_cards.append(
+                    {
+                        "type": "gap",
+                        "start_port": last_port + 1,
+                        "end_port": end_port,
+                        "available_count": end_port - last_port,
+                    }
                 )
-                if last_port < end_port:
-                    final_gap = end_port - last_port
-                    if final_gap > 0:
-                        port_cards.append(
-                            {
-                                "type": "gap",
-                                "start_port": last_port + 1,
-                                "end_port": end_port,
-                                "available_count": final_gap,
-                            }
-                        )
         else:
             port_cards.append(
                 {

@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server } from 'lucide-vue-next'
+import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
 
-defineProps<{ card: PortCard }>()
+defineProps<{
+  card: PortCard
+  // 最终展示的服务协议（人工指定 > 自动探测）；unknown 或未探测时不传
+  scheme?: 'http' | 'https' | 'unknown'
+  // 是否为人工指定（徽章显示铅笔标记）
+  manual?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'scheme-toggle'): void
+}>()
 
 const { t } = useI18n()
 </script>
@@ -37,14 +47,42 @@ const { t } = useI18n()
   </div>
 
   <div class="port-detail">
-    <span
-      class="port-source"
-      :class="card.source"
-    >
-      <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
-      <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
-      <Server v-else :size="13" class="port-source-icon" />
-      <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
+    <span class="port-detail-left">
+      <span
+        class="port-source"
+        :class="card.source"
+      >
+        <Container v-if="card.source === 'docker'" :size="13" class="port-source-icon" />
+        <Cog v-else-if="card.source === 'system'" :size="13" class="port-source-icon" />
+        <Server v-else :size="13" class="port-source-icon" />
+        <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
+      </span>
+
+      <!-- 服务协议徽章：可点击循环切换（自动 → HTTP → HTTPS → 自动），unknown 不显示 -->
+      <button
+        v-if="scheme === 'https'"
+        type="button"
+        class="port-scheme https"
+        :class="{ manual }"
+        :title="manual ? t('ports.schemeManualHttpsTip') : t('ports.schemeHttpsTip')"
+        @click.stop="emit('scheme-toggle')"
+      >
+        <Lock :size="11" class="port-scheme-icon" />
+        <span>HTTPS</span>
+        <Pencil v-if="manual" :size="9" class="port-scheme-manual-icon" />
+      </button>
+      <button
+        v-else-if="scheme === 'http'"
+        type="button"
+        class="port-scheme http"
+        :class="{ manual }"
+        :title="manual ? t('ports.schemeManualHttpTip') : t('ports.schemeHttpTip')"
+        @click.stop="emit('scheme-toggle')"
+      >
+        <Globe :size="11" class="port-scheme-icon" />
+        <span>HTTP</span>
+        <Pencil v-if="manual" :size="9" class="port-scheme-manual-icon" />
+      </button>
     </span>
 
     <!-- 容器名（在线/离线状态由左上角圆点 + 背景深浅统一表达） -->
