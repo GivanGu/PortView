@@ -614,8 +614,9 @@ class PortMonitor:
 
         prev_port: int | None = None
         for current in port_data_list:
-            port_cards.append(current)
-            # 间隙卡片：相邻两个已用端口之间的可用端口
+            # 间隙卡片：相邻两个已用端口之间的可用端口。
+            # 必须先于当前卡片插入，保证「已用/可用」严格按端口升序交错排列
+            # （此前先 append 当前卡片再补 gap，导致 gap 落在其后一个已用端口之后）。
             if prev_port is not None:
                 gap = current["port"] - prev_port - 1
                 if gap > 0:
@@ -627,6 +628,7 @@ class PortMonitor:
                             "available_count": gap,
                         }
                     )
+            port_cards.append(current)
             prev_port = current["port"]
 
         # 末尾到 end_port 的间隙

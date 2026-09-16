@@ -180,6 +180,60 @@ class TestMergeUnknownAndGaps:
         assert mid["end_port"] == 8079
         assert mid["available_count"] == 8079 - 81 + 1
 
+    def test_gap_order_interleaved_ascending(self):
+        """gap 卡片必须落在前后两个已用端口之间，整体严格按端口升序交错排列。
+
+        回归：03a261b 重构后 gap 先 append 当前卡片再补，
+        导致 gap(81-8079) 落在 8080 之后，页面排序错乱。
+        """
+        monitor = _make_monitor()
+        cards = [
+            {
+                "port": 80,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "HTTP",
+                "container": None,
+            },
+            {
+                "port": 8080,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "App",
+                "container": None,
+            },
+            {
+                "port": 9000,
+                "type": "used",
+                "source": "system",
+                "protocol": "TCP",
+                "service_name": "未知服务",
+                "container": None,
+            },
+        ]
+        result = monitor._merge_unknown_and_gaps(cards, 1, 10000)
+        # 期望顺序：gap(1-79), 80, gap(81-8079), 8080, gap(8081-8999), 9000, gap(9001-10000)
+        expected = [
+            ("gap", 1, 79),
+            ("used", 80, None),
+            ("gap", 81, 8079),
+            ("used", 8080, None),
+            ("gap", 8081, 8999),
+            ("used", 9000, None),
+            ("gap", 9001, 10000),
+        ]
+        actual = [
+            (
+                c["type"],
+                c.get("port", c.get("start_port")),
+                c.get("end_port"),
+            )
+            for c in result
+        ]
+        assert actual == expected
+
     def test_empty_cards(self):
         monitor = _make_monitor()
         result = monitor._merge_unknown_and_gaps([], 1, 100)
