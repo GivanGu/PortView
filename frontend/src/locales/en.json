@@ -110,6 +110,8 @@
     "schemeHttpsTip": "Service uses HTTPS (encrypted) (click to cycle: HTTPS → auto)",
     "schemeManualHttpTip": "Manually set to HTTP (click to cycle: HTTP → HTTPS → auto)",
     "schemeManualHttpsTip": "Manually set to HTTPS (click to cycle: HTTPS → auto)",
+    "schemeSelect": "Select",
+    "schemeSelectTip": "Protocol unknown (click to select: Select → HTTP → HTTPS → auto)",
     "editService": "Edit service name",
     "hidePort": "Hide port",
     "unknownService": "Unknown service",

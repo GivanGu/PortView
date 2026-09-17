@@ -110,6 +110,8 @@
     "schemeHttpsTip": "服务使用 HTTPS 加密连接（点击切换：HTTPS → 自动）",
     "schemeManualHttpTip": "人工指定 HTTP（点击切换：HTTP → HTTPS → 自动）",
     "schemeManualHttpsTip": "人工指定 HTTPS（点击切换：HTTPS → 自动）",
+    "schemeSelect": "选择",
+    "schemeSelectTip": "协议未知（点击选择：选择 → HTTP → HTTPS → 自动）",
     "editService": "编辑服务名",
     "hidePort": "隐藏端口",
     "unknownService": "未知服务",

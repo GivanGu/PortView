@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil } from 'lucide-vue-next'
+import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
 
 defineProps<{
@@ -58,7 +58,7 @@ const { t } = useI18n()
         <span>{{ card.source === 'docker' ? t('common.sourceDocker') : card.source === 'system' ? t('common.sourceSystem') : t('common.sourceHost') }}</span>
       </span>
 
-      <!-- 服务协议徽章：可点击循环切换（自动 → HTTP → HTTPS → 自动），unknown 不显示 -->
+      <!-- 服务协议徽章：可点击循环切换（选择 → HTTP → HTTPS → 自动） -->
       <button
         v-if="scheme === 'https'"
         type="button"
@@ -82,6 +82,16 @@ const { t } = useI18n()
         <Globe :size="11" class="port-scheme-icon" />
         <span>HTTP</span>
         <Pencil v-if="manual" :size="9" class="port-scheme-manual-icon" />
+      </button>
+      <button
+        v-else-if="scheme === 'unknown'"
+        type="button"
+        class="port-scheme unknown"
+        :title="t('ports.schemeSelectTip')"
+        @click.stop="emit('scheme-toggle')"
+      >
+        <MousePointerClick :size="11" class="port-scheme-icon" />
+        <span>{{ t('ports.schemeSelect') }}</span>
       </button>
     </span>
 
