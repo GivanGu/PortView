@@ -108,16 +108,13 @@ async def api_ports(
 
         config = load_config()
         hidden_ports = load_hidden_ports()
-        notes_map = await _load_notes_map()
-        # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
-        port_data = await asyncio.to_thread(
-            monitor.get_port_analysis,
+        port_data = monitor.get_port_analysis(
             config,
             start_port=start_port,
             end_port=end_port,
             protocol_filter=protocol_filter,
             hidden_ports=hidden_ports,
-            notes_map=notes_map,
+            notes_map=await _load_notes_map(),
         )
 
         # P1.1：按监控区间收窄
@@ -137,16 +134,13 @@ async def api_ports(
 async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIResponse:
     """刷新端口信息（重连 Docker + 重新分析）。"""
     try:
-        # Docker 客户端重连是阻塞 I/O，放到线程池
-        await asyncio.to_thread(monitor.reconnect)
+        monitor.reconnect()
         config = load_config()
         hidden_ports = load_hidden_ports()
-        notes_map = await _load_notes_map()
-        port_data = await asyncio.to_thread(
-            monitor.get_port_analysis,
-            config,
+        port_data = monitor.get_port_analysis(
+            config=config,
             hidden_ports=hidden_ports,
-            notes_map=notes_map,
+            notes_map=await _load_notes_map(),
         )
         return APIResponse(success=True, data=port_data, message="端口信息已刷新")
     except Exception as e:

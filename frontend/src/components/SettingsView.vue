@@ -29,9 +29,6 @@ async function handleSetPassword() {
   passwordBusy.value = true
   try {
     await auth.doSetPassword(newPassword.value)
-    // doSetPassword 会撤销当前会话（设密码/自动开启保护均触发），
-    // 需用新密码重新登录，否则刷新页面后会话失效、被踢回登录页。
-    await auth.doLogin(newPassword.value)
     newPassword.value = ''
     confirmPassword.value = ''
     showToast(t('settings.pwUpdated'))
@@ -207,7 +204,6 @@ async function handleReset() {
   applyTheme('dark')
   applyAccent('indigo')
   applyLang('zh')
-  setRefreshInterval(0)
   setLogoScrim('left')
   setLogoDisplayMode('background')
   showToast(t('settings.resetDone'))

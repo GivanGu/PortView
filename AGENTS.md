@@ -102,5 +102,4 @@ cd frontend && npm install && npm run dev
 - Commit style: `<type>(<scope>): <summary>` — e.g. `feat(port-monitor): add offline container support`
 - Release: `main` → `docker-publish.yml` (version + latest); `dev` → `docker-dev.yml` (dev + dev-<version>); version read from `app/__init__.py`
 - **Every release must create a GitHub Release** (via API or `gh release create`) with an English changelog; the in-app update badge links to the latest release page (`/releases/tag/vX.Y.Z`)
-- Release notes 只写更新内容与修复内容（Features/Fixes），不展开说明问题产生的原因
 - Language: code comments and commit messages are in Chinese; README is bilingual (English default `README.md` + Chinese `README.zh-CN.md`)
