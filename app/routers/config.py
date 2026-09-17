@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends
@@ -177,12 +178,15 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
             return APIResponse(success=True, data=[])
 
         config = load_config()
-        port_data = monitor.get_port_analysis(
+        notes_map = await _load_notes_map()
+        # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
+        port_data = await asyncio.to_thread(
+            monitor.get_port_analysis,
             config,
             start_port=1,
             end_port=65535,
             hidden_ports=[],  # 不过滤，拿到全部卡片
-            notes_map=await _load_notes_map(),
+            notes_map=notes_map,
         )
 
         card_by_port: dict[int, dict] = {}
