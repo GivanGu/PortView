@@ -40,6 +40,10 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends docker-ce-cli; \
     rm -rf /var/lib/apt/lists/*
 
+# 非 root 运行用户（安全加固：降低容器被攻破后的权限）
+# 固定 UID/GID 1000，便于宿主机 bind 挂载目录对齐属主。
+RUN groupadd -g 1000 portview && useradd -u 1000 -g portview -m portview
+
 # Python 运行时依赖（uv 从锁文件安装，跳过项目本体与 dev 依赖 → 可复现且更快）
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-install-project --no-dev --python 3.12
@@ -48,6 +52,16 @@ RUN uv sync --no-install-project --no-dev --python 3.12
 COPY app/ ./app/
 COPY config/config.json.example ./config/config.json.example
 COPY --from=frontend /build/dist ./frontend/dist
+
+# 属主对齐：应用代码、venv 与运行时数据目录全部归 portview，
+# 保证非 root 用户可读写。/app/.data 是命名卷挂载点，Docker 首次挂载时
+# 会把镜像内该目录的属主复制进卷；/app/config 为 bind 挂载点，宿主机
+# 目录需自行保证属主为 UID 1000（或 world-writable），否则写配置会失败。
+RUN chown -R portview:portview /app \
+    && mkdir -p /app/.data /app/config \
+    && chown portview:portview /app/.data /app/config
+
+USER portview
 
 EXPOSE 8081
 
