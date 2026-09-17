@@ -875,7 +875,7 @@ html, body {
   min-width: 0;
 }
 
-/* 服务协议徽章（http/https）：可点击循环切换 自动 → HTTP → HTTPS → 自动 */
+/* 服务协议徽章（select/http/https）：可点击循环切换 选择 → HTTP → HTTPS → 自动 */
 .port-scheme {
   display: inline-flex;
   align-items: center;
@@ -906,6 +906,12 @@ html, body {
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
+}
+/* 协议未知：虚线边框提示"待选择"，点击进入 选择 → HTTP → HTTPS → 自动 循环 */
+.port-scheme.unknown {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
 }
 /* 人工指定标记：铅笔图标 + 强调色描边，区别于自动探测 */
 .port-scheme.manual {
