@@ -386,13 +386,27 @@ async function probeCardSchemes() {
 // ── 人工指定协议：优先级高于自动探测 ──
 // manualSchemes[port] = 'http' | 'https'；无条目 = 跟随自动探测。
 const manualSchemes = ref<Record<number, 'http' | 'https'>>({})
+// 进行中的协议变更（乐观更新尚未被服务端确认）。
+// 并发 loadManualSchemes 的旧响应可能不含该端口的最新值，
+// 合并 pending 可避免旧响应覆盖未确认的乐观值（修复徽章偶发消失）。
+let pendingSchemes: Record<number, 'http' | 'https' | null> = {}
+// loadManualSchemes 序号：仅应用最新一次响应，丢弃乱序到达的旧响应。
+let schemesLoadSeq = 0
 
 async function loadManualSchemes() {
+  const seq = ++schemesLoadSeq
   try {
     const resp = await fetchPortSchemes()
+    // 已有更新的加载发起，丢弃本次（乱序旧响应）
+    if (seq !== schemesLoadSeq) return
     if (resp.success) {
       const m: Record<number, 'http' | 'https'> = {}
       for (const [p, s] of Object.entries(resp.data || {})) m[Number(p)] = s
+      // 合并进行中的乐观更新，避免旧响应覆盖未确认值
+      for (const [p, s] of Object.entries(pendingSchemes)) {
+        if (s == null) delete m[Number(p)]
+        else m[Number(p)] = s
+      }
       manualSchemes.value = m
     }
   } catch (e) {
@@ -423,6 +437,8 @@ async function handleSchemeToggle(card: PortCard) {
   else next = null
   // 乐观更新，失败回滚
   const prev = { ...manualSchemes.value }
+  // 标记为进行中：并发 loadManualSchemes 的旧响应合并时会保留该乐观值
+  pendingSchemes[port] = next
   if (next) manualSchemes.value = { ...manualSchemes.value, [port]: next }
   else {
     const m = { ...manualSchemes.value }
@@ -432,9 +448,13 @@ async function handleSchemeToggle(card: PortCard) {
   try {
     if (next) await setPortScheme(port, next)
     else await clearPortScheme(port)
+    // 服务端已确认：重新拉取对齐状态，并使在途旧响应因序号过期而失效
+    await loadManualSchemes()
   } catch (e) {
     console.error('保存人工协议失败:', e)
     manualSchemes.value = prev
+  } finally {
+    delete pendingSchemes[port]
   }
 }
 
