@@ -67,14 +67,20 @@ cd frontend && npm install && npm run dev
 
 两个 workflow 均推送 **GHCR + ACR**，tag 命名空间完全隔离，互不覆盖。
 
+### 版本号规则
+- **开发版与正式版不共用版本号**。正式版形如 `1.6.0`，开发版形如 `1.6.x`（x 持续追加），且**正式版的 x 不与开发版的 x 相同**。
+- 例：正式版 `1.6.0` → 开发版 `1.6.1`、`1.6.2`…；下一正式版取与当前开发版 x 不冲突的号（如 `1.7.0`）。
+- `main` 分支的版本号只在发版时设定；`dev` 分支的版本号在开发前 bump。
+
 ### 发版流程
-1. 在 `dev` 分支 bump `app/__init__.py` 版本号（如 `1.4.8` → `1.4.9`），作为本次开发目标版本
-   - **版本号只在当前版本基础上 +1（patch 位）**，不要跳号或回退；每次更新都基于上一个已发布版本递增
-2. 开发功能，push 触发 `docker-dev.yml` 构建开发镜像（tag: `dev` + `dev-1.4.9`）
-3. 验证 `dev` 镜像（`docker pull <registry>/portview:dev-1.4.9`）
+1. 在 `dev` 分支 bump `app/__init__.py` 版本号（如 `1.6.0` → `1.6.1`），作为本次开发目标版本
+   - **开发版只在当前开发版基础上 +1（patch 位）**，不要跳号或回退；且不得与正式版相同
+2. 开发功能，push 触发 `docker-dev.yml` 构建开发镜像（tag: `dev` + `dev-1.6.1`）
+3. 验证 `dev` 镜像（`docker pull <registry>/portview:dev-1.6.1`）
 4. 合并 `dev` → `main`
-5. push `main` 触发 `docker-publish.yml` 构建稳定镜像（tag: `1.4.9` + `latest`）
-6. 创建 GitHub Release（英文 changelog），tag `v1.4.9`
+5. 在 `main` 分支将 `app/__init__.py` 版本号设为本次正式版（如 `1.6.0`），独立提交
+6. push `main` 触发 `docker-publish.yml` 构建稳定镜像（tag: `1.6.0` + `latest`）
+7. 创建 GitHub Release（英文 changelog），tag `v1.6.0`
 
 ## Architecture
 
