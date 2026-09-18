@@ -4,8 +4,10 @@
 
 端点：
 - GET   ``/api/prefs``       读取当前用户（单行）
-- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval / logo_scrim / logo_display_mode），未提供字段不修改
-- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0, logo_scrim=left, logo_display_mode=background）
+- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval / logo_scrim / logo_display_mode / favorites），未提供字段不修改
+- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0, logo_scrim=left, logo_display_mode=background, favorites=[]）
+
+favorites 为收藏端口号 JSON 数组（如 ``[80, 8080]``），顺序即收藏页展示顺序。
 
 说明：
 - 前端 App.vue 已经在 localStorage 中保留了偏好；这里的持久化是**服务端备份**，
@@ -16,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter
@@ -37,7 +40,7 @@ async def api_get_prefs() -> APIResponse:
         return APIResponse(success=False, error="db not ready")
     conn = db_service._db
     cur = await conn.execute(
-        "SELECT theme, accent, lang, refresh_interval, logo_scrim, logo_display_mode FROM user_prefs WHERE id = 1"
+        "SELECT theme, accent, lang, refresh_interval, logo_scrim, logo_display_mode, favorites FROM user_prefs WHERE id = 1"
     )
     row = await cur.fetchone()
     if row is None:
@@ -51,6 +54,7 @@ async def api_get_prefs() -> APIResponse:
             refresh_interval=row["refresh_interval"] or 0,
             logo_scrim=row["logo_scrim"] or "left",
             logo_display_mode=row["logo_display_mode"] or "background",
+            favorites=json.loads(row["favorites"] or "[]"),
         ),
     )
 
@@ -92,6 +96,9 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     if patch.logo_display_mode is not None:
         sets.append("logo_display_mode = ?")
         params.append(patch.logo_display_mode)
+    if patch.favorites is not None:
+        sets.append("favorites = ?")
+        params.append(json.dumps(patch.favorites))
     if not sets:
         return APIResponse(success=True, message="no-op")
     sets.append("updated_at = ?")
@@ -115,7 +122,7 @@ async def api_reset_prefs() -> APIResponse:
 
     conn = db_service._db
     await conn.execute(
-        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, logo_scrim = 'left', logo_display_mode = 'background', updated_at = ? WHERE id = 1",
+        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, logo_scrim = 'left', logo_display_mode = 'background', favorites = '[]', updated_at = ? WHERE id = 1",
         (int(time.time()),),
     )
     await conn.commit()
