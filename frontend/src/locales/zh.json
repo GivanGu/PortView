@@ -10,7 +10,9 @@
     "ports": "端口",
     "notes": "备注",
     "hidden": "隐藏",
-    "settings": "设置"
+    "settings": "设置",
+    "collapse": "收起侧栏",
+    "expand": "展开侧栏"
   },
   "topbar": {
     "searchPlaceholder": "搜索端口、服务、容器…",

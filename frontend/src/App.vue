@@ -14,6 +14,8 @@ import {
   Palette,
   ShieldAlert,
   RefreshCw,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -85,6 +87,10 @@ const activeTab = ref<Tab>('overview')
 const theme = ref<Theme>('dark')
 const accent = ref<AccentId>('indigo')
 const version = ref('')
+const channel = ref('stable')
+const versionLabel = computed(() =>
+  channel.value === 'dev' ? `dev-${version.value}` : `v${version.value}`,
+)
 const loading = ref(true)
 const showAccentPicker = ref(false)
 
@@ -225,6 +231,27 @@ function initialLogoMode(): 'background' | 'box' {
   return 'background'
 }
 
+// v1.5.5：侧栏收缩/展开。localStorage 持久化，与主题/强调色同一惯例
+const RAIL_KEY = 'portview.railCollapsed'
+const railCollapsed = ref(false)
+
+function initialRailCollapsed(): boolean {
+  try {
+    return localStorage.getItem(RAIL_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function toggleRail() {
+  railCollapsed.value = !railCollapsed.value
+  try {
+    localStorage.setItem(RAIL_KEY, railCollapsed.value ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
 function toggleTheme() {
   const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
   theme.value = next
@@ -357,6 +384,7 @@ onMounted(async () => {
   applyAccent(accent.value)
   applyLogoScrim(initialLogoScrim())
   setLogoDisplayMode(initialLogoMode())
+  railCollapsed.value = initialRailCollapsed()
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -367,6 +395,7 @@ onMounted(async () => {
   try {
     const health = await healthCheck()
     version.value = health.version
+    channel.value = health.channel ?? 'stable'
   } catch {
     version.value = 'unknown'
   }
@@ -462,7 +491,7 @@ onBeforeUnmount(() => {
 
     <div class="app-body">
       <!-- 图标导航轨 -->
-      <aside class="rail">
+      <aside class="rail" :class="{ collapsed: railCollapsed }">
         <nav class="rail-nav">
           <button
             v-for="item in navItems"
@@ -476,6 +505,15 @@ onBeforeUnmount(() => {
             <span class="rail-label">{{ item.label }}</span>
           </button>
         </nav>
+        <button
+          class="rail-toggle"
+          :title="railCollapsed ? t('nav.expand') : t('nav.collapse')"
+          :aria-label="railCollapsed ? t('nav.expand') : t('nav.collapse')"
+          @click="toggleRail"
+        >
+          <PanelLeftOpen v-if="railCollapsed" :size="20" />
+          <PanelLeftClose v-else :size="20" />
+        </button>
       </aside>
 
       <!-- 主内容 -->
@@ -492,7 +530,7 @@ onBeforeUnmount(() => {
     <footer class="statusbar">
       <div class="status-item">
         <span class="status-dot" />
-        <span>PortView v{{ version }}</span>
+        <span>PortView {{ versionLabel }}</span>
         <button
           v-if="hasUpdate"
           class="update-badge"

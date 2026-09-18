@@ -79,6 +79,8 @@ jobs:
             org.opencontainers.image.description="Docker 容器与主机端口监控和可视化工具（开发版）"
             org.opencontainers.image.version=${{ steps.ver.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            PORTVIEW_CHANNEL=dev
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
