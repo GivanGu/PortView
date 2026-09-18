@@ -1,11 +1,11 @@
 """/api/auth/* 路由 —— 单用户密码登录 + 会话。
 
 端点：
-- POST /api/auth/set_password  首次设置 / 修改密码
+- POST /api/auth/set_password  首次设置 / 修改密码（已开启保护且已有密码时需有效会话）
 - POST /api/auth/login         登录，成功则写 httpOnly cookie ``portview_session``
 - POST /api/auth/logout        登出（删对应 token）
 - GET  /api/auth/me            当前会话状态（含 ``auth_required`` 是否开启）
-- PATCH /api/auth/toggle       切换 auth 强制开关（无需登录即可关，方便首次配置）
+- PATCH /api/auth/toggle       切换 auth 强制开关（关闭时若已开启需有效会话）
 """
 
 from __future__ import annotations
@@ -35,25 +35,26 @@ class TogglePayload(BaseModel):
 
 
 @router.post("/set_password")
-async def set_password(body: SetPasswordPayload, response: Response) -> APIResponse:
+async def set_password(
+    body: SetPasswordPayload,
+    token: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> APIResponse:
     has = await auth_svc.has_password()
-    # 首次设置：无密码 → 直接写入
-    # 修改密码：需要旧密码正确 + 会话有效（简化：仅校验旧密码在 body.password 里没塞进时由前端处理 ——
-    # 这里 v1.2 只做 set/update，不区分；前端在"设置" tab 提供旧密码+新密码两个字段）
+    # 已开启登录保护且已有密码时，修改密码必须持有有效会话，
+    # 否则攻击者可未授权重置密码 → 接管账户
+    if (
+        has
+        and await auth_svc.is_auth_required()
+        and not await auth_svc.is_valid_session(token or "")
+    ):
+        raise HTTPException(status_code=401, detail="login required")
     if has:
-        # 已存在 → 视为 update_password；失败则 400
-        await auth_svc.verify_user_password(body.password)
-        # 允许"覆盖式"修改：只要登录了就能改；未登录也能改（单用户工具，密码忘了就忘在锁外）
-        # 简化策略：直接覆盖（不强制旧密码），但要求新密码长度>=4
-        pass
-    await auth_svc.create_user_if_absent(password=body.password)
-    await auth_svc.update_password(body.password)
-    # 登出旧会话（改了密码后老 cookie 失效）
-    n = await auth_svc.revoke_all_sessions()
-    return APIResponse(
-        success=True,
-        message=f"password updated ({n} old sessions revoked)",
-    )
+        # 已有密码 → 覆盖式修改（不强制旧密码，单用户工具）；update_password 内部会撤销全部旧会话
+        await auth_svc.update_password(body.password)
+    else:
+        # 首次设置：无密码 → 直接写入
+        await auth_svc.create_user_if_absent(password=body.password)
+    return APIResponse(success=True, message="password updated")
 
 
 @router.post("/login")
@@ -112,10 +113,22 @@ async def me(
 
 
 @router.patch("/toggle")
-async def toggle(body: TogglePayload, response: Response) -> APIResponse:
+async def toggle(
+    body: TogglePayload,
+    response: Response,
+    token: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> APIResponse:
     # 开启登录保护前必须先设置密码，否则开启后无人能登录
     if body.enabled and not await auth_svc.has_password():
         raise HTTPException(status_code=400, detail="set password first")
+    # 关闭登录保护时，若当前已开启保护则必须持有有效会话，
+    # 否则攻击者可未授权关闭保护 → 绕过全部鉴权
+    if (
+        not body.enabled
+        and await auth_svc.is_auth_required()
+        and not await auth_svc.is_valid_session(token or "")
+    ):
+        raise HTTPException(status_code=401, detail="login required")
     await auth_svc.set_auth_required(body.enabled)
     if not body.enabled:
         # 关闭时清 cookie，保持前端体验一致

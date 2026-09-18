@@ -6,21 +6,14 @@
 - range_rules CRUD
 - /api/ports?range_ids=... 过滤
 - /api/ports 卡片带 remark
+
+DB / 配置目录隔离由 tests/conftest.py 统一处理（临时路径 + 每用例全新 DB）。
 """
 
 from __future__ import annotations
 
-import os
-
-os.environ["PORTVIEW_CONFIG_DIR"] = "/tmp/portview_p1_test"
-
 import pytest
 from fastapi.testclient import TestClient
-
-# 强制使用临时 SQLite
-os.environ["PORTVIEW_DB"] = "/tmp/portview_p1_test/p1.db"
-# 关掉 env 层的 require_auth，让测试控制
-os.environ.pop("PORTVIEW_REQUIRE_AUTH", None)
 
 from app.main import app
 
@@ -78,23 +71,51 @@ class TestAuth:
 
     def test_toggle_requires_password(self, client: TestClient):
         """未设置密码时开启登录保护应返回 400；有密码则可开启。"""
-        from unittest.mock import AsyncMock, patch
-
-        with patch(
-            "app.routers.auth.auth_svc.has_password",
-            new=AsyncMock(return_value=False),
-        ):
-            resp = client.patch("/api/auth/toggle", json={"enabled": True})
-            assert resp.status_code == 400
-
-        with patch(
-            "app.routers.auth.auth_svc.has_password",
-            new=AsyncMock(return_value=True),
-        ):
-            resp2 = client.patch("/api/auth/toggle", json={"enabled": True})
-            assert resp2.status_code == 200
-        # 收尾：关闭，避免影响后续测试
+        # 全新 DB 无密码 → 开启保护应被拒绝
+        resp = client.patch("/api/auth/toggle", json={"enabled": True})
+        assert resp.status_code == 400
+        # 设置密码后可开启
+        client.post("/api/auth/set_password", json={"password": "portview-1234"})
+        resp2 = client.patch("/api/auth/toggle", json={"enabled": True})
+        assert resp2.status_code == 200
+        # 收尾：登录后关闭（保护开启时关闭需有效会话）
+        client.post("/api/auth/login", json={"password": "portview-1234"})
         client.patch("/api/auth/toggle", json={"enabled": False})
+
+    def test_set_password_requires_session_when_enabled(self, client: TestClient):
+        """保护开启且已有密码时，修改密码必须持有有效会话，否则可被未授权接管。"""
+        client.post("/api/auth/set_password", json={"password": "first-pass"})
+        client.patch("/api/auth/toggle", json={"enabled": True})
+        # 未登录改密码 → 401
+        resp = client.post("/api/auth/set_password", json={"password": "hacked-pass"})
+        assert resp.status_code == 401
+        # 原密码仍然有效
+        ok = client.post("/api/auth/login", json={"password": "first-pass"})
+        assert ok.status_code == 200
+        # 登录后可以改密码
+        changed = client.post("/api/auth/set_password", json={"password": "second-pass"})
+        assert changed.status_code == 200
+        # 改密后旧会话全部撤销 → 必须用新密码重新登录
+        client.cookies.clear()
+        again = client.post("/api/auth/login", json={"password": "second-pass"})
+        assert again.status_code == 200
+        # 收尾：关闭保护
+        client.patch("/api/auth/toggle", json={"enabled": False})
+
+    def test_toggle_off_requires_session_when_enabled(self, client: TestClient):
+        """保护开启时，关闭保护必须持有有效会话，否则可未授权绕过全部鉴权。"""
+        client.post("/api/auth/set_password", json={"password": "guard-pass"})
+        client.patch("/api/auth/toggle", json={"enabled": True})
+        # 未登录关闭 → 401
+        resp = client.patch("/api/auth/toggle", json={"enabled": False})
+        assert resp.status_code == 401
+        # 保护仍然生效 → /api/ports 仍 401
+        assert client.get("/api/ports").status_code == 401
+        # 登录后可关闭
+        client.post("/api/auth/login", json={"password": "guard-pass"})
+        ok = client.patch("/api/auth/toggle", json={"enabled": False})
+        assert ok.status_code == 200
+        assert client.get("/api/ports").status_code == 200
 
 
 # --------------------- ranges CRUD ---------------------

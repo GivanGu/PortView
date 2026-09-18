@@ -21,10 +21,15 @@ RUN npm run build
 FROM ghcr.io/astral-sh/uv:0.4.4-python3.12-bookworm-slim AS runtime
 WORKDIR /app
 
+# 构建渠道：dev 镜像由 docker-dev.yml 传入 PORTVIEW_CHANNEL=dev，
+# stable 镜像与本地构建走默认值 stable。前端状态栏据此显示 dev-<version>。
+ARG PORTVIEW_CHANNEL=stable
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_NO_CACHE=1 \
     PORTVIEW_PORT=8081 \
+    PORTVIEW_CHANNEL=${PORTVIEW_CHANNEL} \
     PATH="/app/.venv/bin:$PATH"
 
 # 系统依赖（gnupg：gpg --dearmor 需要，--no-install-recommends 不会自动带上）

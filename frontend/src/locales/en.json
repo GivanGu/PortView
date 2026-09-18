@@ -10,7 +10,9 @@
     "ports": "Ports",
     "notes": "Notes",
     "hidden": "Hidden",
-    "settings": "Settings"
+    "settings": "Settings",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
   },
   "topbar": {
     "searchPlaceholder": "Search ports, services, containers…",

@@ -210,7 +210,7 @@ export function fetchHiddenPortDetails(): Promise<ApiResponse<HiddenPortDetail[]
 
 // ── 健康检查 ──────────────────────────────────────────
 
-export function healthCheck(): Promise<{ status: string; version: string }> {
+export function healthCheck(): Promise<{ status: string; version: string; channel?: string }> {
   return fetch('/api/health').then(r => r.json())
 }
 

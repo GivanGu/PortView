@@ -35,6 +35,10 @@ from app.services import db as _db_service
 
 logger = logging.getLogger(__name__)
 
+# 构建渠道：Docker 构建时通过 ARG PORTVIEW_CHANNEL 注入（dev 镜像为 dev，
+# stable 镜像与本地运行默认 stable）。前端状态栏据此显示 dev-<version> 样式。
+CHANNEL = os.environ.get("PORTVIEW_CHANNEL", "stable").strip() or "stable"
+
 # 前端构建产物目录（Vite build 输出）
 _FRONTEND_DIST = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -52,7 +56,10 @@ async def lifespan(_: FastAPI):
     )
     init_config()
     async with _db_service.init_db():
-        logger.info("PortView v%s 启动完成（SQLite ready）", __version__)
+        if CHANNEL == "dev":
+            logger.info("PortView dev-%s 启动完成（SQLite ready）", __version__)
+        else:
+            logger.info("PortView v%s 启动完成（SQLite ready）", __version__)
         yield
 
 
@@ -112,7 +119,7 @@ def create_app() -> FastAPI:
     # 健康检查
     @app.get("/api/health", tags=["meta"])
     def health() -> dict:
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": __version__, "channel": CHANNEL}
 
     # 前端静态资源（若已构建）
     if os.path.isdir(_FRONTEND_DIST):
@@ -136,7 +143,8 @@ def create_app() -> FastAPI:
         def root() -> dict:
             return {
                 "name": "PortView",
-                "version": __version__,
+                "version": f"dev-{__version__}" if CHANNEL == "dev" else __version__,
+                "channel": CHANNEL,
                 "hint": "前端尚未构建。运行 `cd frontend && npm install && npm run build` 后刷新。",
                 "docs": "/docs",
             }

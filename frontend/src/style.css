@@ -48,6 +48,7 @@
   /* 间距 */
   --sidebar-width: 240px;
   --rail-width: 200px;
+  --rail-width-collapsed: 60px;
   --topbar-height: 56px;
   --statusbar-height: 32px;
 
@@ -1890,6 +1891,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
 }
 
 .rail-nav {
@@ -1945,6 +1947,44 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* v1.5.5：侧栏收缩/展开。收缩后为纯图标窄栏，文字隐藏、图标居中，
+   导航项保留原生 title 提示。 */
+.rail.collapsed {
+  width: var(--rail-width-collapsed);
+  min-width: var(--rail-width-collapsed);
+  padding: 16px 8px;
+}
+
+.rail.collapsed .rail-item {
+  justify-content: center;
+  gap: 0;
+  padding: 10px 0;
+}
+
+.rail.collapsed .rail-label {
+  display: none;
+}
+
+.rail-toggle {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rail-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .main-content {
