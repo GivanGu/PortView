@@ -21,6 +21,7 @@ import {
   logoUrl,
   fetchDefaultLogos,
   defaultLogoUrl,
+  patchPrefs,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
@@ -494,7 +495,8 @@ async function handleHide(card: PortCard) {
   if (card.port) {
     await hidePort(card.port)
   }
-  await loadData()
+  // 全局刷新：收藏页/总览页立即同步（本视图由 refreshTick watcher 重载）
+  triggerRefresh()
 }
 
 
@@ -504,7 +506,8 @@ async function handleEditSave() {
   await editPort(editingPort.value, editServiceName.value)
   editingPort.value = null
   editServiceName.value = ''
-  await loadData()
+  // 服务名变更 → 全局刷新，收藏页立即同步（本视图由 refreshTick watcher 重载）
+  triggerRefresh()
 }
 
 function startEdit(card: PortCard) {
@@ -602,7 +605,34 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
 // v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
-const { refreshInterval, refreshTick, logoDisplayMode } = usePrefs()
+const { refreshInterval, refreshTick, logoDisplayMode, favorites, setFavorites, triggerRefresh } = usePrefs()
+
+// ── 收藏（v1.5.6）：按端口号收藏，顺序存 user_prefs.favorites ──
+function isFavorite(card: PortCard): boolean {
+  return card.port != null && favorites.value.includes(card.port)
+}
+
+async function toggleFavorite(card: PortCard) {
+  if (card.port == null) return
+  const port = card.port
+  const has = favorites.value.includes(port)
+  const prev = [...favorites.value]
+  const next = has ? prev.filter((p) => p !== port) : [...prev, port]
+  setFavorites(next)
+  let ok = false
+  try {
+    ok = (await patchPrefs({ favorites: next })).success
+  } catch (e) {
+    console.error('收藏操作失败:', e)
+  }
+  if (ok) {
+    showToast(t(has ? 'ports.removedFavorite' : 'ports.addedFavorite'))
+  } else {
+    // 保存失败：回滚本地状态，避免与服务端分叉后被静默覆盖
+    setFavorites(prev)
+    showToast(t('common.saveFailed'))
+  }
+}
 
 function applyPollTimer() {
   if (pollTimer) {
@@ -977,6 +1007,15 @@ onBeforeUnmount(() => {
 
           <div class="settings-menu-group">
             <div class="settings-menu-label">{{ t('ports.menuOther') }}</div>
+            <button
+              class="settings-menu-item"
+              @click="runMenuAction(settingsMenuCard!, (c) => toggleFavorite(c))"
+            >
+              <span class="settings-menu-ico">{{ isFavorite(settingsMenuCard) ? '★' : '☆' }}</span>
+              <span>
+                {{ isFavorite(settingsMenuCard) ? t('ports.removeFavorite') : t('ports.addFavorite') }}
+              </span>
+            </button>
             <button
               class="settings-menu-item danger"
               @click="runMenuAction(settingsMenuCard!, (c) => handleHide(c))"

@@ -229,6 +229,14 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: schema_version -> 3 (port_schemes)")
 
+    # v1.5.5 迁移：user_prefs 加 favorites 列（收藏端口号 JSON 数组，顺序 = 展示顺序）。
+    # 无新表，沿用列迁移模式，不 bump schema_version。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols5 = {row[1] for row in await cur.fetchall()}
+    if "favorites" not in pref_cols5:
+        await conn.execute("ALTER TABLE user_prefs ADD COLUMN favorites TEXT NOT NULL DEFAULT '[]'")
+        logger.info("migration: user_prefs.favorites added (default '[]')")
+
     await conn.commit()
     if _db is not None:
         await _db.close()

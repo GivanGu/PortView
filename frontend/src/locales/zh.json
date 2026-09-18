@@ -7,6 +7,7 @@
   },
   "nav": {
     "overview": "概览",
+    "favorites": "收藏",
     "ports": "端口",
     "notes": "备注",
     "hidden": "隐藏",
@@ -44,6 +45,7 @@
     "refresh": "刷新",
     "search": "搜索",
     "save": "保存",
+    "saveFailed": "保存失败",
     "cancel": "取消",
     "close": "关闭",
     "delete": "删除",
@@ -133,7 +135,18 @@
     "logoDelete": "删除 Logo",
     "logoTooLarge": "图片超过 1MiB 限制",
     "logoAdded": "Logo 已添加",
-    "logoDiscoverFailed": "未找到 {service} 的 Logo，可手动上传"
+    "logoDiscoverFailed": "未找到 {service} 的 Logo，可手动上传",
+    "addFavorite": "添加至收藏",
+    "removeFavorite": "移除收藏",
+    "addedFavorite": "已添加至收藏",
+    "removedFavorite": "已移除收藏"
+  },
+  "favorites": {
+    "title": "收藏",
+    "empty": "还没有收藏，去端口页卡片设置里加",
+    "count": "{n} 项",
+    "editRemark": "点击名称编辑备注",
+    "vanished": "该端口已不在监控范围内"
   },
   "hidden": {
     "total": "共 {n} 个",

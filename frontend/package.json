@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "lucide-vue-next": "^0.545.0",
+    "sortablejs": "^1.15.7",
     "vue": "^3.5.41",
     "vue-i18n": "^11.4.10"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "@types/sortablejs": "^1.15.9",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
     "typescript": "~6.0.2",

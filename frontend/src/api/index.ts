@@ -256,6 +256,7 @@ export interface UserPrefs {
   refresh_interval: number
   logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode: 'background' | 'box'
+  favorites: number[]
 }
 
 export interface UserPrefsPatch {
@@ -265,6 +266,7 @@ export interface UserPrefsPatch {
   refresh_interval?: number
   logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode?: 'background' | 'box'
+  favorites?: number[]
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {

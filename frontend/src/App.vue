@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } 
 import {
   LayoutDashboard,
   Network,
+  Star,
   StickyNote,
   EyeOff,
   Settings,
@@ -23,6 +24,7 @@ import { fetchPorts, healthCheck, getPrefs } from '@/api'
 import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
+import FavoritesView from '@/components/FavoritesView.vue'
 import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
@@ -31,7 +33,7 @@ import PasswordPrompt from '@/components/PasswordPrompt.vue'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
 
-type Tab = 'overview' | 'ports' | 'notes' | 'hidden' | 'settings'
+type Tab = 'overview' | 'favorites' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
 type Lang = 'zh' | 'en'
 
@@ -138,10 +140,11 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
+  { id: 'favorites' as Tab, icon: Star, label: t('nav.favorites') },
   { id: 'ports' as Tab, icon: Network, label: t('nav.ports') },
   { id: 'notes' as Tab, icon: StickyNote, label: t('nav.notes') },
   { id: 'hidden' as Tab, icon: EyeOff, label: t('nav.hidden') },
@@ -327,6 +330,7 @@ watch(logoDisplayMode, (v) => {
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
 const visited = reactive<Record<Tab, boolean>>({
   overview: true,
+  favorites: false,
   ports: false,
   notes: false,
   hidden: false,
@@ -405,6 +409,7 @@ onMounted(async () => {
       setRefreshInterval(prefs.data.refresh_interval ?? 0)
       if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
       if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
+      if (prefs.data.favorites) setFavorites(prefs.data.favorites)
     }
   } catch { /* ignore */ }
   applyStatsTimer()
@@ -519,6 +524,7 @@ onBeforeUnmount(() => {
       <!-- 主内容 -->
       <main class="main-content">
         <OverviewView v-if="visited.overview" v-show="activeTab === 'overview'" />
+        <FavoritesView v-if="visited.favorites" v-show="activeTab === 'favorites'" />
         <PortsView v-if="visited.ports" v-show="activeTab === 'ports'" />
         <NotesView v-if="visited.notes" v-show="activeTab === 'notes'" />
         <HiddenPortsView v-if="visited.hidden" v-show="activeTab === 'hidden'" />

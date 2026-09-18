@@ -221,6 +221,18 @@ class TestPrefs:
         d = client.get("/api/prefs").json()["data"]
         assert d["theme"] == "dark" and d["accent"] == "indigo" and d["lang"] == "zh"
 
+    def test_favorites_roundtrip(self, client: TestClient):
+        assert client.get("/api/prefs").json()["data"]["favorites"] == []
+        r = client.patch("/api/prefs", json={"favorites": [80, 443, 22]})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["favorites"] == [80, 443, 22]
+        # 其他字段不受影响
+        assert d["theme"] in ("dark", "light")
+        # 重置清空收藏
+        client.post("/api/prefs/reset")
+        assert client.get("/api/prefs").json()["data"]["favorites"] == []
+
 
 class TestLogos:
     """v1.5.0 应用 Logo 端点。"""

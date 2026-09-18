@@ -19,6 +19,10 @@ const logoScrim: Ref<LogoScrim> = ref('left')
 export type LogoDisplayMode = 'background' | 'box'
 const logoDisplayMode: Ref<LogoDisplayMode> = ref('background')
 
+// v1.5.5：收藏端口号数组（顺序 = 收藏页展示顺序）。
+// 端口页卡片菜单切换收藏时写入；收藏页拖拽排序后整体 PATCH。
+const favorites: Ref<number[]> = ref([])
+
 function setRefreshInterval(v: number) {
   refreshInterval.value = v
 }
@@ -35,6 +39,10 @@ function setLogoDisplayMode(v: LogoDisplayMode) {
   logoDisplayMode.value = v
 }
 
+function setFavorites(v: number[]) {
+  favorites.value = v
+}
+
 export function usePrefs() {
   return {
     refreshInterval: readonly(refreshInterval),
@@ -45,6 +53,8 @@ export function usePrefs() {
     setLogoScrim,
     logoDisplayMode: readonly(logoDisplayMode),
     setLogoDisplayMode,
+    favorites: readonly(favorites),
+    setFavorites,
   }
 }
 

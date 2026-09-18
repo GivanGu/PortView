@@ -15,9 +15,11 @@ import {
   type LogoMeta,
 } from '@/api'
 import { appKey } from '@/logo'
+import { usePrefs } from '@/store/prefs'
 import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const { triggerRefresh } = usePrefs()
 
 const notes = ref<NoteRead[]>([])
 const loading = ref(false)
@@ -248,6 +250,8 @@ async function handleSave() {
     await upsertNote(draft.value)
     closeEditor()
     await loadData()
+    // 备注/服务名变更 → 全局刷新，端口页/收藏页立即同步
+    triggerRefresh()
   } catch (e) {
     console.error('save note failed:', e)
     alert(t('notes.saveFailed'))

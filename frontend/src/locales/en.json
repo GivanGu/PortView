@@ -7,6 +7,7 @@
   },
   "nav": {
     "overview": "Overview",
+    "favorites": "Favorites",
     "ports": "Ports",
     "notes": "Notes",
     "hidden": "Hidden",
@@ -44,6 +45,7 @@
     "refresh": "Refresh",
     "search": "Search",
     "save": "Save",
+    "saveFailed": "Save failed",
     "cancel": "Cancel",
     "close": "Close",
     "delete": "Delete",
@@ -133,7 +135,18 @@
     "logoDelete": "Delete logo",
     "logoTooLarge": "Image exceeds 1MiB limit",
     "logoAdded": "Logo added",
-    "logoDiscoverFailed": "No logo found for {service} — upload one manually"
+    "logoDiscoverFailed": "No logo found for {service} — upload one manually",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites",
+    "addedFavorite": "Added to favorites",
+    "removedFavorite": "Removed from favorites"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "empty": "No favorites yet — add them from the card menu on the Ports page",
+    "count": "{n} total",
+    "editRemark": "Click the name to edit the remark",
+    "vanished": "This port is no longer in the monitored range"
   },
   "hidden": {
     "total": "{n} total",

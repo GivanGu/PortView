@@ -159,6 +159,7 @@ class UserPrefsRead(BaseModel):
     refresh_interval: int = 0
     logo_scrim: Literal["none", "left", "overlay", "glass"] = "left"
     logo_display_mode: Literal["background", "box"] = "background"
+    favorites: list[int] = []
 
 
 class UserPrefsPatch(BaseModel):
@@ -170,6 +171,7 @@ class UserPrefsPatch(BaseModel):
     refresh_interval: int | None = Field(default=None, ge=0, le=300)
     logo_scrim: Literal["none", "left", "overlay", "glass"] | None = None
     logo_display_mode: Literal["background", "box"] | None = None
+    favorites: list[int] | None = None
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────
