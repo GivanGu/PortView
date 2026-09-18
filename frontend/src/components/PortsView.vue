@@ -495,7 +495,8 @@ async function handleHide(card: PortCard) {
   if (card.port) {
     await hidePort(card.port)
   }
-  await loadData()
+  // 全局刷新：收藏页/总览页立即同步（本视图由 refreshTick watcher 重载）
+  triggerRefresh()
 }
 
 
@@ -505,7 +506,8 @@ async function handleEditSave() {
   await editPort(editingPort.value, editServiceName.value)
   editingPort.value = null
   editServiceName.value = ''
-  await loadData()
+  // 服务名变更 → 全局刷新，收藏页立即同步（本视图由 refreshTick watcher 重载）
+  triggerRefresh()
 }
 
 function startEdit(card: PortCard) {
@@ -603,7 +605,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
 // v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
-const { refreshInterval, refreshTick, logoDisplayMode, favorites, setFavorites } = usePrefs()
+const { refreshInterval, refreshTick, logoDisplayMode, favorites, setFavorites, triggerRefresh } = usePrefs()
 
 // ── 收藏（v1.5.6）：按端口号收藏，顺序存 user_prefs.favorites ──
 function isFavorite(card: PortCard): boolean {

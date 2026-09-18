@@ -19,9 +19,12 @@ import {
 } from '@/api'
 import { appKey, normalizeServiceName } from '@/logo'
 import { usePrefs } from '@/store/prefs'
+import { useOpenService } from '@/composables/useOpenService'
+import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 
 const { t } = useI18n()
-const { favorites, setFavorites, refreshTick } = usePrefs()
+const { favorites, setFavorites, refreshTick, triggerRefresh } = usePrefs()
+const { showAddrPrompt, loadManualSchemes, handleOpenService, onAddrConfigure, onAddrDismissed } = useOpenService()
 
 const loading = ref(false)
 const toast = ref('')
@@ -164,6 +167,8 @@ async function saveEdit(tile: FavTile) {
     })
     if (resp.success) {
       card.remark = remark || undefined
+      // 备注/服务名变更 → 全局刷新，端口页等视图立即同步
+      triggerRefresh()
     } else {
       showToast(t('common.saveFailed'))
     }
@@ -216,7 +221,10 @@ watch(refreshTick, () => {
   if (!loading.value) loadData()
 })
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  loadManualSchemes()
+})
 onBeforeUnmount(destroySortable)
 </script>
 
@@ -250,7 +258,11 @@ onBeforeUnmount(destroySortable)
           :title="tile.card ? t('favorites.editRemark') : t('favorites.vanished')"
         >
           <span class="port-status-dot" :class="isOffline(tile) ? 'is-offline' : 'is-online'"></span>
-          <div class="fav-tile-logo">
+          <div
+            class="fav-tile-logo"
+            :title="t('ports.openService')"
+            @click="handleOpenService(tile.card ?? { type: 'used', port: tile.port })"
+          >
             <img v-if="tile.card && logoSrc(tile.card)" :src="logoSrc(tile.card)" :alt="displayName(tile)" />
             <span v-else class="fav-tile-fallback">{{ displayName(tile).charAt(0).toUpperCase() }}</span>
           </div>
@@ -272,6 +284,8 @@ onBeforeUnmount(destroySortable)
     <Teleport to="body">
       <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
     </Teleport>
+
+    <AccessAddressPrompt v-if="showAddrPrompt" @configure="onAddrConfigure" @dismissed="onAddrDismissed" />
   </div>
 </template>
 
@@ -323,6 +337,12 @@ onBeforeUnmount(destroySortable)
   justify-content: center;
   overflow: hidden;
   background: rgba(128, 128, 160, 0.12);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fav-tile-logo:hover {
+  background: rgba(128, 128, 160, 0.25);
 }
 
 .fav-tile-logo img {
