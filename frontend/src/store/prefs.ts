@@ -1,4 +1,5 @@
 import { ref, readonly, type Ref } from 'vue'
+import { patchPrefs } from '@/api'
 
 /** 全局偏好共享状态：刷新间隔等跨组件需实时同步的值。
  * App.vue 依据它驱动自动刷新定时器；SettingsView 修改时写入，二者保持同步。
@@ -39,8 +40,34 @@ function setLogoDisplayMode(v: LogoDisplayMode) {
   logoDisplayMode.value = v
 }
 
+// v1.6.4：收藏写入串行化。promise chain 保证连续 PATCH 按发出顺序到达服务端，
+// 避免乱序覆盖（拖拽排序「顺序乱」根因）；失败回滚到最后一次成功持久化的值。
+let favoritesChain: Promise<void> = Promise.resolve()
+let lastSavedFavorites: number[] = []
+
 function setFavorites(v: number[]) {
   favorites.value = v
+  lastSavedFavorites = [...v]
+}
+
+function saveFavorites(next: number[]): Promise<boolean> {
+  favorites.value = next
+  const run = favoritesChain.then(async () => {
+    try {
+      const resp = await patchPrefs({ favorites: next })
+      if (resp.success) {
+        lastSavedFavorites = next
+        return true
+      }
+    } catch (e) {
+      console.error('收藏保存失败:', e)
+    }
+    // 仅当值仍由本次写入持有时回滚，避免覆盖更新的乐观更新
+    if (favorites.value === next) favorites.value = [...lastSavedFavorites]
+    return false
+  })
+  favoritesChain = run.then(() => undefined, () => undefined)
+  return run
 }
 
 export function usePrefs() {
@@ -55,6 +82,7 @@ export function usePrefs() {
     setLogoDisplayMode,
     favorites: readonly(favorites),
     setFavorites,
+    saveFavorites,
   }
 }
 
