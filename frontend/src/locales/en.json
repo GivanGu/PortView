@@ -139,7 +139,8 @@
     "addFavorite": "Add to favorites",
     "removeFavorite": "Remove from favorites",
     "addedFavorite": "Added to favorites",
-    "removedFavorite": "Removed from favorites"
+    "removedFavorite": "Removed from favorites",
+    "favorited": "Favorited, click to remove"
   },
   "favorites": {
     "title": "Favorites",
