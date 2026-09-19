@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick } from 'lucide-vue-next'
+import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
+import { usePrefs } from '@/store/prefs'
 
-defineProps<{
+const props = defineProps<{
   card: PortCard
   // 最终展示的服务协议（人工指定 > 自动探测）；unknown 或未探测时不传
   scheme?: 'http' | 'https' | 'unknown'
@@ -13,9 +15,14 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'scheme-toggle'): void
+  (e: 'favorite-toggle'): void
 }>()
 
 const { t } = useI18n()
+const { favorites } = usePrefs()
+
+// v1.6.2：已收藏端口在端口号旁显示实心 ★，点击取消收藏
+const isFavorite = computed(() => props.card.port != null && favorites.value.includes(props.card.port))
 </script>
 
 <template>
@@ -29,6 +36,16 @@ const { t } = useI18n()
         role="img"
       ></span>
       <span class="port-number">{{ card.port }}</span>
+      <button
+        v-if="isFavorite"
+        type="button"
+        class="port-fav-star"
+        :title="t('ports.favorited')"
+        :aria-label="t('ports.favorited')"
+        @click.stop="emit('favorite-toggle')"
+      >
+        <Star :size="14" fill="currentColor" />
+      </button>
     </span>
     <span
       class="port-protocol"

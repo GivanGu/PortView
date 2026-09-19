@@ -137,6 +137,57 @@ function isOffline(tile: FavTile): boolean {
   return tile.card == null || tile.card.is_running === false
 }
 
+// ── 右键菜单（v1.6.3）：移除收藏。复用端口页 settings-menu 样式 ──
+const ctxMenu = ref<{ port: number; x: number; y: number } | null>(null)
+
+function openCtxMenu(tile: FavTile, e: MouseEvent) {
+  // 钳制视口，防止菜单溢出右/下边缘（菜单约 180x48）
+  const menuWidth = 180
+  const menuHeight = 48
+  let x = e.clientX
+  let y = e.clientY
+  if (x + menuWidth > window.innerWidth) x = Math.max(8, window.innerWidth - menuWidth - 8)
+  if (y + menuHeight > window.innerHeight) y = Math.max(8, window.innerHeight - menuHeight - 4)
+  ctxMenu.value = { port: tile.port, x, y }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value = null
+}
+
+// 移除逻辑同端口页 toggleFavorite：乐观更新 + 失败回滚
+async function removeFavorite(port: number) {
+  closeCtxMenu()
+  const prev = [...favorites.value]
+  const next = prev.filter((p) => p !== port)
+  setFavorites(next)
+  let ok = false
+  try {
+    ok = (await patchPrefs({ favorites: next })).success
+  } catch (err) {
+    console.error('收藏操作失败:', err)
+  }
+  if (ok) {
+    showToast(t('ports.removedFavorite'))
+  } else {
+    setFavorites(prev)
+    showToast(t('common.saveFailed'))
+  }
+}
+
+// 滚动 / 缩放 / Esc 时关闭菜单（菜单 fixed 定位，视口变化会错位）
+function onScrollCloseMenu() {
+  if (ctxMenu.value) closeCtxMenu()
+}
+
+function onKeydownCloseMenu(e: KeyboardEvent) {
+  if (e.key === 'Escape' && ctxMenu.value) closeCtxMenu()
+}
+
+function onResizeCloseMenu() {
+  if (ctxMenu.value) closeCtxMenu()
+}
+
 // ── 行内备注编辑（Enter 保存 / Esc 取消，保存到 port_notes 与端口页自动同步）──
 const editingPort = ref<number | null>(null)
 const editRemark = ref('')
@@ -224,8 +275,16 @@ watch(refreshTick, () => {
 onMounted(() => {
   loadData()
   loadManualSchemes()
+  window.addEventListener('scroll', onScrollCloseMenu, true)
+  window.addEventListener('keydown', onKeydownCloseMenu)
+  window.addEventListener('resize', onResizeCloseMenu)
 })
-onBeforeUnmount(destroySortable)
+onBeforeUnmount(() => {
+  destroySortable()
+  window.removeEventListener('scroll', onScrollCloseMenu, true)
+  window.removeEventListener('keydown', onKeydownCloseMenu)
+  window.removeEventListener('resize', onResizeCloseMenu)
+})
 </script>
 
 <template>
@@ -256,6 +315,7 @@ onBeforeUnmount(destroySortable)
           class="fav-tile"
           :class="{ offline: isOffline(tile) }"
           :title="tile.card ? t('favorites.editRemark') : t('favorites.vanished')"
+          @contextmenu.prevent="openCtxMenu(tile, $event)"
         >
           <span class="port-status-dot" :class="isOffline(tile) ? 'is-offline' : 'is-online'"></span>
           <div
@@ -283,6 +343,19 @@ onBeforeUnmount(destroySortable)
 
     <Teleport to="body">
       <div v-if="toastVisible" class="save-toast">{{ toast }}</div>
+    </Teleport>
+
+    <!-- 收藏卡右键菜单（复用端口页 settings-menu 样式） -->
+    <Teleport to="body">
+      <template v-if="ctxMenu">
+        <div class="settings-menu-overlay" @click="closeCtxMenu"></div>
+        <div class="settings-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+          <button class="settings-menu-item danger" @click="removeFavorite(ctxMenu.port)">
+            <span class="settings-menu-ico">★</span>
+            <span>{{ t('ports.removeFavorite') }}</span>
+          </button>
+        </div>
+      </template>
     </Teleport>
 
     <AccessAddressPrompt v-if="showAddrPrompt" @configure="onAddrConfigure" @dismissed="onAddrDismissed" />

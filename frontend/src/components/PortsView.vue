@@ -844,6 +844,7 @@ onBeforeUnmount(() => {
                     :scheme="effectiveScheme(card)"
                     :manual="isManualScheme(card)"
                     @scheme-toggle="handleSchemeToggle(card)"
+                    @favorite-toggle="toggleFavorite(card)"
                   />
                 </div>
               </template>
@@ -866,6 +867,7 @@ onBeforeUnmount(() => {
                     :scheme="effectiveScheme(card)"
                     :manual="isManualScheme(card)"
                     @scheme-toggle="handleSchemeToggle(card)"
+                    @favorite-toggle="toggleFavorite(card)"
                   />
                 </div>
               </div>

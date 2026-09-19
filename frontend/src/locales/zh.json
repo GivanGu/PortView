@@ -139,7 +139,8 @@
     "addFavorite": "添加至收藏",
     "removeFavorite": "移除收藏",
     "addedFavorite": "已添加至收藏",
-    "removedFavorite": "已移除收藏"
+    "removedFavorite": "已移除收藏",
+    "favorited": "已收藏，点击取消收藏"
   },
   "favorites": {
     "title": "收藏",
