@@ -21,7 +21,6 @@ import {
   logoUrl,
   fetchDefaultLogos,
   defaultLogoUrl,
-  patchPrefs,
   type PortAnalysis,
   type PortCard,
   type RangeRead,
@@ -605,7 +604,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // v1.4.4：自动刷新 + 手动刷新统一走共享 prefs store
 // v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
-const { refreshInterval, refreshTick, logoDisplayMode, favorites, setFavorites, triggerRefresh } = usePrefs()
+const { refreshInterval, refreshTick, logoDisplayMode, favorites, saveFavorites, triggerRefresh } = usePrefs()
 
 // ── 收藏（v1.5.6）：按端口号收藏，顺序存 user_prefs.favorites ──
 function isFavorite(card: PortCard): boolean {
@@ -616,22 +615,10 @@ async function toggleFavorite(card: PortCard) {
   if (card.port == null) return
   const port = card.port
   const has = favorites.value.includes(port)
-  const prev = [...favorites.value]
-  const next = has ? prev.filter((p) => p !== port) : [...prev, port]
-  setFavorites(next)
-  let ok = false
-  try {
-    ok = (await patchPrefs({ favorites: next })).success
-  } catch (e) {
-    console.error('收藏操作失败:', e)
-  }
-  if (ok) {
-    showToast(t(has ? 'ports.removedFavorite' : 'ports.addedFavorite'))
-  } else {
-    // 保存失败：回滚本地状态，避免与服务端分叉后被静默覆盖
-    setFavorites(prev)
-    showToast(t('common.saveFailed'))
-  }
+  const next = has ? favorites.value.filter((p) => p !== port) : [...favorites.value, port]
+  // v1.6.4：串行写入 + 失败回滚（原先并发 PATCH 可能乱序到达互相覆盖）
+  const ok = await saveFavorites(next)
+  showToast(t(ok ? (has ? 'ports.removedFavorite' : 'ports.addedFavorite') : 'common.saveFailed'))
 }
 
 function applyPollTimer() {

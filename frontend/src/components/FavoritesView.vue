@@ -11,7 +11,6 @@ import {
   logoUrl,
   defaultLogoUrl,
   upsertNote,
-  patchPrefs,
   type PortCard,
   type LogoMeta,
   type HiddenPortDetail,
@@ -23,7 +22,7 @@ import { useOpenService } from '@/composables/useOpenService'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 
 const { t } = useI18n()
-const { favorites, setFavorites, refreshTick, triggerRefresh } = usePrefs()
+const { favorites, saveFavorites, refreshTick, triggerRefresh } = usePrefs()
 const { showAddrPrompt, loadManualSchemes, handleOpenService, onAddrConfigure, onAddrDismissed } = useOpenService()
 
 const loading = ref(false)
@@ -155,24 +154,12 @@ function closeCtxMenu() {
   ctxMenu.value = null
 }
 
-// 移除逻辑同端口页 toggleFavorite：乐观更新 + 失败回滚
+// 移除逻辑同端口页 toggleFavorite：乐观更新 + 失败回滚（v1.6.4 统一走 saveFavorites 串行写入）
 async function removeFavorite(port: number) {
   closeCtxMenu()
-  const prev = [...favorites.value]
-  const next = prev.filter((p) => p !== port)
-  setFavorites(next)
-  let ok = false
-  try {
-    ok = (await patchPrefs({ favorites: next })).success
-  } catch (err) {
-    console.error('收藏操作失败:', err)
-  }
-  if (ok) {
-    showToast(t('ports.removedFavorite'))
-  } else {
-    setFavorites(prev)
-    showToast(t('common.saveFailed'))
-  }
+  const next = favorites.value.filter((p) => p !== port)
+  const ok = await saveFavorites(next)
+  showToast(t(ok ? 'ports.removedFavorite' : 'common.saveFailed'))
 }
 
 // 滚动 / 缩放 / Esc 时关闭菜单（菜单 fixed 定位，视口变化会错位）
@@ -254,15 +241,10 @@ watch([loading, () => tiles.value.length], async ([l, n]) => {
       const order = [...favorites.value]
       const [moved] = order.splice(oldIndex, 1)
       order.splice(newIndex, 0, moved)
-      setFavorites(order)
-      patchPrefs({ favorites: order })
-        .then((resp) => {
-          if (!resp.success) showToast(t('common.saveFailed'))
-        })
-        .catch((e) => {
-          console.error('保存收藏顺序失败:', e)
-          showToast(t('common.saveFailed'))
-        })
+      // v1.6.4：串行写入 + 失败回滚（原先 fire-and-forget PATCH，连拖时乱序到达互相覆盖）
+      saveFavorites(order).then((ok) => {
+        if (!ok) showToast(t('common.saveFailed'))
+      })
     },
   })
 })
