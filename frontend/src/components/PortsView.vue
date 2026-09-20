@@ -25,10 +25,11 @@ import {
   type PortCard,
   type RangeRead,
   type LogoMeta,
+  type GridItem,
 } from '@/api'
 import { appKey, normalizeServiceName } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import usePrefs from '@/store/prefs'
+import usePrefs, { hasPortFavorite, removePortFavorite, uid } from '@/store/prefs'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import PortCardContent from '@/components/PortCardContent.vue'
 import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
@@ -606,16 +607,18 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 // v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
 const { refreshInterval, refreshTick, logoDisplayMode, favorites, saveFavorites, triggerRefresh } = usePrefs()
 
-// ── 收藏（v1.5.6）：按端口号收藏，顺序存 user_prefs.favorites ──
+// ── 收藏（v1.5.6 / v1.6.5 网格模型）：按端口号收藏，存 user_prefs.favorites ──
 function isFavorite(card: PortCard): boolean {
-  return card.port != null && favorites.value.includes(card.port)
+  return card.port != null && hasPortFavorite(favorites.value, card.port)
 }
 
 async function toggleFavorite(card: PortCard) {
   if (card.port == null) return
   const port = card.port
-  const has = favorites.value.includes(port)
-  const next = has ? favorites.value.filter((p) => p !== port) : [...favorites.value, port]
+  const has = hasPortFavorite(favorites.value, port)
+  const next: GridItem[] = has
+    ? removePortFavorite(favorites.value, port)[0]
+    : [...favorites.value, { id: uid('port'), kind: 'port', port }]
   // v1.6.4：串行写入 + 失败回滚（原先并发 PATCH 可能乱序到达互相覆盖）
   const ok = await saveFavorites(next)
   showToast(t(ok ? (has ? 'ports.removedFavorite' : 'ports.addedFavorite') : 'common.saveFailed'))

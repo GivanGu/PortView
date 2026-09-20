@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
-import { usePrefs } from '@/store/prefs'
+import { usePrefs, hasPortFavorite } from '@/store/prefs'
 
 const props = defineProps<{
   card: PortCard
@@ -22,7 +22,9 @@ const { t } = useI18n()
 const { favorites } = usePrefs()
 
 // v1.6.2：已收藏端口在端口号旁显示实心 ★，点击取消收藏
-const isFavorite = computed(() => props.card.port != null && favorites.value.includes(props.card.port))
+const isFavorite = computed(
+  () => props.card.port != null && hasPortFavorite(favorites.value, props.card.port),
+)
 </script>
 
 <template>

@@ -233,6 +233,29 @@ class TestPrefs:
         client.post("/api/prefs/reset")
         assert client.get("/api/prefs").json()["data"]["favorites"] == []
 
+    def test_favorites_grid_roundtrip(self, client: TestClient):
+        # v1.6.5：GridItem 数组（port/url 条目 + 文件夹）后端透传不解析
+        grid = [
+            {"id": "port-80", "kind": "port", "port": 80},
+            {
+                "id": "url-1",
+                "kind": "url",
+                "url": "https://example.com",
+                "title": "Example",
+                "logoKey": "url:example.com",
+            },
+            {
+                "id": "folder-1",
+                "kind": "folder",
+                "name": "Dev",
+                "items": [{"id": "port-3000", "kind": "port", "port": 3000}],
+            },
+        ]
+        r = client.patch("/api/prefs", json={"favorites": grid})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["favorites"] == grid
+
 
 class TestLogos:
     """v1.5.0 应用 Logo 端点。"""
@@ -324,6 +347,142 @@ class TestLogos:
 
         # 清理
         client.delete("/api/logos/idem-app")
+
+    def test_fetch_invalid_url(self, client: TestClient):
+        # 非 http(s) 或无 host → 拒绝
+        r = client.post("/api/logos/fetch", json={"app_key": "bad-url", "url": "ftp://example.com"})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+        r = client.post("/api/logos/fetch", json={"app_key": "bad-url2", "url": "https://"})
+        assert r.json()["success"] is False
+
+    def test_fetch_idempotent(self, client: TestClient):
+        # 已有终态记录 → cached，不重复抓取
+        import base64
+
+        png_1x1 = base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+        client.put("/api/logos/fetch-idem", json={"mime": "image/png", "data": png_1x1})
+        r = client.post(
+            "/api/logos/fetch", json={"app_key": "fetch-idem", "url": "https://example.com"}
+        )
+        assert r.json()["success"] is True
+        assert r.json()["message"] == "cached"
+        client.delete("/api/logos/fetch-idem")
+
+    def test_fetch_unreachable_not_found(self, client: TestClient):
+        # 127.0.0.1:1 连接被拒 → 落 not_found
+        r = client.post(
+            "/api/logos/fetch", json={"app_key": "fetch-miss", "url": "http://127.0.0.1:1/"}
+        )
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert r.json()["data"]["status"] == "not_found"
+        client.delete("/api/logos/fetch-miss")
+
+    def test_fetch_found_local_server(self, client: TestClient):
+        # 本地起一个 HTTP 服务提供 /favicon.ico → 抓取成功落 found
+        import http.server
+        import socketserver
+        import threading
+
+        png_1x1 = bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+        )
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/favicon.ico":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.end_headers()
+                    self.wfile.write(png_1x1)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+            port = httpd.server_address[1]
+            th = threading.Thread(target=httpd.serve_forever, daemon=True)
+            th.start()
+            try:
+                # URL 带路径：抓取应只取 origin（scheme://host[:port]）
+                r = client.post(
+                    "/api/logos/fetch",
+                    json={"app_key": "fetch-ok", "url": f"http://127.0.0.1:{port}/some/path"},
+                )
+                assert r.json()["success"] is True
+                assert r.json()["data"]["status"] == "found"
+                assert r.json()["data"]["mime"] == "image/png"
+                img = client.get("/api/logos/fetch-ok")
+                assert img.status_code == 200
+                assert img.content == png_1x1
+            finally:
+                httpd.shutdown()
+                th.join(timeout=2)
+            client.delete("/api/logos/fetch-ok")
+
+    def test_fetch_url_too_long(self, client: TestClient):
+        # url 超过 2048 → Pydantic 校验拒绝（422）
+        r = client.post(
+            "/api/logos/fetch",
+            json={"app_key": "long-url", "url": "https://example.com/" + "a" * 3000},
+        )
+        assert r.status_code == 422
+
+    def test_fetch_userinfo_stripped(self, client: TestClient):
+        # URL 内嵌 user:pass → 抓取时不得附加 Authorization 头
+        import http.server
+        import socketserver
+        import threading
+
+        png_1x1 = bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+        )
+        seen_auth: list[str | None] = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen_auth.append(self.headers.get("Authorization"))
+                if self.path == "/favicon.ico":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.end_headers()
+                    self.wfile.write(png_1x1)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+            port = httpd.server_address[1]
+            th = threading.Thread(target=httpd.serve_forever, daemon=True)
+            th.start()
+            try:
+                r = client.post(
+                    "/api/logos/fetch",
+                    json={
+                        "app_key": "fetch-auth",
+                        "url": f"http://user:pass@127.0.0.1:{port}/",
+                    },
+                )
+                assert r.json()["success"] is True
+                assert r.json()["data"]["status"] == "found"
+            finally:
+                httpd.shutdown()
+                th.join(timeout=2)
+            client.delete("/api/logos/fetch-auth")
+        # 目标站收到的所有请求都不应带 Authorization 头
+        assert seen_auth, "local server received no request"
+        assert all(a is None for a in seen_auth), f"Authorization leaked: {seen_auth}"
 
     def test_default_logos_list(self, client: TestClient):
         # v1.5.13：内置默认 Logo 匹配表应含 names + ports

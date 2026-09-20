@@ -159,7 +159,8 @@ class UserPrefsRead(BaseModel):
     refresh_interval: int = 0
     logo_scrim: Literal["none", "left", "overlay", "glass"] = "left"
     logo_display_mode: Literal["background", "box"] = "background"
-    favorites: list[int] = []
+    # 收藏网格（v1.6.5）：GridItem 数组（port/url 条目 + 文件夹），后端透传不解析
+    favorites: list = []
 
 
 class UserPrefsPatch(BaseModel):
@@ -171,7 +172,8 @@ class UserPrefsPatch(BaseModel):
     refresh_interval: int | None = Field(default=None, ge=0, le=300)
     logo_scrim: Literal["none", "left", "overlay", "glass"] | None = None
     logo_display_mode: Literal["background", "box"] | None = None
-    favorites: list[int] | None = None
+    # 收藏网格（v1.6.5）：GridItem 数组，后端透传不解析
+    favorites: list | None = None
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────
@@ -211,3 +213,10 @@ class LogoUploadRequest(BaseModel):
 
     mime: str
     data: str
+
+
+class LogoFetchRequest(BaseModel):
+    """外部 URL favicon 抓取（v1.6.5）：服务端从 URL 的 origin 抓取 favicon，存为 ``app_key``。"""
+
+    app_key: str
+    url: str = Field(..., max_length=2048)

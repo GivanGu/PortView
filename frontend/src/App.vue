@@ -85,7 +85,8 @@ const ACCENTS = [
 
 type AccentId = (typeof ACCENTS)[number]['id']
 
-const activeTab = ref<Tab>('overview')
+// v1.6.5：收藏页（导航页）为默认首页
+const activeTab = ref<Tab>('favorites')
 const theme = ref<Theme>('dark')
 const accent = ref<AccentId>('indigo')
 const version = ref('')
@@ -329,8 +330,8 @@ watch(logoDisplayMode, (v) => {
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
 const visited = reactive<Record<Tab, boolean>>({
-  overview: true,
-  favorites: false,
+  overview: false,
+  favorites: true,
   ports: false,
   notes: false,
   hidden: false,

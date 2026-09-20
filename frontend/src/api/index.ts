@@ -247,6 +247,28 @@ export function deleteNote(port: number): Promise<ApiResponse> {
   return request(`/api/notes/${port}`, { method: 'DELETE' })
 }
 
+// ── 收藏网格（v1.6.5）─────────────────────────────────
+
+/** 收藏条目：port（带在线状态的服务）或 url（外部站点） */
+export interface FavEntry {
+  id: string
+  kind: 'port' | 'url'
+  port?: number
+  url?: string
+  title?: string
+  logoKey?: string
+}
+
+/** 文件夹（单层，不可嵌套） */
+export interface FavFolder {
+  id: string
+  kind: 'folder'
+  name: string
+  items: FavEntry[]
+}
+
+export type GridItem = FavEntry | FavFolder
+
 // ── P1-2 用户偏好 ─────────────────────────────────────────
 
 export interface UserPrefs {
@@ -256,7 +278,7 @@ export interface UserPrefs {
   refresh_interval: number
   logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode: 'background' | 'box'
-  favorites: number[]
+  favorites: GridItem[]
 }
 
 export interface UserPrefsPatch {
@@ -266,7 +288,7 @@ export interface UserPrefsPatch {
   refresh_interval?: number
   logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode?: 'background' | 'box'
-  favorites?: number[]
+  favorites?: GridItem[]
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {
@@ -368,6 +390,14 @@ export function discoverLogo(appKey: string, port: number, path = '/'): Promise<
   return request<{ status: string; mime: string | null }>('/api/logos/discover', {
     method: 'POST',
     body: JSON.stringify({ app_key: appKey, port, path }),
+  })
+}
+
+/** 外部 URL favicon 抓取（v1.6.5）：服务端从 URL origin 抓取并存为 app_key（幂等）。 */
+export function fetchFavicon(appKey: string, url: string): Promise<ApiResponse<{ status: string; mime: string | null }>> {
+  return request<{ status: string; mime: string | null }>('/api/logos/fetch', {
+    method: 'POST',
+    body: JSON.stringify({ app_key: appKey, url }),
   })
 }
 
