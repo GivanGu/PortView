@@ -2463,6 +2463,11 @@ html, body {
   background: var(--accent-light);
   color: var(--accent);
 }
+/* v1.6.6：禁用态（如无背景图时的作用域选项） */
+.radio-pill.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 /* accent 网格 */
 .accent-grid {
@@ -2817,3 +2822,19 @@ html, body {
   border-radius: 6px;
 }
 .auth-warning-ico { flex-shrink: 0; }
+
+/* ── v1.6.6：全应用毛玻璃背景（scope=all 且有图时，<html data-fav-bg="all">）──
+   背景层是 fixed <img>（已 blur/brightness）。这里只把各表面转半透明让背景透出，
+   卡片（.port-card / .settings-card 等）保持不透明保证文字可读。 */
+html[data-fav-bg='all'] .app-shell {
+  background: transparent;
+}
+html[data-fav-bg='all'] .topbar,
+html[data-fav-bg='all'] .rail,
+html[data-fav-bg='all'] .statusbar,
+html[data-fav-bg='all'] .main-header {
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+}
+html[data-fav-bg='all'] .main-content {
+  background: transparent;
+}

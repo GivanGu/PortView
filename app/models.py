@@ -161,6 +161,10 @@ class UserPrefsRead(BaseModel):
     logo_display_mode: Literal["background", "box"] = "background"
     # 收藏网格（v1.6.5）：GridItem 数组（port/url 条目 + 文件夹），后端透传不解析
     favorites: list = []
+    # 默认主页（v1.6.6）：启动时打开的标签页
+    default_tab: str = "favorites"
+    # 背景图作用域（v1.6.6）：favorites=仅收藏页 / all=全应用
+    background_scope: str = "favorites"
 
 
 class UserPrefsPatch(BaseModel):
@@ -174,6 +178,9 @@ class UserPrefsPatch(BaseModel):
     logo_display_mode: Literal["background", "box"] | None = None
     # 收藏网格（v1.6.5）：GridItem 数组，后端透传不解析
     favorites: list | None = None
+    # 默认主页 / 背景作用域（v1.6.6）：str + 路由内白名单校验（同 accent 惯例）
+    default_tab: str | None = None
+    background_scope: str | None = None
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────

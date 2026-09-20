@@ -116,6 +116,14 @@ _SCHEMA = [
     "  scheme     TEXT NOT NULL CHECK (scheme IN ('http', 'https')),"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
+    # 自定义背景图（v1.6.6）：单行 id=1，BLOB 存图片字节。
+    # 不进 user_prefs——prefs 每次全量读取，4MiB 图片会拖垮 GET /api/prefs。
+    "CREATE TABLE IF NOT EXISTS backgrounds ("
+    "  id         INTEGER PRIMARY KEY CHECK (id = 1),"
+    "  mime       TEXT NOT NULL,"
+    "  data       BLOB NOT NULL,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
 ]
 
 
@@ -237,11 +245,30 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         await conn.execute("ALTER TABLE user_prefs ADD COLUMN favorites TEXT NOT NULL DEFAULT '[]'")
         logger.info("migration: user_prefs.favorites added (default '[]')")
 
+    # v1.6.6 迁移：user_prefs 加 default_tab 列（默认主页：overview / favorites）。
+    # 默认 favorites 保持 v1.6.5 现状（收藏页为默认首页）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols6 = {row[1] for row in await cur.fetchall()}
+    if "default_tab" not in pref_cols6:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN default_tab TEXT NOT NULL DEFAULT 'favorites'"
+        )
+        logger.info("migration: user_prefs.default_tab added (default 'favorites')")
+
+    # v1.6.6 迁移：user_prefs 加 background_scope 列（背景图作用域：favorites / all）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols7 = {row[1] for row in await cur.fetchall()}
+    if "background_scope" not in pref_cols7:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN background_scope TEXT NOT NULL DEFAULT 'favorites'"
+        )
+        logger.info("migration: user_prefs.background_scope added (default 'favorites')")
+
     await conn.commit()
     if _db is not None:
         await _db.close()
     _db = conn
-    logger.info("SQLite @ %s (WAL, 8 tables) ready", path)
+    logger.info("SQLite @ %s (WAL, 9 tables) ready", path)
     yield conn
     await conn.close()
     logger.info("SQLite @ %s closed", path)

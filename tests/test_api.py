@@ -256,6 +256,93 @@ class TestPrefs:
         d = client.get("/api/prefs").json()["data"]
         assert d["favorites"] == grid
 
+    def test_default_tab_and_scope_roundtrip(self, client: TestClient):
+        # v1.6.6：默认主页 + 背景作用域，PATCH 局部更新 + 读回
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "favorites"
+        assert d["background_scope"] == "favorites"
+
+        r = client.patch(
+            "/api/prefs", json={"default_tab": "overview", "background_scope": "all"}
+        )
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "overview"
+        assert d["background_scope"] == "all"
+
+    def test_bad_default_tab_rejected(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"default_tab": "ports"})
+        assert r.json()["success"] is False
+
+    def test_bad_background_scope_rejected(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"background_scope": "everywhere"})
+        assert r.json()["success"] is False
+
+    def test_reset_restores_home_and_scope(self, client: TestClient):
+        client.patch(
+            "/api/prefs", json={"default_tab": "overview", "background_scope": "all"}
+        )
+        r = client.post("/api/prefs/reset")
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "favorites"
+        assert d["background_scope"] == "favorites"
+
+
+class TestBackground:
+    """v1.6.6 自定义背景图端点。"""
+
+    def _png_1x1(self) -> str:
+        import base64
+
+        return base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+
+    def test_get_unset_404(self, client: TestClient):
+        client.delete("/api/background")
+        r = client.get("/api/background")
+        assert r.status_code == 404
+
+    def test_upload_get_delete_roundtrip(self, client: TestClient):
+        data = self._png_1x1()
+        r = client.put("/api/background", json={"mime": "image/png", "data": data})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+        r = client.get("/api/background")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "image/png"
+        assert len(r.content) > 0
+
+        r = client.delete("/api/background")
+        assert r.json()["success"] is True
+        assert client.get("/api/background").status_code == 404
+
+    def test_upload_invalid_mime(self, client: TestClient):
+        import base64
+
+        data = base64.b64encode(b"hello").decode()
+        r = client.put("/api/background", json={"mime": "text/plain", "data": data})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_upload_too_large_rejected(self, client: TestClient):
+        # 4MiB + 1 字节 → 拒绝
+        import base64
+
+        big = base64.b64encode(b"\x00" * (4 * 1024 * 1024 + 1)).decode()
+        r = client.put("/api/background", json={"mime": "image/png", "data": big})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_delete_idempotent(self, client: TestClient):
+        r = client.delete("/api/background")
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
 
 class TestLogos:
     """v1.5.0 应用 Logo 端点。"""

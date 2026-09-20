@@ -2,10 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
+import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, setBackground, deleteBackground, backgroundUrl, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid } from 'lucide-vue-next'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid, Home, Image as ImageIcon } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 
@@ -85,10 +85,84 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, backgroundSet, backgroundVersion, backgroundScope, setBackgroundSet, setBackgroundScope } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
+
+// v1.6.6：默认主页（本地镜像防闪烁，服务端权威，下次启动生效）
+const DEFAULT_TAB_KEY = 'portview.defaultTab'
+const DEFAULT_TABS = ['overview', 'favorites'] as const
+type DefaultTab = (typeof DEFAULT_TABS)[number]
+
+function initialDefaultTab(): DefaultTab {
+  try {
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY)
+    if (saved && DEFAULT_TABS.includes(saved as DefaultTab)) return saved as DefaultTab
+  } catch { /* ignore */ }
+  return 'favorites'
+}
+const defaultTab = ref<DefaultTab>(initialDefaultTab())
+
+function onHomeChange(v: DefaultTab) {
+  defaultTab.value = v
+  try {
+    localStorage.setItem(DEFAULT_TAB_KEY, v)
+  } catch { /* ignore */ }
+  void persistPartial({ default_tab: v })
+}
+
+// v1.6.6：背景图（≤4MiB，前端预检）
+const BG_MAX = 4 * 1024 * 1024
+async function onBgFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > BG_MAX) {
+    showToast(t('settings.bgTooLarge'))
+    return
+  }
+  try {
+    const { mime, b64 } = await readImageFile(file)
+    const resp = await setBackground(mime, b64)
+    if (resp.success) {
+      setBackgroundSet(true)
+      showToast(t('settings.bgSaved'))
+    } else {
+      showToast(t('settings.bgSaveFailed'))
+    }
+  } catch {
+    showToast(t('settings.bgSaveFailed'))
+  }
+}
+
+async function handleRemoveBg() {
+  try {
+    await deleteBackground()
+    setBackgroundSet(false)
+    showToast(t('settings.bgRemoved'))
+  } catch {
+    showToast(t('settings.bgSaveFailed'))
+  }
+}
+
+function onBgScopeChange(v: 'favorites' | 'all') {
+  setBackgroundScope(v)
+  void persistPartial({ background_scope: v })
+}
+
+function readImageFile(file: File): Promise<{ mime: string; b64: string }> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => {
+      const dataUrl = String(r.result)
+      resolve({ mime: file.type, b64: dataUrl.split(',')[1] || '' })
+    }
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(file)
+  })
+}
 
 function showToast(msg: string) {
   toast.value = msg
@@ -210,6 +284,16 @@ async function handleReset() {
   setRefreshInterval(0)
   setLogoScrim('left')
   setLogoDisplayMode('background')
+  // v1.6.6：默认主页 + 背景作用域 + 清除背景图
+  defaultTab.value = 'favorites'
+  try {
+    localStorage.setItem(DEFAULT_TAB_KEY, 'favorites')
+  } catch { /* ignore */ }
+  setBackgroundScope('favorites')
+  try {
+    await deleteBackground()
+    setBackgroundSet(false)
+  } catch { /* ignore */ }
   showToast(t('settings.resetDone'))
 }
 
@@ -225,6 +309,9 @@ onMounted(async () => {
       setRefreshInterval(p.refresh_interval ?? 0)
       if (p.logo_scrim) setLogoScrim(p.logo_scrim)
       if (p.logo_display_mode) setLogoDisplayMode(p.logo_display_mode)
+      // v1.6.6：默认主页（服务端权威）
+      if (p.default_tab) defaultTab.value = p.default_tab
+      if (p.background_scope) setBackgroundScope(p.background_scope)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -348,6 +435,89 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
               <Sun :size="16" />
               <span>{{ t('settings.themeLight') }}</span>
             </label>
+          </div>
+        </section>
+
+        <!-- v1.6.6：默认主页 -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <Home :size="16" class="card-ico" />
+            <span>{{ t('settings.home') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.homeHint') }}</p>
+          <div class="radio-2col">
+            <label class="radio-pill" :class="{ active: defaultTab === 'overview' }">
+              <input
+                type="radio"
+                name="pv-home"
+                value="overview"
+                :checked="defaultTab === 'overview'"
+                @change="onHomeChange('overview')"
+              />
+              <span>{{ t('settings.homeOverview') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: defaultTab === 'favorites' }">
+              <input
+                type="radio"
+                name="pv-home"
+                value="favorites"
+                :checked="defaultTab === 'favorites'"
+                @change="onHomeChange('favorites')"
+              />
+              <span>{{ t('settings.homeFavorites') }}</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- v1.6.6：背景图 -->
+        <section class="settings-card">
+          <header class="settings-card-title">
+            <ImageIcon :size="16" class="card-ico" />
+            <span>{{ t('settings.background') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.backgroundHint') }}</p>
+          <div v-if="backgroundSet" class="bg-row">
+            <img :src="backgroundUrl(backgroundVersion)" class="bg-preview" alt="" />
+            <div class="bg-actions">
+              <label class="btn btn-small">
+                {{ t('settings.bgChange') }}
+                <input type="file" accept="image/*" class="hidden-input" @change="onBgFilePicked" />
+              </label>
+              <button class="btn btn-small btn-danger" @click="handleRemoveBg">
+                {{ t('settings.bgRemove') }}
+              </button>
+            </div>
+          </div>
+          <label v-else class="btn btn-small">
+            {{ t('settings.bgUpload') }}
+            <input type="file" accept="image/*" class="hidden-input" @change="onBgFilePicked" />
+          </label>
+          <div class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.bgScope') }}</div>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: backgroundScope === 'favorites', disabled: !backgroundSet }">
+                <input
+                  type="radio"
+                  name="pv-bg-scope"
+                  value="favorites"
+                  :checked="backgroundScope === 'favorites'"
+                  :disabled="!backgroundSet"
+                  @change="onBgScopeChange('favorites')"
+                />
+                <span>{{ t('settings.bgScopeFavorites') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: backgroundScope === 'all', disabled: !backgroundSet }">
+                <input
+                  type="radio"
+                  name="pv-bg-scope"
+                  value="all"
+                  :checked="backgroundScope === 'all'"
+                  :disabled="!backgroundSet"
+                  @change="onBgScopeChange('all')"
+                />
+                <span>{{ t('settings.bgScopeAll') }}</span>
+              </label>
+            </div>
           </div>
         </section>
 
@@ -584,3 +754,30 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
     </div>
   </div>
 </template>
+
+<style scoped>
+/* v1.6.6：背景图卡片 */
+.bg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bg-preview {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bg-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hidden-input {
+  display: none;
+}
+</style>

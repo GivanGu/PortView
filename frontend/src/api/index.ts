@@ -279,6 +279,9 @@ export interface UserPrefs {
   logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode: 'background' | 'box'
   favorites: GridItem[]
+  // v1.6.6
+  default_tab: 'overview' | 'favorites'
+  background_scope: 'favorites' | 'all'
 }
 
 export interface UserPrefsPatch {
@@ -289,6 +292,9 @@ export interface UserPrefsPatch {
   logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode?: 'background' | 'box'
   favorites?: GridItem[]
+  // v1.6.6
+  default_tab?: 'overview' | 'favorites'
+  background_scope?: 'favorites' | 'all'
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {
@@ -419,4 +425,34 @@ export function fetchDefaultLogos(): Promise<ApiResponse<DefaultLogos>> {
 /** 构建内置默认 Logo 图片 URL（供 <img src> 使用）。 */
 export function defaultLogoUrl(key: string): string {
   return `/api/logos/default/${encodeURIComponent(key)}`
+}
+
+// ── 自定义背景图 (v1.6.6) ─────────────────────────────
+
+/** 上传 / 替换背景图（base64 图片字节）。 */
+export function setBackground(mime: string, dataBase64: string): Promise<ApiResponse> {
+  return request('/api/background', {
+    method: 'PUT',
+    body: JSON.stringify({ mime, data: dataBase64 }),
+  })
+}
+
+/** 删除背景图（幂等）。 */
+export function deleteBackground(): Promise<ApiResponse> {
+  return request('/api/background', { method: 'DELETE' })
+}
+
+/** 构建背景图 URL（供 <img src> 使用）。version 非 0 时附加缓存击穿参数。 */
+export function backgroundUrl(version = 0): string {
+  return version ? `/api/background?v=${version}` : '/api/background'
+}
+
+/** 探测背景图是否已设置（404 = 未设置）。 */
+export async function hasBackground(): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/background', { method: 'HEAD', credentials: 'same-origin' })
+    return resp.ok
+  } catch {
+    return false
+  }
 }

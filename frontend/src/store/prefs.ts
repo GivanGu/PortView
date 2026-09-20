@@ -25,6 +25,24 @@ const logoDisplayMode: Ref<LogoDisplayMode> = ref('background')
 // 端口页卡片菜单切换收藏时写入；收藏页拖拽 / 增删后整体 PATCH。
 const favorites: Ref<GridItem[]> = ref([])
 
+// v1.6.6：自定义背景图。
+// backgroundScope 决定毛玻璃背景作用域（favorites=仅收藏页 / all=全应用）。
+// backgroundSet 标记是否已上传（控制背景层显隐 + 设置页缩略图）。
+// backgroundVersion 自增用于 <img src> 缓存击穿（上传/删除后刷新）。
+export type BackgroundScope = 'favorites' | 'all'
+const backgroundScope: Ref<BackgroundScope> = ref('favorites')
+const backgroundSet: Ref<boolean> = ref(false)
+const backgroundVersion = ref(0)
+
+function setBackgroundScope(v: BackgroundScope) {
+  backgroundScope.value = v
+}
+
+function setBackgroundSet(v: boolean) {
+  backgroundSet.value = v
+  if (v) backgroundVersion.value++
+}
+
 function setRefreshInterval(v: number) {
   refreshInterval.value = v
 }
@@ -151,6 +169,12 @@ export function usePrefs() {
     favorites,
     setFavorites,
     saveFavorites,
+    // v1.6.6 背景图
+    backgroundScope: readonly(backgroundScope),
+    setBackgroundScope,
+    backgroundSet: readonly(backgroundSet),
+    setBackgroundSet,
+    backgroundVersion: readonly(backgroundVersion),
   }
 }
 

@@ -10,6 +10,7 @@ import {
   fetchDefaultLogos,
   logoUrl,
   defaultLogoUrl,
+  backgroundUrl,
   upsertNote,
   uploadLogo,
   fetchFavicon,
@@ -25,9 +26,18 @@ import { appKey, normalizeServiceName } from '@/logo'
 import { usePrefs, uid, urlLogoKey, hasPortFavorite } from '@/store/prefs'
 import { useOpenService } from '@/composables/useOpenService'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
+import BackgroundLayer from '@/components/BackgroundLayer.vue'
 
 const { t } = useI18n()
-const { favorites, saveFavorites, refreshTick, triggerRefresh } = usePrefs()
+const {
+  favorites,
+  saveFavorites,
+  refreshTick,
+  triggerRefresh,
+  backgroundSet,
+  backgroundVersion,
+  backgroundScope,
+} = usePrefs()
 const { showAddrPrompt, loadManualSchemes, handleOpenService, onAddrConfigure, onAddrDismissed } = useOpenService()
 
 const loading = ref(false)
@@ -118,12 +128,14 @@ async function loadData() {
 }
 
 // ── 网格模型（v1.6.5）：GridItem[]，port/url 条目 + 单层文件夹 ──
+// v1.6.6：文件夹从网格磁贴改为左侧分组栏，网格只展示当前分组的条目。
 
 interface FlatEntry {
   entry: FavEntry
   folder: FavFolder | null
 }
 
+// 全部条目（含文件夹内），用于搜索 / 离线筛选
 const allEntries = computed<FlatEntry[]>(() => {
   const out: FlatEntry[] = []
   for (const it of favorites.value) {
@@ -134,6 +146,22 @@ const allEntries = computed<FlatEntry[]>(() => {
     }
   }
   return out
+})
+
+// 根条目（「全部」视图）与文件夹列表（左侧分组栏）
+const rootEntries = computed<FavEntry[]>(() =>
+  favorites.value.filter((it): it is FavEntry => it.kind !== 'folder'),
+)
+const folders = computed<FavFolder[]>(() =>
+  favorites.value.filter((it): it is FavFolder => it.kind === 'folder'),
+)
+const entryCount = computed(() => allEntries.value.length)
+
+// 当前选中的分组：null = 「全部」（根条目），否则为文件夹 id
+const selectedGroup = ref<string | null>(null)
+const currentFolder = computed<FavFolder | null>(() => {
+  if (!selectedGroup.value) return null
+  return folders.value.find((f) => f.id === selectedGroup.value) ?? null
 })
 
 function entryName(entry: FavEntry): string {
@@ -209,7 +237,7 @@ function ensureUrlFavicons() {
   }
 }
 
-// ── 搜索 / 离线筛选（过滤时扁平展示，隐藏文件夹结构）──
+// ── 搜索 / 离线筛选（过滤时扁平展示，隐藏分组结构）──
 const search = ref('')
 const offlineOnly = ref(false)
 const filtering = computed(() => search.value.trim() !== '' || offlineOnly.value)
@@ -225,16 +253,23 @@ function entryMatches(entry: FavEntry, folder: FavFolder | null, q: string): boo
   return false
 }
 
-const visible = computed<GridItem[]>(() => {
-  if (!filtering.value) return favorites.value
-  const q = search.value.trim().toLowerCase()
-  const out: GridItem[] = []
-  for (const { entry, folder } of allEntries.value) {
-    if (offlineOnly.value && (entry.kind !== 'port' || !isOfflineEntry(entry))) continue
-    if (q && !entryMatches(entry, folder, q)) continue
-    out.push(entry)
+// 网格展示的条目：过滤时扁平全量；否则仅当前分组
+const visible = computed<FavEntry[]>(() => {
+  if (filtering.value) {
+    const q = search.value.trim().toLowerCase()
+    const out: FavEntry[] = []
+    for (const { entry, folder } of allEntries.value) {
+      if (offlineOnly.value && (entry.kind !== 'port' || !isOfflineEntry(entry))) continue
+      if (q && !entryMatches(entry, folder, q)) continue
+      out.push(entry)
+    }
+    return out
   }
-  return out
+  if (selectedGroup.value) {
+    const f = currentFolder.value
+    return f ? f.items : []
+  }
+  return rootEntries.value
 })
 
 // ── 变更操作（全部整体 PATCH，走 saveFavorites 串行写入）──
@@ -303,22 +338,37 @@ function deleteFolder(id: string) {
   if (!folder || folder.kind !== 'folder') return
   const rest = favorites.value.filter((it) => !(it.kind === 'folder' && it.id === id))
   saveFavorites([...rest, ...folder.items])
+  // 删除的是当前选中分组 → 回到「全部」
+  if (selectedGroup.value === id) selectedGroup.value = null
 }
 
-function reorder(oldIndex: number, newIndex: number, items: GridItem[], folderId?: string): GridItem[] {
-  if (folderId) {
-    return items.map((it) => {
-      if (it.kind !== 'folder' || it.id !== folderId) return it
-      const sub = [...it.items]
-      const [m] = sub.splice(oldIndex, 1)
-      sub.splice(newIndex, 0, m)
-      return { ...it, items: sub }
-    })
-  }
-  const order = [...items]
-  const [m] = order.splice(oldIndex, 1)
-  order.splice(newIndex, 0, m)
-  return order
+// 重排根条目（保持文件夹位置不动，仅重排非文件夹项）
+function reorderRootEntries(oldIndex: number, newIndex: number): GridItem[] {
+  const root = [...rootEntries.value]
+  const [m] = root.splice(oldIndex, 1)
+  root.splice(newIndex, 0, m)
+  let i = 0
+  return favorites.value.map((it) => (it.kind === 'folder' ? it : root[i++]))
+}
+
+// 重排文件夹（保持根条目位置不动，仅重排文件夹项）
+function reorderFolders(oldIndex: number, newIndex: number): GridItem[] {
+  const fs = [...folders.value]
+  const [m] = fs.splice(oldIndex, 1)
+  fs.splice(newIndex, 0, m)
+  let i = 0
+  return favorites.value.map((it) => (it.kind === 'folder' ? fs[i++] : it))
+}
+
+// 重排某文件夹内部条目
+function reorderInFolder(oldIndex: number, newIndex: number, folderId: string): GridItem[] {
+  return favorites.value.map((it) => {
+    if (it.kind !== 'folder' || it.id !== folderId) return it
+    const sub = [...it.items]
+    const [m] = sub.splice(oldIndex, 1)
+    sub.splice(newIndex, 0, m)
+    return { ...it, items: sub }
+  })
 }
 
 // ── 打开 / 点击 ──
@@ -384,8 +434,6 @@ function onScrollCloseMenu() {
 function onKeydownCloseMenu(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (ctxMenu.value) ctxMenu.value = null
-    if (folderModalId.value) folderModalId.value = null
-    if (addModal.value) addModal.value = null
     if (nameModal.value) nameModal.value = null
   }
 }
@@ -394,7 +442,7 @@ function onResizeCloseMenu() {
 }
 
 function otherFolders(excludeId: string | null): FavFolder[] {
-  return favorites.value.filter((it): it is FavFolder => it.kind === 'folder' && it.id !== excludeId)
+  return folders.value.filter((f) => f.id !== excludeId)
 }
 
 function onCtxMoveTo(folderId: string) {
@@ -423,43 +471,10 @@ function onCtxRemoveFolder() {
   if (!confirm(t('favorites.deleteFolderConfirm', { name: target.folder.name }))) return
   deleteFolder(target.folder.id)
 }
-function onCtxRemoveFolderFromModal() {
-  const folder = currentFolder.value
-  if (!folder) return
-  if (!confirm(t('favorites.deleteFolderConfirm', { name: folder.name }))) return
-  folderModalId.value = null
-  deleteFolder(folder.id)
-}
 
-// ── 文件夹弹窗 ──
-const folderModalId = ref<string | null>(null)
-const currentFolder = computed<FavFolder | null>(() => {
-  const it = favorites.value.find((x) => x.kind === 'folder' && x.id === folderModalId.value)
-  return it && it.kind === 'folder' ? it : null
-})
-
-function openFolderModal(id: string) {
-  closeCtxMenu()
-  folderModalId.value = id
-}
-
-// 文件夹内行内重命名
-const folderRename = ref('')
-watch(
-  () => folderModalId.value,
-  (id) => {
-    folderRename.value = id ? currentFolder.value?.name ?? '' : ''
-  },
-)
-function saveFolderRename() {
-  const name = folderRename.value.trim()
-  if (!name || !currentFolder.value) return
-  renameFolder(currentFolder.value.id, name)
-}
-
-// ── 拖拽排序（sortablejs）＋ 拖入文件夹（悬停检测）──
+// ── 拖拽排序（sortablejs）＋ 拖入分组（悬停检测）──
 const gridEl = ref<HTMLElement | null>(null)
-const folderGridEl = ref<HTMLElement | null>(null)
+const folderListEl = ref<HTMLElement | null>(null)
 let rootSortable: Sortable | null = null
 let folderSortable: Sortable | null = null
 const dragOverFolderId = ref<string | null>(null)
@@ -479,12 +494,14 @@ function onRootDragMove(e: MouseEvent) {
   dragOverFolderId.value = tile?.dataset.folderId ?? null
 }
 
+// 网格：条目排序 + 拖到左侧分组栏移动
 function setupRootSortable() {
   rootSortable?.destroy()
   rootSortable = null
   if (loading.value || filtering.value || visible.value.length === 0 || !gridEl.value) return
   rootSortable = Sortable.create(gridEl.value, {
     animation: 150,
+    group: 'fav-entries', // 独立分组：条目不会跨入侧栏文件夹列表
     onStart: (evt) => {
       // 拖拽中的节点自身会挡住 elementFromPoint 命中检测，需排除
       ;(evt.item as HTMLElement).style.pointerEvents = 'none'
@@ -494,49 +511,64 @@ function setupRootSortable() {
       ;(evt.item as HTMLElement).style.pointerEvents = ''
       window.removeEventListener('mousemove', onRootDragMove)
       const id = evt.item.dataset.id
-      const kind = evt.item.dataset.kind
-      const folderId = dragOverFolderId.value
+      const over = dragOverFolderId.value
       dragOverFolderId.value = null
-      if (!id || kind === 'folder') {
-        // 文件夹磁贴只参与排序，不参与拖入
-        if (kind === 'folder' && evt.oldIndex != null && evt.newIndex != null && evt.oldIndex !== evt.newIndex) {
-          saveFavorites(reorder(evt.oldIndex, evt.newIndex, favorites.value))
-        }
-        return
-      }
-      if (folderId) {
-        moveEntry(id, folderId)
+      if (!id) return
+      // 拖到左侧分组栏（「全部」=root → 根，否则 → 该文件夹）
+      if (over) {
+        moveEntry(id, over === 'root' ? null : over)
         return
       }
       const { oldIndex, newIndex } = evt
       if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
-      saveFavorites(reorder(oldIndex, newIndex, favorites.value))
+      // 当前分组内排序：根 → 重排根条目；文件夹 → 重排该文件夹内部
+      if (selectedGroup.value) {
+        saveFavorites(reorderInFolder(oldIndex, newIndex, selectedGroup.value))
+      } else {
+        saveFavorites(reorderRootEntries(oldIndex, newIndex))
+      }
     },
   })
 }
 
+// 左侧分组栏：文件夹排序
 function setupFolderSortable() {
   folderSortable?.destroy()
   folderSortable = null
-  const folder = currentFolder.value
-  if (!folder || !folderGridEl.value || folder.items.length === 0) return
-  folderSortable = Sortable.create(folderGridEl.value, {
+  if (!folderListEl.value || folders.value.length < 2) return
+  folderSortable = Sortable.create(folderListEl.value, {
     animation: 150,
+    group: 'fav-folders', // 独立分组：侧栏文件夹不接受网格条目拖入
+    handle: '.fav-group-item',
     onEnd: (evt) => {
       const { oldIndex, newIndex } = evt
       if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
-      saveFavorites(reorder(oldIndex, newIndex, favorites.value, folder.id))
+      saveFavorites(reorderFolders(oldIndex, newIndex))
     },
   })
 }
 
-watch([loading, filtering, () => favorites.value.length], () => {
-  void nextTick(() => setupRootSortable())
-})
-// 条目数变化（空文件夹加首项 / 删末项）也需重建 Sortable
-watch([folderModalId, () => currentFolder.value?.items.length ?? 0], () => {
-  void nextTick(() => setupFolderSortable())
-})
+watch(
+  [loading, filtering, selectedGroup, () => visible.value.length],
+  () => {
+    void nextTick(() => setupRootSortable())
+  },
+)
+watch(
+  () => folders.value.length,
+  () => {
+    void nextTick(() => setupFolderSortable())
+  },
+)
+
+// ── 新建分组（侧栏内联输入）──
+const newGroupName = ref('')
+function createGroup() {
+  const name = newGroupName.value.trim()
+  if (!name) return
+  addFolder(name)
+  newGroupName.value = ''
+}
 
 // ── 添加弹窗 ──
 const addModal = ref<{ folderId: string | null } | null>(null)
@@ -691,15 +723,10 @@ async function onLogoFilePicked(e: Event) {
   }
 }
 
-// ── 新建 / 重命名文件夹弹窗 ──
+// ── 重命名分组弹窗 ──
 const nameModal = ref<{ mode: 'new' | 'rename'; folderId?: string } | null>(null)
 const nameInput = ref('')
 
-function openNewFolder() {
-  closeCtxMenu()
-  nameInput.value = ''
-  nameModal.value = { mode: 'new' }
-}
 function openRenameFolder(folder: FavFolder) {
   closeCtxMenu()
   nameInput.value = folder.name
@@ -708,8 +735,9 @@ function openRenameFolder(folder: FavFolder) {
 function saveNameModal() {
   const name = nameInput.value.trim()
   if (!name || !nameModal.value) return
-  if (nameModal.value.mode === 'new') addFolder(name)
-  else if (nameModal.value.folderId) renameFolder(nameModal.value.folderId, name)
+  if (nameModal.value.mode === 'rename' && nameModal.value.folderId) {
+    renameFolder(nameModal.value.folderId, name)
+  }
   nameModal.value = null
 }
 
@@ -776,15 +804,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="favorites-view">
+  <div class="favorites-view" :class="{ 'has-bg': backgroundSet && backgroundScope === 'favorites' }">
+    <BackgroundLayer
+      v-if="backgroundSet && backgroundScope === 'favorites'"
+      :src="backgroundUrl(backgroundVersion)"
+    />
     <div class="main-header">
       <h1>{{ t('favorites.title') }}</h1>
       <div class="header-actions">
-        <span class="meta">{{ t('favorites.count', { n: favorites.length }) }}</span>
+        <span class="meta">{{ t('favorites.count', { n: entryCount }) }}</span>
         <span v-if="offlineCount > 0" class="offline-badge" :title="t('favorites.offlineCount', { n: offlineCount })">
           {{ t('favorites.offlineCount', { n: offlineCount }) }}
         </span>
-        <button class="btn btn-primary btn-sm" @click="openAddModal(null)">
+        <button class="btn btn-primary btn-sm" @click="openAddModal(selectedGroup)">
           <Plus :size="14" /> {{ t('favorites.add') }}
         </button>
       </div>
@@ -796,120 +828,84 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-else>
-        <div class="toolbar">
-          <div class="search-box">
-            <span class="search-icon"><Search :size="15" /></span>
-            <input v-model="search" type="text" :placeholder="t('favorites.searchPlaceholder')" />
-          </div>
-          <button
-            class="chip"
-            :class="{ active: offlineOnly }"
-            @click="offlineOnly = !offlineOnly"
-          >
-            {{ t('favorites.offlineOnly') }} ({{ offlineCount }})
-          </button>
-        </div>
-
-        <div v-if="favorites.length === 0" class="empty-state">
-          <div class="empty-icon">
-            <Star :size="32" />
-          </div>
-          <div class="empty-text">{{ t('favorites.empty') }}</div>
-        </div>
-
-        <div v-else-if="visible.length === 0" class="empty-state">
-          <div class="empty-text">{{ t('common.noResult') }}</div>
-        </div>
-
-        <div v-else ref="gridEl" class="fav-grid" @contextmenu.prevent="openRootMenu($event)">
-          <template v-for="item in visible" :key="item.id">
-            <!-- 文件夹磁贴 -->
+        <div class="fav-layout">
+          <!-- 左侧分组栏（过滤时隐藏） -->
+          <aside v-if="!filtering" class="fav-sidebar">
             <div
-              v-if="item.kind === 'folder'"
-              class="fav-tile fav-folder-tile"
-              :data-id="item.id"
-              data-kind="folder"
-              :data-folder-id="item.id"
-              :class="{ 'drag-over': dragOverFolderId === item.id }"
-              :title="t('favorites.dragToFolder')"
-              @click="openFolderModal(item.id)"
-              @contextmenu.prevent.stop="openFolderMenu(item, $event)"
+              class="fav-group-item all"
+              data-folder-id="root"
+              :class="{ active: selectedGroup === null, 'drag-over': dragOverFolderId === 'root' }"
+              @click="selectedGroup = null"
             >
-              <div class="fav-folder-ico"><Folder :size="28" /></div>
-              <div class="fav-tile-name">
-                <span class="fav-name-text">{{ item.name }}</span>
-              </div>
-              <div class="fav-folder-count">{{ t('favorites.folderCount', { n: item.items.length }) }}</div>
+              <Star :size="14" class="fav-group-ico" />
+              <span class="fav-group-name">{{ t('favorites.allGroup') }}</span>
+              <span class="fav-group-count">{{ rootEntries.length }}</span>
             </div>
 
-            <!-- 条目磁贴（port / url） -->
-            <div
-              v-else
-              class="fav-tile"
-              :class="{ offline: isOfflineEntry(item) }"
-              :data-id="item.id"
-              :data-kind="item.kind"
-              :title="item.kind === 'port' ? t('favorites.editRemark') : t('ports.openService')"
-              @contextmenu.prevent.stop="openEntryMenuAt(item, $event)"
-            >
-              <span v-if="item.kind === 'port'" class="port-status-dot" :class="isOfflineEntry(item) ? 'is-offline' : 'is-online'"></span>
-              <div class="fav-tile-logo" @click="openEntry(item)">
-                <img v-if="entryLogoSrc(item)" :src="entryLogoSrc(item)" :alt="entryName(item)" @error="onLogoError(item.id)" />
-                <span v-else class="fav-tile-fallback">{{ entryName(item).charAt(0).toUpperCase() }}</span>
-              </div>
-              <div class="fav-tile-name">
-                <input
-                  v-if="item.kind === 'port' && editingPort === item.port"
-                  v-model="editRemark"
-                  class="fav-edit-input"
-                  @keyup.enter="saveEdit(item)"
-                  @keyup.esc="cancelEdit"
-                  @blur="saveEdit(item)"
-                />
-                <span v-else class="fav-name-text" @click="item.kind === 'port' ? startEdit(item) : openEntry(item)">
-                  {{ entryName(item) }}
-                </span>
+            <div ref="folderListEl" class="fav-group-list">
+              <div
+                v-for="f in folders"
+                :key="f.id"
+                class="fav-group-item"
+                :class="{ active: selectedGroup === f.id, 'drag-over': dragOverFolderId === f.id }"
+                :data-folder-id="f.id"
+                @click="selectedGroup = f.id"
+                @contextmenu.prevent.stop="openFolderMenu(f, $event)"
+              >
+                <Folder :size="14" class="fav-group-ico" />
+                <span class="fav-group-name">{{ f.name }}</span>
+                <span class="fav-group-count">{{ f.items.length }}</span>
               </div>
             </div>
-          </template>
-        </div>
-      </template>
-    </div>
 
-    <!-- 文件夹弹窗 -->
-    <Teleport to="body">
-      <div v-if="currentFolder" class="modal-overlay" @click.self="folderModalId = null">
-        <div class="modal">
-          <div class="modal-header">
-            <h2>
-              <Folder :size="16" class="folder-ico-inline" />
+            <div class="fav-new-group">
               <input
-                v-model="folderRename"
-                class="folder-rename-input"
-                @keyup.enter="saveFolderRename"
-                @blur="saveFolderRename"
+                v-model="newGroupName"
+                class="fav-new-input"
+                type="text"
+                :placeholder="t('favorites.newGroupPlaceholder')"
+                @keyup.enter="createGroup"
               />
-            </h2>
-            <div class="modal-header-actions">
-              <span class="meta">{{ t('favorites.folderCount', { n: currentFolder.items.length }) }}</span>
-              <button class="modal-close" :title="t('common.close')" @click="folderModalId = null">
-                <X :size="16" />
+            </div>
+          </aside>
+
+          <!-- 右侧主区：工具栏 + 网格 -->
+          <div class="fav-main">
+            <div class="toolbar">
+              <div class="search-box">
+                <span class="search-icon"><Search :size="15" /></span>
+                <input v-model="search" type="text" :placeholder="t('favorites.searchPlaceholder')" />
+              </div>
+              <button
+                class="chip"
+                :class="{ active: offlineOnly }"
+                @click="offlineOnly = !offlineOnly"
+              >
+                {{ t('favorites.offlineOnly') }} ({{ offlineCount }})
               </button>
             </div>
-          </div>
-          <div class="modal-body">
-            <div v-if="currentFolder.items.length === 0" class="empty-state empty-sm">
-              <div class="empty-text">{{ t('favorites.emptyFolder') }}</div>
+
+            <div v-if="entryCount === 0" class="empty-state">
+              <div class="empty-icon">
+                <Star :size="32" />
+              </div>
+              <div class="empty-text">{{ t('favorites.empty') }}</div>
             </div>
-            <div v-else ref="folderGridEl" class="fav-grid">
+
+            <div v-else-if="visible.length === 0" class="empty-state">
+              <div class="empty-text">{{ t('common.noResult') }}</div>
+            </div>
+
+            <div v-else ref="gridEl" class="fav-grid" @contextmenu.prevent="openRootMenu($event)">
               <div
-                v-for="entry in currentFolder.items"
+                v-for="entry in visible"
                 :key="entry.id"
                 class="fav-tile"
                 :class="{ offline: isOfflineEntry(entry) }"
                 :data-id="entry.id"
                 :data-kind="entry.kind"
-                @contextmenu.prevent="openEntryMenuAt(entry, $event)"
+                :title="entry.kind === 'port' ? t('favorites.editRemark') : t('ports.openService')"
+                @contextmenu.prevent.stop="openEntryMenuAt(entry, $event)"
               >
                 <span v-if="entry.kind === 'port'" class="port-status-dot" :class="isOfflineEntry(entry) ? 'is-offline' : 'is-online'"></span>
                 <div class="fav-tile-logo" @click="openEntry(entry)">
@@ -917,24 +913,24 @@ onBeforeUnmount(() => {
                   <span v-else class="fav-tile-fallback">{{ entryName(entry).charAt(0).toUpperCase() }}</span>
                 </div>
                 <div class="fav-tile-name">
-                  <span class="fav-name-text" @click="openEntry(entry)">
+                  <input
+                    v-if="entry.kind === 'port' && editingPort === entry.port"
+                    v-model="editRemark"
+                    class="fav-edit-input"
+                    @keyup.enter="saveEdit(entry)"
+                    @keyup.esc="cancelEdit"
+                    @blur="saveEdit(entry)"
+                  />
+                  <span v-else class="fav-name-text" @click="entry.kind === 'port' ? startEdit(entry) : openEntry(entry)">
                     {{ entryName(entry) }}
                   </span>
                 </div>
               </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button class="btn btn-danger btn-sm" @click="onCtxRemoveFolderFromModal">
-              {{ t('favorites.deleteFolder') }}
-            </button>
-            <button class="btn btn-primary btn-sm" @click="openAddModal(currentFolder.id)">
-              <Plus :size="14" /> {{ t('favorites.addHere') }}
-            </button>
-          </div>
         </div>
-      </div>
-    </Teleport>
+      </template>
+    </div>
 
     <!-- 添加收藏弹窗 -->
     <Teleport to="body">
@@ -1017,12 +1013,12 @@ onBeforeUnmount(() => {
       </div>
     </Teleport>
 
-    <!-- 新建 / 重命名文件夹弹窗 -->
+    <!-- 重命名分组弹窗 -->
     <Teleport to="body">
       <div v-if="nameModal" class="modal-overlay" @click.self="nameModal = null">
         <div class="modal modal-sm">
           <div class="modal-header">
-            <h2>{{ nameModal.mode === 'new' ? t('favorites.newFolder') : t('favorites.renameFolder') }}</h2>
+            <h2>{{ t('favorites.renameFolder') }}</h2>
             <button class="modal-close" :title="t('common.close')" @click="nameModal = null">
               <X :size="16" />
             </button>
@@ -1085,10 +1081,6 @@ onBeforeUnmount(() => {
 
           <template v-else-if="ctxFolder">
             <div class="settings-menu-group">
-              <button class="settings-menu-item" @click="openFolderModal(ctxFolder.folder.id)">
-                <span class="settings-menu-ico"><Folder :size="14" /></span>
-                <span>{{ t('favorites.openFolder') }}</span>
-              </button>
               <button class="settings-menu-item" @click="openRenameFolder(ctxFolder.folder)">
                 <span class="settings-menu-ico">✎</span>
                 <span>{{ t('favorites.renameFolder') }}</span>
@@ -1104,13 +1096,9 @@ onBeforeUnmount(() => {
 
           <template v-else>
             <div class="settings-menu-group">
-              <button class="settings-menu-item" @click="openAddModal(null)">
+              <button class="settings-menu-item" @click="openAddModal(selectedGroup)">
                 <span class="settings-menu-ico">＋</span>
                 <span>{{ t('favorites.add') }}</span>
-              </button>
-              <button class="settings-menu-item" @click="openNewFolder">
-                <span class="settings-menu-ico"><Folder :size="14" /></span>
-                <span>{{ t('favorites.newFolder') }}</span>
               </button>
             </div>
           </template>
@@ -1128,10 +1116,136 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.favorites-view {
+  position: relative;
+  /* 填满 .main-content，让绝对定位的背景层铺满整个视图高度 */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.favorites-view .main-header,
+.favorites-view .main-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* 背景作用域 = 收藏页时，表面半透明让毛玻璃透出 */
+.favorites-view.has-bg .main-header {
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+}
+
+.favorites-view.has-bg .main-body {
+  background: transparent;
+}
+
+/* 两栏布局：左侧分组栏 + 右侧主区 */
+.fav-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.fav-sidebar {
+  position: sticky;
+  top: 0;
+  width: 180px;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+
+.fav-group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.fav-group-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.fav-group-item.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.fav-group-item.drag-over {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.fav-group-ico {
+  flex-shrink: 0;
+}
+
+.fav-group-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fav-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.fav-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fav-new-group {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.fav-new-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-light);
+  background: transparent;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.fav-new-input:focus {
+  border-color: var(--accent);
+}
+
+/* 右侧主区 */
+.fav-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 网格：居中、大图标、间距大气 */
 .fav-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 22px;
+  padding: 12px 0;
 }
 
 .fav-tile {
@@ -1139,17 +1253,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px 12px 12px;
-  border-radius: var(--radius, 10px);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  gap: 10px;
+  width: 92px;
   cursor: grab;
-  transition: all 0.15s;
+  transition: transform 0.15s;
 }
 
 .fav-tile:hover {
-  background: var(--bg-card-hover);
+  transform: translateY(-2px);
 }
 
 .fav-tile:active {
@@ -1162,14 +1273,14 @@ onBeforeUnmount(() => {
 
 .fav-tile .port-status-dot {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 0;
+  right: 14px;
 }
 
 .fav-tile-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1190,7 +1301,7 @@ onBeforeUnmount(() => {
 }
 
 .fav-tile-fallback {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -1207,6 +1318,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: text;
+  /* 背景图上保证可读 */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
 .fav-edit-input {
@@ -1219,32 +1332,6 @@ onBeforeUnmount(() => {
   background: var(--bg-secondary);
   color: var(--text-primary);
   outline: none;
-}
-
-/* 文件夹磁贴 */
-.fav-folder-tile {
-  cursor: pointer;
-}
-
-.fav-folder-tile.drag-over {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-.fav-folder-ico {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-}
-
-.fav-folder-count {
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 /* 顶栏离线徽标 */
@@ -1285,28 +1372,6 @@ onBeforeUnmount(() => {
 /* 弹窗内元素 */
 .modal-sm {
   max-width: 400px;
-}
-
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.folder-ico-inline {
-  vertical-align: -2px;
-  margin-right: 6px;
-  color: var(--accent);
-}
-
-.folder-rename-input {
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  width: 220px;
 }
 
 .empty-sm {
@@ -1391,5 +1456,41 @@ onBeforeUnmount(() => {
 
 .hidden-input {
   display: none;
+}
+
+/* 窄屏：分组栏退化为顶部横向 chip */
+@media (max-width: 768px) {
+  .fav-layout {
+    flex-direction: column;
+  }
+
+  .fav-sidebar {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+  }
+
+  .fav-group-list {
+    flex-direction: row;
+  }
+
+  .fav-group-item {
+    flex-shrink: 0;
+  }
+
+  .fav-new-group {
+    margin-top: 0;
+    padding-top: 0;
+    padding-left: 8px;
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+
+  .fav-new-input {
+    width: 110px;
+  }
 }
 </style>

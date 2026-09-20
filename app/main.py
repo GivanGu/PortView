@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.config import init_config
 from app.routers import auth as auth_router
+from app.routers import background as background_router
 from app.routers import config as config_router
 from app.routers import logos as logos_router
 from app.routers import notes as notes_router
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(prefs_router.router)  # P1-2
     app.include_router(ranges_router.router)  # P1.1 监控区间
     app.include_router(logos_router.router)  # v1.5.0 应用 Logo
+    app.include_router(background_router.router)  # v1.6.6 自定义背景图
 
     # 健康检查
     @app.get("/api/health", tags=["meta"])

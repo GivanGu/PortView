@@ -20,7 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { fetchPorts, healthCheck, getPrefs } from '@/api'
+import { fetchPorts, healthCheck, getPrefs, backgroundUrl, hasBackground } from '@/api'
 import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
@@ -30,6 +30,7 @@ import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
 import LoginView from '@/components/LoginView.vue'
 import PasswordPrompt from '@/components/PasswordPrompt.vue'
+import BackgroundLayer from '@/components/BackgroundLayer.vue'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
 
@@ -73,6 +74,11 @@ const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
 const LOGO_SCRIM_KEY = 'portview.logoScrim'
 const LOGO_MODE_KEY = 'portview.logoDisplayMode'
+// v1.6.6：默认主页（启动时打开的标签页）。localStorage 镜像防首屏闪烁，
+// 服务端 prefs 为权威源（onMounted 同步回来）。改设置下次启动生效。
+const DEFAULT_TAB_KEY = 'portview.defaultTab'
+const DEFAULT_TABS = ['overview', 'favorites'] as const
+type DefaultTab = (typeof DEFAULT_TABS)[number]
 
 const ACCENTS = [
   { id: 'indigo', color: '#6366f1' },
@@ -85,8 +91,18 @@ const ACCENTS = [
 
 type AccentId = (typeof ACCENTS)[number]['id']
 
-// v1.6.5：收藏页（导航页）为默认首页
-const activeTab = ref<Tab>('favorites')
+function initialDefaultTab(): DefaultTab {
+  try {
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY)
+    if (saved && DEFAULT_TABS.includes(saved as DefaultTab)) return saved as DefaultTab
+  } catch {
+    /* ignore */
+  }
+  return 'favorites'
+}
+
+// v1.6.6：默认首页由设置决定（默认收藏页，保持 v1.6.5 现状）
+const activeTab = ref<Tab>(initialDefaultTab())
 const theme = ref<Theme>('dark')
 const accent = ref<AccentId>('indigo')
 const version = ref('')
@@ -141,7 +157,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, backgroundSet, backgroundVersion, backgroundScope, setBackgroundSet, setBackgroundScope } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -327,11 +343,24 @@ watch(logoDisplayMode, (v) => {
   applyLogoMode(v)
 })
 
+// v1.6.6：全应用背景。scope=all 且有图时，挂 fixed 背景层 + <html data-fav-bg="all">
+// 驱动 style.css 把顶栏/侧栏/状态栏/页头转半透明（卡片保持不透明保证可读）。
+const showAllBg = computed(() => backgroundSet.value && backgroundScope.value === 'all')
+watch(
+  showAllBg,
+  (v) => {
+    if (v) document.documentElement.setAttribute('data-fav-bg', 'all')
+    else document.documentElement.removeAttribute('data-fav-bg')
+  },
+  { immediate: true },
+)
+
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
+const _defaultTab = activeTab.value
 const visited = reactive<Record<Tab, boolean>>({
-  overview: false,
-  favorites: true,
+  overview: _defaultTab === 'overview',
+  favorites: _defaultTab === 'favorites',
   ports: false,
   notes: false,
   hidden: false,
@@ -411,8 +440,18 @@ onMounted(async () => {
       if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
       if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
       if (prefs.data.favorites) setFavorites(prefs.data.favorites)
+      // v1.6.6：默认主页（服务端权威，同步到 localStorage，下次启动生效）
+      if (prefs.data.default_tab) {
+        try {
+          localStorage.setItem(DEFAULT_TAB_KEY, prefs.data.default_tab)
+        } catch { /* ignore */ }
+      }
+      // v1.6.6：背景图作用域
+      if (prefs.data.background_scope) setBackgroundScope(prefs.data.background_scope)
     }
   } catch { /* ignore */ }
+  // v1.6.6：探测背景图是否已设置（驱动全应用背景层显隐）
+  void hasBackground().then((set) => setBackgroundSet(set))
   applyStatsTimer()
   loading.value = false
   loadStats()
@@ -430,6 +469,8 @@ onBeforeUnmount(() => {
 <template>
   <LoginView v-if="needsLogin" />
   <div v-else class="app-shell">
+    <!-- v1.6.6：全应用毛玻璃背景（scope=all 且有图时） -->
+    <BackgroundLayer v-if="showAllBg" fixed :src="backgroundUrl(backgroundVersion)" />
     <!-- 顶栏：logo + 搜索 + 主题/语言 -->
     <header class="topbar">
       <div class="topbar-brand">
