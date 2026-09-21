@@ -181,7 +181,8 @@
     "offlineCount": "{n} offline",
     "dragToFolder": "Drag here to move into the folder",
     "allGroup": "All",
-    "newGroupPlaceholder": "New group…"
+    "icon": "Icon",
+    "pickIcon": "Pick a group icon"
   },
   "hidden": {
     "total": "{n} total",

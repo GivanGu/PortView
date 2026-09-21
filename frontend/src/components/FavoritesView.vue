@@ -1,7 +1,35 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Star, Plus, Folder, Search, X } from 'lucide-vue-next'
+import {
+  Star,
+  Plus,
+  Folder,
+  Search,
+  X,
+  Heart,
+  BookOpen,
+  Gamepad2,
+  Briefcase,
+  Code2,
+  Clapperboard,
+  Music4,
+  Coffee,
+  Rocket,
+  Shield,
+  Globe,
+  Cpu,
+  Database,
+  Server,
+  Home,
+  Zap,
+  Palette,
+  MessageSquare,
+  ShoppingBag,
+  Plane,
+  Dumbbell,
+  Wallet,
+} from 'lucide-vue-next'
 import Sortable from 'sortablejs'
 import {
   fetchPorts,
@@ -38,6 +66,42 @@ const {
   backgroundVersion,
   backgroundScope,
 } = usePrefs()
+
+// 分组预设图标（lucide，无需上传，右键菜单里挑选）
+const FOLDER_ICON_MAP: Record<string, Component> = {
+  Folder,
+  Star,
+  Heart,
+  BookOpen,
+  Gamepad2,
+  Briefcase,
+  Code2,
+  Clapperboard,
+  Music4,
+  Coffee,
+  Rocket,
+  Shield,
+  Globe,
+  Cpu,
+  Database,
+  Server,
+  Home,
+  Zap,
+  Palette,
+  MessageSquare,
+  ShoppingBag,
+  Plane,
+  Dumbbell,
+  Wallet,
+}
+
+function folderIcon(f: FavFolder): Component {
+  return (f.icon && FOLDER_ICON_MAP[f.icon]) || Folder
+}
+
+function setFolderIcon(id: string, icon: string) {
+  saveFavorites(favorites.value.map((it) => (it.kind === 'folder' && it.id === id ? { ...it, icon } : it)))
+}
 const { showAddrPrompt, loadManualSchemes, handleOpenService, onAddrConfigure, onAddrDismissed } = useOpenService()
 
 const loading = ref(false)
@@ -434,6 +498,7 @@ function onScrollCloseMenu() {
 function onKeydownCloseMenu(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (ctxMenu.value) ctxMenu.value = null
+    if (iconPicker.value) iconPicker.value = null
     if (nameModal.value) nameModal.value = null
   }
 }
@@ -560,15 +625,6 @@ watch(
     void nextTick(() => setupFolderSortable())
   },
 )
-
-// ── 新建分组（侧栏内联输入）──
-const newGroupName = ref('')
-function createGroup() {
-  const name = newGroupName.value.trim()
-  if (!name) return
-  addFolder(name)
-  newGroupName.value = ''
-}
 
 // ── 添加弹窗 ──
 const addModal = ref<{ folderId: string | null } | null>(null)
@@ -723,10 +779,14 @@ async function onLogoFilePicked(e: Event) {
   }
 }
 
-// ── 重命名分组弹窗 ──
+// ── 新建 / 重命名分组弹窗 ──
 const nameModal = ref<{ mode: 'new' | 'rename'; folderId?: string } | null>(null)
 const nameInput = ref('')
 
+function openNewGroup() {
+  nameInput.value = ''
+  nameModal.value = { mode: 'new' }
+}
 function openRenameFolder(folder: FavFolder) {
   closeCtxMenu()
   nameInput.value = folder.name
@@ -735,10 +795,35 @@ function openRenameFolder(folder: FavFolder) {
 function saveNameModal() {
   const name = nameInput.value.trim()
   if (!name || !nameModal.value) return
-  if (nameModal.value.mode === 'rename' && nameModal.value.folderId) {
+  if (nameModal.value.mode === 'new') {
+    addFolder(name)
+  } else if (nameModal.value.folderId) {
     renameFolder(nameModal.value.folderId, name)
   }
   nameModal.value = null
+}
+
+// ── 分组图标选择器（从右键菜单打开，浮层网格）──
+const iconPicker = ref<{ x: number; y: number; folderId: string } | null>(null)
+const iconPickerFolder = computed<FavFolder | null>(() => {
+  const id = iconPicker.value?.folderId
+  return id ? (folders.value.find((f) => f.id === id) ?? null) : null
+})
+
+function openIconPicker(e: MouseEvent) {
+  const target = ctxMenu.value?.target
+  if (target?.kind !== 'folder') return
+  // 选择器约 244×236，超出视口时收回
+  let x = e.clientX
+  let y = e.clientY
+  if (x + 252 > window.innerWidth) x = Math.max(8, window.innerWidth - 252)
+  if (y + 244 > window.innerHeight) y = Math.max(8, window.innerHeight - 244)
+  iconPicker.value = { x, y, folderId: target.folder.id }
+  ctxMenu.value = null
+}
+function pickIcon(name: string) {
+  if (iconPicker.value) setFolderIcon(iconPicker.value.folderId, name)
+  iconPicker.value = null
 }
 
 // ── 行内备注编辑（port 条目，与端口页备注同步）──
@@ -810,7 +895,10 @@ onBeforeUnmount(() => {
       :src="backgroundUrl(backgroundVersion)"
     />
     <div class="main-header">
-      <h1>{{ t('favorites.title') }}</h1>
+      <h1>
+        {{ t('favorites.title') }}
+        <span v-if="currentFolder" class="fav-current-name">/ {{ currentFolder.name }}</span>
+      </h1>
       <div class="header-actions">
         <span class="meta">{{ t('favorites.count', { n: entryCount }) }}</span>
         <span v-if="offlineCount > 0" class="offline-badge" :title="t('favorites.offlineCount', { n: offlineCount })">
@@ -829,7 +917,7 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <div class="fav-layout">
-          <!-- 左侧分组栏（过滤时隐藏） -->
+          <!-- 左侧分组栏：WeTab 式窄坞（纯图标 + hover 浮出名称，过滤时隐藏） -->
           <aside v-if="!filtering" class="fav-sidebar">
             <div
               class="fav-group-item all"
@@ -837,10 +925,11 @@ onBeforeUnmount(() => {
               :class="{ active: selectedGroup === null, 'drag-over': dragOverFolderId === 'root' }"
               @click="selectedGroup = null"
             >
-              <Star :size="14" class="fav-group-ico" />
-              <span class="fav-group-name">{{ t('favorites.allGroup') }}</span>
-              <span class="fav-group-count">{{ rootEntries.length }}</span>
+              <Star :size="20" class="fav-group-ico" />
+              <span class="fav-group-label">{{ t('favorites.allGroup') }}</span>
             </div>
+
+            <div class="fav-divider"></div>
 
             <div ref="folderListEl" class="fav-group-list">
               <div
@@ -852,21 +941,17 @@ onBeforeUnmount(() => {
                 @click="selectedGroup = f.id"
                 @contextmenu.prevent.stop="openFolderMenu(f, $event)"
               >
-                <Folder :size="14" class="fav-group-ico" />
-                <span class="fav-group-name">{{ f.name }}</span>
-                <span class="fav-group-count">{{ f.items.length }}</span>
+                <component :is="folderIcon(f)" :size="20" class="fav-group-ico" />
+                <span class="fav-group-label">{{ f.name }}</span>
               </div>
             </div>
 
-            <div class="fav-new-group">
-              <input
-                v-model="newGroupName"
-                class="fav-new-input"
-                type="text"
-                :placeholder="t('favorites.newGroupPlaceholder')"
-                @keyup.enter="createGroup"
-              />
-            </div>
+            <div class="fav-divider"></div>
+
+            <button class="fav-group-item fav-new-btn" @click="openNewGroup">
+              <Plus :size="20" class="fav-group-ico" />
+              <span class="fav-group-label">{{ t('favorites.newFolder') }}</span>
+            </button>
           </aside>
 
           <!-- 右侧主区：工具栏 + 网格 -->
@@ -1018,7 +1103,7 @@ onBeforeUnmount(() => {
       <div v-if="nameModal" class="modal-overlay" @click.self="nameModal = null">
         <div class="modal modal-sm">
           <div class="modal-header">
-            <h2>{{ t('favorites.renameFolder') }}</h2>
+            <h2>{{ nameModal?.mode === 'new' ? t('favorites.newFolder') : t('favorites.renameFolder') }}</h2>
             <button class="modal-close" :title="t('common.close')" @click="nameModal = null">
               <X :size="16" />
             </button>
@@ -1081,6 +1166,10 @@ onBeforeUnmount(() => {
 
           <template v-else-if="ctxFolder">
             <div class="settings-menu-group">
+              <button class="settings-menu-item" @click="openIconPicker($event)">
+                <span class="settings-menu-ico">◈</span>
+                <span>{{ t('favorites.icon') }}</span>
+              </button>
               <button class="settings-menu-item" @click="openRenameFolder(ctxFolder.folder)">
                 <span class="settings-menu-ico">✎</span>
                 <span>{{ t('favorites.renameFolder') }}</span>
@@ -1102,6 +1191,28 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </template>
+        </div>
+      </template>
+    </Teleport>
+
+    <!-- 分组图标选择器 -->
+    <Teleport to="body">
+      <template v-if="iconPicker">
+        <div class="settings-menu-overlay" @click="iconPicker = null"></div>
+        <div class="icon-picker" :style="{ left: iconPicker.x + 'px', top: iconPicker.y + 'px' }">
+          <div class="icon-picker-title">{{ t('favorites.pickIcon') }}</div>
+          <div class="icon-picker-grid">
+            <button
+              v-for="(Comp, name) in FOLDER_ICON_MAP"
+              :key="name"
+              class="icon-picker-item"
+              :class="{ active: iconPickerFolder?.icon === name }"
+              :title="String(name)"
+              @click="pickIcon(String(name))"
+            >
+              <component :is="Comp" :size="18" />
+            </button>
+          </div>
         </div>
       </template>
     </Teleport>
@@ -1140,48 +1251,58 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-/* 两栏布局：左侧分组栏 + 右侧主区 */
+/* 两栏布局：左侧分组坞 + 右侧主区 */
 .fav-layout {
   display: flex;
   gap: 16px;
   align-items: flex-start;
 }
 
+/* WeTab 式窄坞：52px 玻璃面板、纯图标、hover 浮出名称 */
 .fav-sidebar {
   position: sticky;
   top: 0;
-  width: 180px;
-  min-width: 180px;
+  z-index: 10;
+  width: 52px;
+  min-width: 52px;
+  align-self: stretch;
+  min-height: 240px;
+  /* 长网格时坞高封顶到视口内，保证底部「+」始终可见 */
+  max-height: calc(100vh - 180px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
   border: 1px solid var(--border);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
 }
 
 .fav-group-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s;
   user-select: none;
 }
 
 .fav-group-item:hover {
-  background: var(--bg-card-hover);
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
   color: var(--text-primary);
 }
 
 .fav-group-item.active {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
 }
 
@@ -1193,44 +1314,107 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.fav-group-name {
-  flex: 1;
-  overflow: hidden;
+/* hover 浮出名称：图标右侧白色胶囊（WeTab 同款） */
+.fav-group-label {
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  max-width: 140px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1d27;
+  font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
 }
 
-.fav-group-count {
-  font-size: 11px;
-  color: var(--text-muted);
+.fav-group-item:hover .fav-group-label {
+  opacity: 1;
+}
+
+.fav-divider {
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 .fav-group-list {
+  flex: 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.fav-new-btn {
+  margin-top: auto;
+}
+
+/* 当前分组名（标题旁，触屏设备无 hover 也能看到所在分组） */
+.fav-current-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* 分组图标选择器 */
+.icon-picker {
+  position: fixed;
+  z-index: 1000;
+  width: 244px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.icon-picker-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
 }
 
-.fav-new-group {
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.fav-new-input {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 12px;
-  padding: 6px 10px;
+.icon-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
   border-radius: 8px;
-  border: 1px dashed var(--border-light);
-  background: transparent;
-  color: var(--text-primary);
-  outline: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
 
-.fav-new-input:focus {
-  border-color: var(--accent);
+.icon-picker-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.icon-picker-item.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
 }
 
 /* 右侧主区 */
@@ -1458,7 +1642,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-/* 窄屏：分组栏退化为顶部横向 chip */
+/* 窄屏：分组坞退化为顶部横向图标行 */
 @media (max-width: 768px) {
   .fav-layout {
     flex-direction: column;
@@ -1468,29 +1652,38 @@ onBeforeUnmount(() => {
     position: static;
     width: 100%;
     min-width: 0;
+    min-height: 0;
     flex-direction: row;
+    align-items: center;
     overflow-x: auto;
-    gap: 6px;
+    padding: 8px;
+    gap: 8px;
   }
 
   .fav-group-list {
     flex-direction: row;
+    justify-content: flex-start;
+    overflow: visible;
+    padding: 0;
   }
 
   .fav-group-item {
     flex-shrink: 0;
   }
 
-  .fav-new-group {
-    margin-top: 0;
-    padding-top: 0;
-    padding-left: 8px;
-    border-top: none;
-    border-left: 1px solid var(--border);
+  .fav-divider {
+    width: 2px;
+    height: 22px;
   }
 
-  .fav-new-input {
-    width: 110px;
+  .fav-new-btn {
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  /* 触屏无 hover：窄屏下常显名称胶囊 */
+  .fav-group-label {
+    opacity: 1;
   }
 }
 </style>

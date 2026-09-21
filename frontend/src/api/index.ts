@@ -264,6 +264,8 @@ export interface FavFolder {
   id: string
   kind: 'folder'
   name: string
+  /** 预设图标名（lucide），缺省为 Folder */
+  icon?: string
   items: FavEntry[]
 }
 

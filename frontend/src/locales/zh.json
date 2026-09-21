@@ -181,7 +181,8 @@
     "offlineCount": "{n} 个离线",
     "dragToFolder": "拖到此处移入文件夹",
     "allGroup": "全部",
-    "newGroupPlaceholder": "新建分组…"
+    "icon": "图标",
+    "pickIcon": "选择分组图标"
   },
   "hidden": {
     "total": "共 {n} 个",
