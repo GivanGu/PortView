@@ -1958,15 +1958,6 @@ html, body {
   transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease, border-right-width 0.2s ease;
 }
 
-/* v1.6.6：自动隐藏模式 — rail 收起不占空间 */
-.rail.auto-hidden {
-  width: 0;
-  min-width: 0;
-  padding: 0;
-  border-right-width: 0;
-  overflow: hidden;
-}
-
 .rail-nav {
   display: flex;
   flex-direction: column;
@@ -2038,6 +2029,16 @@ html, body {
 
 .rail.collapsed .rail-label {
   display: none;
+}
+
+/* v1.6.6：自动隐藏模式 — rail 收起不占空间。
+   必须放在 .rail.collapsed 之后：两者特异性相同，收起态下让 0 宽度覆盖 60px。 */
+.rail.auto-hidden {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right-width: 0;
+  overflow: hidden;
 }
 
 .rail-toggle {

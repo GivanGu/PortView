@@ -163,7 +163,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, markFavoritesLoaded, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -579,6 +579,8 @@ onMounted(async () => {
       if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
       if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
       if (prefs.data.favorites) setFavorites(prefs.data.favorites)
+      // v1.6.7：服务端数据已就绪（含「无收藏」的空态），放行收藏页归一逻辑
+      markFavoritesLoaded()
       // v1.6.6：默认主页（服务端权威，同步到 localStorage，下次启动生效）
       if (prefs.data.default_tab) {
         try {

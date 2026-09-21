@@ -25,6 +25,15 @@ const logoDisplayMode: Ref<LogoDisplayMode> = ref('background')
 // 端口页卡片菜单切换收藏时写入；收藏页拖拽 / 增删后整体 PATCH。
 const favorites: Ref<GridItem[]> = ref([])
 
+// v1.6.7：标记服务端收藏数据是否已加载完成。
+// 收藏页的数据归一（根条目迁移 / 建默认分组）必须等它置 true 后才执行，
+// 否则组件 setup 时的 immediate watch 会在空数组上误建「默认分组」并 PATCH 覆盖服务端真实数据。
+const favoritesLoaded = ref(false)
+
+function markFavoritesLoaded() {
+  favoritesLoaded.value = true
+}
+
 // v1.6.6：自定义背景图。
 // backgroundScope 决定毛玻璃背景作用域（favorites=仅收藏页 / all=全应用）。
 // backgroundSet 标记是否已上传（控制背景层显隐 + 设置页缩略图）。
@@ -175,6 +184,9 @@ export function usePrefs() {
     favorites,
     setFavorites,
     saveFavorites,
+    // v1.6.7：收藏数据加载完成标志（收藏页归一逻辑的守卫）
+    favoritesLoaded: readonly(favoritesLoaded),
+    markFavoritesLoaded,
     // v1.6.6 背景图
     backgroundScope: readonly(backgroundScope),
     setBackgroundScope,

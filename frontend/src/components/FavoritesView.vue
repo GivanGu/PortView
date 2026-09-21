@@ -70,6 +70,7 @@ const {
   backgroundVersion,
   backgroundScope,
   backgroundBlur,
+  favoritesLoaded,
 } = usePrefs()
 
 // 分组预设图标（lucide，无需上传，右键菜单里挑选）
@@ -402,7 +403,17 @@ function normalizeFavoritesData() {
     ])
   }
 }
-watch(favorites, () => normalizeFavoritesData(), { immediate: true })
+// 守卫：服务端数据未加载完成前（favorites 仍为空数组）不执行归一，
+// 避免在空态上误建「默认分组」并 PATCH 覆盖服务端真实数据（v1.6.7 分组丢失根因）。
+// 同时 watch favoritesLoaded：加载完成时强制触发一次（覆盖「无收藏」用户 favorites 未变化的场景）。
+watch(
+  [favorites, favoritesLoaded],
+  () => {
+    if (!favoritesLoaded.value) return
+    normalizeFavoritesData()
+  },
+  { immediate: true },
+)
 
 // ── 变更操作（全部整体 PATCH，走 saveFavorites 串行写入）──
 function addEntry(targetFolderId: string | null, entry: FavEntry) {
