@@ -18,6 +18,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -275,6 +278,62 @@ function toggleRail() {
   }
 }
 
+// v1.6.6：侧栏自动隐藏。开启后 rail 默认收起不占空间，悬停左缘标签滑出、移出 300ms 滑回；
+// 点标签钉住/取消钉住（触摸设备无 hover，点按即唤出）。localStorage 持久化，与收起/展开同惯例。
+const RAIL_AUTO_KEY = 'portview.railAutoHide'
+const railAutoHide = ref(false)
+const railPinned = ref(false)
+const railHoverOpen = ref(false)
+let railCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+function initialRailAutoHide(): boolean {
+  try {
+    return localStorage.getItem(RAIL_AUTO_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function toggleRailAutoHide() {
+  railAutoHide.value = !railAutoHide.value
+  railPinned.value = false
+  railHoverOpen.value = false
+  try {
+    localStorage.setItem(RAIL_AUTO_KEY, railAutoHide.value ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function cancelRailClose() {
+  if (railCloseTimer) {
+    clearTimeout(railCloseTimer)
+    railCloseTimer = null
+  }
+}
+
+function openRailHover() {
+  if (!railAutoHide.value) return
+  cancelRailClose()
+  railHoverOpen.value = true
+}
+
+function scheduleRailClose() {
+  if (!railAutoHide.value) return
+  cancelRailClose()
+  railCloseTimer = setTimeout(() => {
+    railHoverOpen.value = false
+    railCloseTimer = null
+  }, 300)
+}
+
+function toggleRailPin() {
+  railPinned.value = !railPinned.value
+  if (!railPinned.value) railHoverOpen.value = false
+}
+
+const railVisible = computed(() => !railAutoHide.value || railPinned.value || railHoverOpen.value)
+
 function toggleTheme() {
   const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
   theme.value = next
@@ -498,6 +557,7 @@ onMounted(async () => {
   applyLogoScrim(initialLogoScrim())
   setLogoDisplayMode(initialLogoMode())
   railCollapsed.value = initialRailCollapsed()
+  railAutoHide.value = initialRailAutoHide()
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -630,7 +690,12 @@ onBeforeUnmount(() => {
 
     <div class="app-body">
       <!-- 图标导航轨 -->
-      <aside class="rail" :class="{ collapsed: railCollapsed }">
+      <aside
+        class="rail"
+        :class="{ collapsed: railCollapsed, 'auto-hidden': railAutoHide && !railVisible }"
+        @mouseenter="openRailHover"
+        @mouseleave="scheduleRailClose"
+      >
         <nav class="rail-nav">
           <button
             v-for="item in navItems"
@@ -645,6 +710,15 @@ onBeforeUnmount(() => {
           </button>
         </nav>
         <button
+          class="rail-toggle rail-auto-toggle"
+          :title="railAutoHide ? t('nav.autoHideOff') : t('nav.autoHide')"
+          :aria-label="railAutoHide ? t('nav.autoHideOff') : t('nav.autoHide')"
+          @click="toggleRailAutoHide"
+        >
+          <EyeOff v-if="railAutoHide" :size="18" />
+          <Eye v-else :size="18" />
+        </button>
+        <button
           class="rail-toggle"
           :title="railCollapsed ? t('nav.expand') : t('nav.collapse')"
           :aria-label="railCollapsed ? t('nav.expand') : t('nav.collapse')"
@@ -654,6 +728,23 @@ onBeforeUnmount(() => {
           <PanelLeftClose v-else :size="20" />
         </button>
       </aside>
+
+      <!-- 自动隐藏模式：左缘半圆标签（悬停滑出 / 点按钉住） -->
+      <button
+        v-if="railAutoHide"
+        class="rail-tab"
+        :class="{ open: railVisible }"
+        :title="railVisible ? t('nav.hideRail') : t('nav.expand')"
+        :aria-label="railVisible ? t('nav.hideRail') : t('nav.expand')"
+        @click="toggleRailPin"
+        @mouseenter="openRailHover"
+        @mouseleave="scheduleRailClose"
+      >
+        <ChevronLeft v-if="railVisible" :size="14" />
+        <ChevronRight v-else :size="14" />
+      </button>
+      <!-- 自动隐藏模式：rail 隐藏时的左缘窄悬停区 -->
+      <div v-if="railAutoHide && !railVisible" class="rail-edge-zone" @mouseenter="openRailHover"></div>
 
       <!-- 主内容 -->
       <main class="main-content">

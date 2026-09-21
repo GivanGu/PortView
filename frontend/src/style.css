@@ -1940,6 +1940,7 @@ html, body {
 
 /* ── 主体：左侧图标轨 + 右侧内容 ── */
 .app-body {
+  position: relative; /* 自动隐藏标签/悬停区 absolute 定位基准 */
   display: flex;
   min-height: 0;
   overflow: hidden;
@@ -1954,7 +1955,16 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
+  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease, border-right-width 0.2s ease;
+}
+
+/* v1.6.6：自动隐藏模式 — rail 收起不占空间 */
+.rail.auto-hidden {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right-width: 0;
+  overflow: hidden;
 }
 
 .rail-nav {
@@ -2048,6 +2058,51 @@ html, body {
 .rail-toggle:hover {
   background: var(--bg-card-hover);
   color: var(--text-secondary);
+}
+
+/* v1.6.6：自动隐藏开关（位于收起/展开按钮上方，两者一起贴底） */
+.rail-auto-toggle {
+  margin-top: auto;
+}
+
+.rail-auto-toggle + .rail-toggle {
+  margin-top: 0;
+}
+
+/* v1.6.6：自动隐藏模式 — 左缘半圆标签（悬停滑出 / 点按钉住） */
+.rail-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 18px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-sidebar);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rail-tab:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* 自动隐藏模式 — rail 隐藏时的左缘窄悬停区 */
+.rail-edge-zone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 15;
 }
 
 .main-content {

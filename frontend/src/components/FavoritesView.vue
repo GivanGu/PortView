@@ -1611,7 +1611,7 @@ onBeforeUnmount(() => {
 .fav-name-text {
   display: block;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;

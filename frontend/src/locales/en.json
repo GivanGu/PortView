@@ -13,7 +13,10 @@
     "hidden": "Hidden",
     "settings": "Settings",
     "collapse": "Collapse sidebar",
-    "expand": "Expand sidebar"
+    "expand": "Expand sidebar",
+    "autoHide": "Enable auto-hide",
+    "autoHideOff": "Disable auto-hide",
+    "hideRail": "Hide sidebar"
   },
   "topbar": {
     "searchPlaceholder": "Search ports, services, containers…",
