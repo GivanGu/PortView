@@ -47,9 +47,7 @@ async def api_get_background() -> Response:
     """
     if db_service._db is None:
         return JSONResponse(status_code=503, content={"success": False, "error": "db not ready"})
-    cur = await db_service._db.execute(
-        "SELECT mime, data FROM backgrounds WHERE id = 1"
-    )
+    cur = await db_service._db.execute("SELECT mime, data FROM backgrounds WHERE id = 1")
     row = await cur.fetchone()
     if row is None or not row["data"]:
         return JSONResponse(status_code=404, content={"success": False, "error": "not set"})

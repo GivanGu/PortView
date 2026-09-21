@@ -262,9 +262,7 @@ class TestPrefs:
         assert d["default_tab"] == "favorites"
         assert d["background_scope"] == "favorites"
 
-        r = client.patch(
-            "/api/prefs", json={"default_tab": "overview", "background_scope": "all"}
-        )
+        r = client.patch("/api/prefs", json={"default_tab": "overview", "background_scope": "all"})
         assert r.json()["success"] is True
         d = client.get("/api/prefs").json()["data"]
         assert d["default_tab"] == "overview"
@@ -279,9 +277,7 @@ class TestPrefs:
         assert r.json()["success"] is False
 
     def test_reset_restores_home_and_scope(self, client: TestClient):
-        client.patch(
-            "/api/prefs", json={"default_tab": "overview", "background_scope": "all"}
-        )
+        client.patch("/api/prefs", json={"default_tab": "overview", "background_scope": "all"})
         r = client.post("/api/prefs/reset")
         assert r.json()["success"] is True
         d = client.get("/api/prefs").json()["data"]
