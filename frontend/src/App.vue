@@ -159,7 +159,7 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, backgroundSet, backgroundVersion, backgroundScope, setBackgroundSet, setBackgroundScope } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
@@ -521,8 +521,9 @@ onMounted(async () => {
           localStorage.setItem(DEFAULT_TAB_KEY, prefs.data.default_tab)
         } catch { /* ignore */ }
       }
-      // v1.6.6：背景图作用域
+      // v1.6.6：背景图作用域 + 模糊度
       if (prefs.data.background_scope) setBackgroundScope(prefs.data.background_scope)
+      if (prefs.data.background_blur != null) setBackgroundBlur(prefs.data.background_blur)
     }
   } catch { /* ignore */ }
   // v1.6.6：探测背景图是否已设置（驱动全应用背景层显隐）
@@ -546,7 +547,7 @@ onBeforeUnmount(() => {
   <LoginView v-if="needsLogin" />
   <div v-else class="app-shell">
     <!-- v1.6.6：全应用毛玻璃背景（scope=all 且有图时） -->
-    <BackgroundLayer v-if="showAllBg" fixed :src="backgroundUrl(backgroundVersion)" />
+    <BackgroundLayer v-if="showAllBg" fixed :src="backgroundUrl(backgroundVersion)" :blur="backgroundBlur" />
     <!-- 顶栏：logo + 搜索 + 主题/语言 -->
     <header class="topbar">
       <div class="topbar-brand">

@@ -90,7 +90,7 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, backgroundSet, backgroundVersion, backgroundScope, setBackgroundSet, setBackgroundScope } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
@@ -155,6 +155,14 @@ async function handleRemoveBg() {
 function onBgScopeChange(v: 'favorites' | 'all') {
   setBackgroundScope(v)
   void persistPartial({ background_scope: v })
+}
+
+// 背景模糊度：拖动实时预览（input），松手才落库（change），避免每像素一次 PATCH
+function onBgBlurInput(e: Event) {
+  setBackgroundBlur(Number((e.target as HTMLInputElement).value))
+}
+function onBgBlurChange(e: Event) {
+  void persistPartial({ background_blur: Number((e.target as HTMLInputElement).value) })
 }
 
 function readImageFile(file: File): Promise<{ mime: string; b64: string }> {
@@ -295,6 +303,7 @@ async function handleReset() {
     localStorage.setItem(DEFAULT_TAB_KEY, 'favorites')
   } catch { /* ignore */ }
   setBackgroundScope('favorites')
+  setBackgroundBlur(10)
   try {
     await deleteBackground()
     setBackgroundSet(false)
@@ -317,6 +326,7 @@ onMounted(async () => {
       // v1.6.6：默认主页（服务端权威）
       if (p.default_tab) defaultTab.value = p.default_tab
       if (p.background_scope) setBackgroundScope(p.background_scope)
+      if (p.background_blur != null) setBackgroundBlur(p.background_blur)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -523,6 +533,23 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
                 <span>{{ t('settings.bgScopeAll') }}</span>
               </label>
             </div>
+          </div>
+          <div class="settings-sub">
+            <div class="settings-sub-title">
+              {{ t('settings.bgBlur') }}
+              <span class="bg-blur-val">{{ backgroundBlur }}</span>
+            </div>
+            <input
+              type="range"
+              class="bg-blur-slider"
+              min="0"
+              max="30"
+              step="1"
+              :value="backgroundBlur"
+              :disabled="!backgroundSet"
+              @input="onBgBlurInput"
+              @change="onBgBlurChange"
+            />
           </div>
         </section>
 
@@ -780,6 +807,59 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
 .bg-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 模糊度滑动条：拖动实时预览，数值随标题右侧显示 */
+.bg-blur-val {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-blur-slider {
+  width: 100%;
+  height: 4px;
+  margin-top: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.bg-blur-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.bg-blur-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.bg-blur-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.bg-blur-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .hidden-input {

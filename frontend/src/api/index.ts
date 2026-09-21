@@ -284,6 +284,7 @@ export interface UserPrefs {
   // v1.6.6
   default_tab: 'overview' | 'favorites'
   background_scope: 'favorites' | 'all'
+  background_blur: number
 }
 
 export interface UserPrefsPatch {
@@ -297,6 +298,7 @@ export interface UserPrefsPatch {
   // v1.6.6
   default_tab?: 'overview' | 'favorites'
   background_scope?: 'favorites' | 'all'
+  background_blur?: number
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {

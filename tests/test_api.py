@@ -276,13 +276,32 @@ class TestPrefs:
         r = client.patch("/api/prefs", json={"background_scope": "everywhere"})
         assert r.json()["success"] is False
 
+    def test_background_blur_roundtrip(self, client: TestClient):
+        # v1.6.6：背景模糊度（px，0-30），默认 10
+        d = client.get("/api/prefs").json()["data"]
+        assert d["background_blur"] == 10
+
+        r = client.patch("/api/prefs", json={"background_blur": 18})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["background_blur"] == 18
+
+    def test_background_blur_out_of_range_rejected(self, client: TestClient):
+        # pydantic Field(ge=0, le=30) 在请求层直接拦 422
+        assert client.patch("/api/prefs", json={"background_blur": -1}).status_code == 422
+        assert client.patch("/api/prefs", json={"background_blur": 31}).status_code == 422
+
     def test_reset_restores_home_and_scope(self, client: TestClient):
-        client.patch("/api/prefs", json={"default_tab": "overview", "background_scope": "all"})
+        client.patch(
+            "/api/prefs",
+            json={"default_tab": "overview", "background_scope": "all", "background_blur": 25},
+        )
         r = client.post("/api/prefs/reset")
         assert r.json()["success"] is True
         d = client.get("/api/prefs").json()["data"]
         assert d["default_tab"] == "favorites"
         assert d["background_scope"] == "favorites"
+        assert d["background_blur"] == 10
 
 
 class TestBackground:

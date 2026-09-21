@@ -264,6 +264,15 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: user_prefs.background_scope added (default 'favorites')")
 
+    # v1.6.6 迁移：user_prefs 加 background_blur 列（背景图模糊度 px，0-30，默认 10）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols8 = {row[1] for row in await cur.fetchall()}
+    if "background_blur" not in pref_cols8:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN background_blur INTEGER NOT NULL DEFAULT 10"
+        )
+        logger.info("migration: user_prefs.background_blur added (default 10)")
+
     await conn.commit()
     if _db is not None:
         await _db.close()

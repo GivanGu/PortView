@@ -165,6 +165,8 @@ class UserPrefsRead(BaseModel):
     default_tab: str = "favorites"
     # 背景图作用域（v1.6.6）：favorites=仅收藏页 / all=全应用
     background_scope: str = "favorites"
+    # 背景图模糊度（v1.6.6）：px，0-30，默认 10
+    background_blur: int = 10
 
 
 class UserPrefsPatch(BaseModel):
@@ -181,6 +183,8 @@ class UserPrefsPatch(BaseModel):
     # 默认主页 / 背景作用域（v1.6.6）：str + 路由内白名单校验（同 accent 惯例）
     default_tab: str | None = None
     background_scope: str | None = None
+    # 背景图模糊度（v1.6.6）：px，0-30
+    background_blur: int | None = Field(default=None, ge=0, le=30)
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────

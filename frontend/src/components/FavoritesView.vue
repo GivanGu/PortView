@@ -66,6 +66,7 @@ const {
   backgroundSet,
   backgroundVersion,
   backgroundScope,
+  backgroundBlur,
 } = usePrefs()
 
 // 分组预设图标（lucide，无需上传，右键菜单里挑选）
@@ -888,6 +889,7 @@ onBeforeUnmount(() => {
     <BackgroundLayer
       v-if="backgroundSet && backgroundScope === 'favorites'"
       :src="backgroundUrl(backgroundVersion)"
+      :blur="backgroundBlur"
     />
     <div class="main-header">
       <h1>

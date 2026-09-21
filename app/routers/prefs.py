@@ -4,8 +4,8 @@
 
 端点：
 - GET   ``/api/prefs``       读取当前用户（单行）
-- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval / logo_scrim / logo_display_mode / favorites / default_tab / background_scope），未提供字段不修改
-- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0, logo_scrim=left, logo_display_mode=background, favorites=[], default_tab=favorites, background_scope=favorites）
+- PATCH ``/api/prefs``       局部更新（theme / accent / lang / refresh_interval / logo_scrim / logo_display_mode / favorites / default_tab / background_scope / background_blur），未提供字段不修改
+- POST  ``/api/prefs/reset`` 重置到默认（theme=dark, accent=indigo, lang=zh, refresh_interval=0, logo_scrim=left, logo_display_mode=background, favorites=[], default_tab=favorites, background_scope=favorites, background_blur=10）
 
 favorites 为收藏端口号 JSON 数组（如 ``[80, 8080]``），顺序即收藏页展示顺序。
 
@@ -43,7 +43,7 @@ async def api_get_prefs() -> APIResponse:
     conn = db_service._db
     cur = await conn.execute(
         "SELECT theme, accent, lang, refresh_interval, logo_scrim, logo_display_mode, "
-        "favorites, default_tab, background_scope FROM user_prefs WHERE id = 1"
+        "favorites, default_tab, background_scope, background_blur FROM user_prefs WHERE id = 1"
     )
     row = await cur.fetchone()
     if row is None:
@@ -60,6 +60,7 @@ async def api_get_prefs() -> APIResponse:
             favorites=json.loads(row["favorites"] or "[]"),
             default_tab=row["default_tab"] or "favorites",
             background_scope=row["background_scope"] or "favorites",
+            background_blur=row["background_blur"] if row["background_blur"] is not None else 10,
         ),
     )
 
@@ -120,6 +121,9 @@ async def api_patch_prefs(patch: UserPrefsPatch) -> APIResponse:
     if patch.background_scope is not None:
         sets.append("background_scope = ?")
         params.append(patch.background_scope)
+    if patch.background_blur is not None:
+        sets.append("background_blur = ?")
+        params.append(patch.background_blur)
     if not sets:
         return APIResponse(success=True, message="no-op")
     sets.append("updated_at = ?")
@@ -143,7 +147,7 @@ async def api_reset_prefs() -> APIResponse:
 
     conn = db_service._db
     await conn.execute(
-        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, logo_scrim = 'left', logo_display_mode = 'background', favorites = '[]', default_tab = 'favorites', background_scope = 'favorites', updated_at = ? WHERE id = 1",
+        "UPDATE user_prefs SET theme = 'dark', accent = 'indigo', lang = 'zh', refresh_interval = 0, logo_scrim = 'left', logo_display_mode = 'background', favorites = '[]', default_tab = 'favorites', background_scope = 'favorites', background_blur = 10, updated_at = ? WHERE id = 1",
         (int(time.time()),),
     )
     await conn.commit()

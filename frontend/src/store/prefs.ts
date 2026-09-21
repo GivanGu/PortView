@@ -33,9 +33,15 @@ export type BackgroundScope = 'favorites' | 'all'
 const backgroundScope: Ref<BackgroundScope> = ref('favorites')
 const backgroundSet: Ref<boolean> = ref(false)
 const backgroundVersion = ref(0)
+// 背景图模糊度（px，0-30，默认 10），设置页滑动条实时预览
+const backgroundBlur: Ref<number> = ref(10)
 
 function setBackgroundScope(v: BackgroundScope) {
   backgroundScope.value = v
+}
+
+function setBackgroundBlur(v: number) {
+  backgroundBlur.value = Math.min(30, Math.max(0, Math.round(v)))
 }
 
 function setBackgroundSet(v: boolean) {
@@ -175,6 +181,8 @@ export function usePrefs() {
     backgroundSet: readonly(backgroundSet),
     setBackgroundSet,
     backgroundVersion: readonly(backgroundVersion),
+    backgroundBlur: readonly(backgroundBlur),
+    setBackgroundBlur,
   }
 }
 

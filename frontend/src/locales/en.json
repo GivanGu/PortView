@@ -248,6 +248,7 @@
     "bgScope": "Scope",
     "bgScopeFavorites": "Favorites only",
     "bgScopeAll": "Whole app",
+    "bgBlur": "Blur",
     "bgTooLarge": "Image exceeds 4MiB limit",
     "bgSaved": "Background saved",
     "bgSaveFailed": "Failed to save background",

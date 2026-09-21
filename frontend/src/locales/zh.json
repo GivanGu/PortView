@@ -248,6 +248,7 @@
     "bgScope": "作用范围",
     "bgScopeFavorites": "仅收藏页",
     "bgScopeAll": "全应用",
+    "bgBlur": "模糊度",
     "bgTooLarge": "图片超过 4MiB 限制",
     "bgSaved": "背景已保存",
     "bgSaveFailed": "背景保存失败",
