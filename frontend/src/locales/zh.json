@@ -151,7 +151,8 @@
   "favorites": {
     "title": "收藏",
     "empty": "还没有收藏 — 选一个分组，点网格末尾的「+」添加，或去端口页卡片菜单添加",
-    "editRemark": "点击名称编辑备注",
+    "editRemark": "编辑备注",
+    "renameEntry": "重命名",
     "vanished": "该端口已不在监控范围内",
     "add": "添加",
     "addTitle": "添加收藏",
@@ -177,7 +178,6 @@
     "folderCount": "{n} 项",
     "emptyFolder": "空文件夹 — 把图标拖进来，或点下方「添加到该文件夹」",
     "addHere": "添加到该文件夹",
-    "moveRoot": "移到根目录",
     "moveTo": "移到「{name}」",
     "changeLogo": "更换图标",
     "openFolder": "打开文件夹",

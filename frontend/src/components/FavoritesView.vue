@@ -374,15 +374,35 @@ watchEffect(() => {
   })
 })
 
-// ── 默认分组：添加只允许在文件夹内，保证始终至少有一个分组 ──
-function ensureDefaultFolder() {
-  if (folders.value.length > 0) return
-  saveFavorites([
-    ...favorites.value,
-    { id: uid('folder'), kind: 'folder', name: t('favorites.defaultFolder'), icon: 'Folder', items: [] },
-  ])
+// ── 数据归一：根目录不再是合法位置（添加只允许在文件夹内）──
+// 加载时静默把根条目迁入第一个文件夹（无文件夹则建「默认分组」收它们）；
+// 无任何条目且无文件夹时建空「默认分组」，保证始终至少有一个分组。
+function normalizeFavoritesData() {
+  const root = favorites.value.filter((it): it is FavEntry => it.kind !== 'folder')
+  const first = folders.value[0]
+  if (root.length > 0) {
+    if (first) {
+      saveFavorites(
+        favorites.value
+          .filter((it) => it.kind === 'folder')
+          .map((it) => (it.id === first.id ? { ...it, items: [...it.items, ...root] } : it)),
+      )
+    } else {
+      saveFavorites([
+        ...favorites.value.filter((it) => it.kind === 'folder'),
+        { id: uid('folder'), kind: 'folder', name: t('favorites.defaultFolder'), icon: 'Folder', items: root },
+      ])
+    }
+    return
+  }
+  if (folders.value.length === 0) {
+    saveFavorites([
+      ...favorites.value,
+      { id: uid('folder'), kind: 'folder', name: t('favorites.defaultFolder'), icon: 'Folder', items: [] },
+    ])
+  }
 }
-watch(folders, () => ensureDefaultFolder(), { immediate: true })
+watch(favorites, () => normalizeFavoritesData(), { immediate: true })
 
 // ── 变更操作（全部整体 PATCH，走 saveFavorites 串行写入）──
 function addEntry(targetFolderId: string | null, entry: FavEntry) {
@@ -534,6 +554,11 @@ const ctxEntry = computed(() => {
   const t = ctxMenu.value?.target
   return t && t.kind === 'entry' ? t : null
 })
+// 扁平视图（全部/在线/离线/搜索）只读：不允许增删，仅文件夹视图内可移除
+const ctxCanRemove = computed(() => {
+  const t = ctxMenu.value?.target
+  return t?.kind === 'entry' && isFolderView.value && !searching.value
+})
 const ctxFolder = computed(() => {
   const t = ctxMenu.value?.target
   return t && t.kind === 'folder' ? t : null
@@ -561,12 +586,6 @@ function onCtxMoveTo(folderId: string) {
   if (target?.kind !== 'entry') return
   closeCtxMenu()
   moveEntry(target.entry.id, folderId)
-}
-function onCtxMoveRoot() {
-  const target = ctxMenu.value?.target
-  if (target?.kind !== 'entry') return
-  closeCtxMenu()
-  moveEntry(target.entry.id, null)
 }
 function onCtxRemoveEntry() {
   const target = ctxMenu.value?.target
@@ -626,9 +645,9 @@ function setupRootSortable() {
       const over = dragOverFolderId.value
       dragOverFolderId.value = null
       if (!id) return
-      // 拖到左侧分组栏（「全部」=root → 根，否则 → 该文件夹）
+      // 拖到左侧分组栏的某个文件夹 → 移入（「全部」不接受拖放，根目录不再是合法位置）
       if (over) {
-        moveEntry(id, over === 'root' ? null : over)
+        moveEntry(id, over)
         return
       }
       const { oldIndex, newIndex } = evt
@@ -856,42 +875,69 @@ function pickModalIcon(name: string) {
   iconInput.value = name
 }
 
-// ── 行内备注编辑（port 条目，与端口页备注同步）──
-const editingPort = ref<number | null>(null)
-const editRemark = ref('')
+// ── 名称/备注编辑弹窗（port=备注，与端口页同步；url=显示名称）──
+const nameEditModal = ref<{ entry: FavEntry } | null>(null)
+const nameEditInput = ref('')
 
-function startEdit(entry: FavEntry) {
-  if (entry.kind !== 'port') return
-  editingPort.value = entry.port ?? null
-  editRemark.value = (entry.port != null ? cards.value.get(entry.port)?.remark : undefined) || ''
+function openNameEdit(entry: FavEntry) {
+  closeCtxMenu()
+  nameEditInput.value =
+    entry.kind === 'port'
+      ? ((entry.port != null ? cards.value.get(entry.port)?.remark : undefined) || '')
+      : entry.title || ''
+  nameEditModal.value = { entry }
 }
-function cancelEdit() {
-  editingPort.value = null
-}
-async function saveEdit(entry: FavEntry) {
-  if (entry.kind !== 'port' || editingPort.value !== entry.port) return
-  editingPort.value = null
-  const card = entry.port != null ? cards.value.get(entry.port) : undefined
-  if (!card) return
-  const remark = editRemark.value.trim()
-  try {
-    const protocol = ((card.protocol || '').toLowerCase() || '') as NoteProtocol
-    const resp = await upsertNote({
-      port: entry.port!,
-      service_name: card.service_name ?? '',
-      protocol,
-      remark,
-    })
-    if (resp.success) {
-      card.remark = remark || undefined
-      triggerRefresh()
-    } else {
+
+async function saveNameEdit() {
+  const target = nameEditModal.value
+  if (!target) return
+  const entry = target.entry
+  const val = nameEditInput.value.trim()
+  if (entry.kind === 'port') {
+    if (entry.port == null) return
+    const card = cards.value.get(entry.port)
+    if (!card) return
+    try {
+      const protocol = ((card.protocol || '').toLowerCase() || '') as NoteProtocol
+      const resp = await upsertNote({
+        port: entry.port,
+        service_name: card.service_name ?? '',
+        protocol,
+        remark: val,
+      })
+      if (resp.success) {
+        card.remark = val || undefined
+        triggerRefresh()
+        nameEditModal.value = null
+      } else {
+        showToast(t('common.saveFailed'))
+      }
+    } catch (e) {
+      console.error('保存备注失败:', e)
       showToast(t('common.saveFailed'))
     }
-  } catch (e) {
-    console.error('保存备注失败:', e)
-    showToast(t('common.saveFailed'))
+  } else {
+    renameEntry(entry.id, val)
+    nameEditModal.value = null
   }
+}
+
+// 重命名 url 条目（改 title，根/文件夹内均可）
+function renameEntry(entryId: string, title: string) {
+  const next: GridItem[] = []
+  for (const it of favorites.value) {
+    if (it.kind === 'folder') {
+      next.push({
+        ...it,
+        items: it.items.map((e) => (e.id === entryId && e.kind === 'url' ? { ...e, title } : e)),
+      })
+    } else if (it.id === entryId && it.kind === 'url') {
+      next.push({ ...it, title })
+    } else {
+      next.push(it)
+    }
+  }
+  saveFavorites(next)
 }
 
 // ── 生命周期 ──
@@ -936,8 +982,7 @@ onBeforeUnmount(() => {
           <aside v-if="!searching" class="fav-sidebar">
             <div
               class="fav-group-item all"
-              data-folder-id="root"
-              :class="{ active: selectedGroup === null, 'drag-over': dragOverFolderId === 'root' }"
+              :class="{ active: selectedGroup === null }"
               @click="selectedGroup = null"
               @mouseenter="onGroupEnter($event, t('favorites.allGroup'))"
               @mouseleave="onGroupLeave"
@@ -1029,7 +1074,7 @@ onBeforeUnmount(() => {
                 :class="{ offline: isOfflineEntry(entry) }"
                 :data-id="entry.id"
                 :data-kind="entry.kind"
-                :title="entry.kind === 'port' ? t('favorites.editRemark') : t('ports.openService')"
+                :title="t('ports.openService')"
                 @contextmenu.prevent.stop="openEntryMenuAt(entry, $event)"
               >
                 <span v-if="entry.kind === 'port'" class="port-status-dot" :class="isOfflineEntry(entry) ? 'is-offline' : 'is-online'"></span>
@@ -1038,17 +1083,7 @@ onBeforeUnmount(() => {
                   <span v-else class="fav-tile-fallback">{{ entryName(entry).charAt(0).toUpperCase() }}</span>
                 </div>
                 <div class="fav-tile-name">
-                  <input
-                    v-if="entry.kind === 'port' && editingPort === entry.port"
-                    v-model="editRemark"
-                    class="fav-edit-input"
-                    @keyup.enter="saveEdit(entry)"
-                    @keyup.esc="cancelEdit"
-                    @blur="saveEdit(entry)"
-                  />
-                  <span v-else class="fav-name-text" @click="entry.kind === 'port' ? startEdit(entry) : openEntry(entry)">
-                    {{ entryName(entry) }}
-                  </span>
+                  <span class="fav-name-text">{{ entryName(entry) }}</span>
                 </div>
               </div>
 
@@ -1189,6 +1224,35 @@ onBeforeUnmount(() => {
       </div>
     </Teleport>
 
+    <!-- 名称/备注编辑弹窗（port=备注，与端口页同步；url=显示名称） -->
+    <Teleport to="body">
+      <div v-if="nameEditModal" class="modal-overlay" @click.self="nameEditModal = null">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>
+              {{ nameEditModal.entry.kind === 'port' ? t('favorites.editRemark') : t('favorites.renameEntry') }}
+            </h2>
+            <button class="modal-close" :title="t('common.close')" @click="nameEditModal = null">
+              <X :size="16" />
+            </button>
+          </div>
+          <div class="modal-body">
+            <input
+              v-model="nameEditInput"
+              class="form-input"
+              type="text"
+              :placeholder="t('favorites.nameLabel')"
+              @keyup.enter="saveNameEdit"
+            />
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-sm" @click="nameEditModal = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary btn-sm" @click="saveNameEdit">{{ t('common.save') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- 右键菜单 -->
     <Teleport to="body">
       <template v-if="ctxMenu">
@@ -1196,10 +1260,6 @@ onBeforeUnmount(() => {
         <div class="settings-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
           <template v-if="ctxEntry">
             <div class="settings-menu-group">
-              <button v-if="ctxEntry.folder" class="settings-menu-item" @click="onCtxMoveRoot">
-                <span class="settings-menu-ico">⌂</span>
-                <span>{{ t('favorites.moveRoot') }}</span>
-              </button>
               <button
                 v-for="f in otherFolders(ctxEntry.folder?.id ?? null)"
                 :key="f.id"
@@ -1217,8 +1277,14 @@ onBeforeUnmount(() => {
                 <span class="settings-menu-ico">◈</span>
                 <span>{{ t('favorites.changeLogo') }}</span>
               </button>
+              <button class="settings-menu-item" @click="openNameEdit(ctxEntry.entry)">
+                <span class="settings-menu-ico">✎</span>
+                <span>
+                  {{ ctxEntry.entry.kind === 'port' ? t('favorites.editRemark') : t('favorites.renameEntry') }}
+                </span>
+              </button>
             </div>
-            <div class="settings-menu-group">
+            <div v-if="ctxCanRemove" class="settings-menu-group">
               <button class="settings-menu-item danger" @click="onCtxRemoveEntry">
                 <span class="settings-menu-ico">★</span>
                 <span>{{ t('ports.removeFavorite') }}</span>
@@ -1293,21 +1359,25 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-/* 两栏布局：左侧分组坞 + 右侧主区（侧栏垂直居中） */
+/* 两栏布局：左侧分组坞 + 右侧主区。
+   min-height:100% 撑满 main-body 可视区（滚动容器子元素的百分比高度按可视高解析），
+   侧栏 sticky top:50% + translateY(-50%) → 网格短时居中于可视区，长时滚动钉在可视区正中。 */
 .fav-layout {
   display: flex;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
+  min-height: 100%;
 }
 
-/* WeTab 式窄坞：52px 玻璃面板、纯图标、hover 浮出名称 */
+/* WeTab 式窄坞：52px 玻璃面板、纯图标、hover 浮出名称。
+   sticky top:50% + translateY(-50%)：始终居中于 main-body 可视区（滚动时钉在正中）。 */
 .fav-sidebar {
   position: sticky;
-  top: 0;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 10;
   width: 52px;
   min-width: 52px;
-  align-self: center;
   min-height: 240px;
   /* 长网格时坞高封顶到视口内，保证底部「+」始终可见 */
   max-height: calc(100vh - 180px);
@@ -1317,7 +1387,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 8px 0;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) var(--fav-bg-glass), transparent);
   border: 1px solid var(--border);
   backdrop-filter: blur(10px);
 }
@@ -1541,24 +1611,19 @@ onBeforeUnmount(() => {
 .fav-name-text {
   display: block;
   font-size: 13px;
+  font-weight: 600;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  cursor: text;
   /* 背景图上保证可读 */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
-.fav-edit-input {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 13px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--border-light);
-  background: var(--bg-secondary);
+/* 浅色主题：白字不可读 → 深色加粗、去投影 */
+[data-theme='light'] .fav-name-text {
   color: var(--text-primary);
-  outline: none;
+  text-shadow: none;
 }
 
 /* 弹窗内 chip */
@@ -1687,6 +1752,7 @@ onBeforeUnmount(() => {
 
   .fav-sidebar {
     position: static;
+    transform: none;
     width: 100%;
     min-width: 0;
     min-height: 0;

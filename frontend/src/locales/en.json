@@ -151,7 +151,8 @@
   "favorites": {
     "title": "Favorites",
     "empty": "No favorites yet — pick a group and click the + tile at the end of the grid, or use the card menu on the Ports page",
-    "editRemark": "Click the name to edit the remark",
+    "editRemark": "Edit remark",
+    "renameEntry": "Rename",
     "vanished": "This port is no longer in the monitored range",
     "add": "Add",
     "addTitle": "Add favorite",
@@ -177,7 +178,6 @@
     "folderCount": "{n} items",
     "emptyFolder": "Empty folder — drag icons here or use Add below",
     "addHere": "Add to this folder",
-    "moveRoot": "Move to root",
     "moveTo": "Move to \"{name}\"",
     "changeLogo": "Change icon",
     "openFolder": "Open folder",

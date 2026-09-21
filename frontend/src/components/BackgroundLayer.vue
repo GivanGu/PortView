@@ -3,6 +3,7 @@
 // 不用 backdrop-filter（省性能）。
 // 默认 absolute 铺满父容器（父容器需 position:relative）；fixed=true 时铺满视口。
 // blur 为用户自定义模糊度（px，0-30），由设置页滑动条驱动。
+// 亮度走 --bg-brightness（主题感知：深色 0.75 / 浅色 1.05）。
 defineProps<{ src: string; fixed?: boolean; blur?: number }>()
 </script>
 
@@ -11,7 +12,7 @@ defineProps<{ src: string; fixed?: boolean; blur?: number }>()
     class="bg-layer"
     :class="{ 'bg-layer-fixed': fixed }"
     :src="src"
-    :style="{ filter: `blur(${blur ?? 10}px) brightness(0.75)` }"
+    :style="{ filter: `blur(${blur ?? 10}px) brightness(var(--bg-brightness, 0.75))` }"
     alt=""
     draggable="false"
   />

@@ -55,6 +55,10 @@
   /* v1.5.2：Logo 遮罩 */
   --scrim: rgba(8, 10, 18, 0.55);
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+
+  /* v1.6.6：背景图主题适配（亮度 + 玻璃表面浓度） */
+  --bg-brightness: 0.75;
+  --fav-bg-glass: 55%;
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -69,11 +73,13 @@
 
   --text-primary: #1a1d27;
   --text-secondary: #4a5169;
-  --text-muted: #8a90a6;
+  /* 浅色主题对比度修复：muted 加深（导航图标/徽标在白底可读，≥3:1） */
+  --text-muted: #6b7290;
 
   --accent: #6366f1;
   --accent-hover: #4f46e5;
-  --accent-light: rgba(99, 102, 241, 0.1);
+  /* 品牌 mark 底色加深，白底上不再发虚 */
+  --accent-light: rgba(99, 102, 241, 0.18);
 
   --green-light: rgba(34, 197, 94, 0.12);
   --red-light: rgba(239, 68, 68, 0.1);
@@ -86,9 +92,13 @@
   --shadow: 0 4px 24px rgba(30, 41, 59, 0.08);
   --shadow-sm: 0 2px 8px rgba(30, 41, 59, 0.06);
 
-  /* v1.5.2：Logo 遮罩（亮色） */
-  --scrim: rgba(255, 255, 255, 0.62);
+  /* v1.5.2：Logo 遮罩（亮色）：白 62% 会把浅色 Logo 洗掉，降到 30% */
+  --scrim: rgba(255, 255, 255, 0.3);
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  /* v1.6.6：浅色主题背景图调亮 + 玻璃面加厚，避免白玻璃叠暗图发浑 */
+  --bg-brightness: 1.05;
+  --fav-bg-glass: 78%;
 }
 
 /* ── 主题切换按钮 ── */
@@ -2897,7 +2907,7 @@ html[data-fav-bg='all'] .topbar,
 html[data-fav-bg='all'] .rail,
 html[data-fav-bg='all'] .statusbar,
 html[data-fav-bg='all'] .main-header {
-  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) var(--fav-bg-glass), transparent);
 }
 html[data-fav-bg='all'] .main-content {
   background: transparent;
