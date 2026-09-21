@@ -36,6 +36,7 @@ import SearchFocusOverlay from '@/components/SearchFocusOverlay.vue'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
 import { useSearch, type Tab } from '@/store/search'
+import { useFavStatus } from '@/store/favStatus'
 
 type Theme = 'dark' | 'light'
 type Lang = 'zh' | 'en'
@@ -393,6 +394,9 @@ const {
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const searchShaking = ref(false)
 
+// 收藏页状态栏计数器（FavoritesView 写入，离开收藏页 active=false）
+const { status: favStatus } = useFavStatus()
+
 const searchPlaceholder = computed(() => {
   switch (activeTab.value) {
     case 'overview':
@@ -682,6 +686,16 @@ onBeforeUnmount(() => {
         </span>
       </div>
       <div class="status-item status-right">
+        <!-- 收藏页计数器：分组名 · 总数 · 离线 · 在线（仅收藏页前台时显示） -->
+        <span v-if="favStatus.active" class="fav-status">
+          <span class="fav-status-group">{{ favStatus.group }}</span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.total')">{{ t('statusbar.total') }} <b>{{ favStatus.total }}</b></span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.offline')">{{ t('statusbar.offline') }} <b>{{ favStatus.offline }}</b></span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.online')">{{ t('statusbar.online') }} <b>{{ favStatus.online }}</b></span>
+        </span>
         <button
           v-if="!auth.has_password"
           class="pw-chip"

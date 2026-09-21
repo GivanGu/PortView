@@ -41,7 +41,10 @@
     "refreshManual": "Manual refresh",
     "refreshAuto": "Auto refresh every {s}s",
     "occupancy": "Occupancy",
-    "containers": "Containers"
+    "containers": "Containers",
+    "total": "Total",
+    "offline": "Offline",
+    "online": "Online"
   },
   "common": {
     "loading": "Loading…",
@@ -147,8 +150,7 @@
   },
   "favorites": {
     "title": "Favorites",
-    "empty": "No favorites yet — click Add in the top right, or use the card menu on the Ports page",
-    "count": "{n} total",
+    "empty": "No favorites yet — pick a group and click the + tile at the end of the grid, or use the card menu on the Ports page",
     "editRemark": "Click the name to edit the remark",
     "vanished": "This port is no longer in the monitored range",
     "add": "Add",
@@ -180,10 +182,11 @@
     "changeLogo": "Change icon",
     "openFolder": "Open folder",
     "searchPlaceholder": "Search favorites…",
-    "offlineOnly": "Offline only",
-    "offlineCount": "{n} offline",
     "dragToFolder": "Drag here to move into the folder",
-    "allGroup": "All"
+    "allGroup": "All",
+    "onlineGroup": "Online",
+    "offlineGroup": "Offline",
+    "defaultFolder": "Default"
   },
   "hidden": {
     "total": "{n} total",

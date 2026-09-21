@@ -41,7 +41,10 @@
     "refreshManual": "手动刷新",
     "refreshAuto": "每 {s} 秒自动刷新",
     "occupancy": "占用率",
-    "containers": "容器"
+    "containers": "容器",
+    "total": "总数",
+    "offline": "离线",
+    "online": "在线"
   },
   "common": {
     "loading": "加载中…",
@@ -147,8 +150,7 @@
   },
   "favorites": {
     "title": "收藏",
-    "empty": "还没有收藏 — 点右上角「添加」，或去端口页卡片菜单添加",
-    "count": "{n} 项",
+    "empty": "还没有收藏 — 选一个分组，点网格末尾的「+」添加，或去端口页卡片菜单添加",
     "editRemark": "点击名称编辑备注",
     "vanished": "该端口已不在监控范围内",
     "add": "添加",
@@ -180,10 +182,11 @@
     "changeLogo": "更换图标",
     "openFolder": "打开文件夹",
     "searchPlaceholder": "搜索收藏…",
-    "offlineOnly": "只看离线",
-    "offlineCount": "{n} 个离线",
     "dragToFolder": "拖到此处移入文件夹",
-    "allGroup": "全部"
+    "allGroup": "全部",
+    "onlineGroup": "在线",
+    "offlineGroup": "离线",
+    "defaultFolder": "默认分组"
   },
   "hidden": {
     "total": "共 {n} 个",

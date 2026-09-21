@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Star,
@@ -29,6 +29,8 @@ import {
   Plane,
   Dumbbell,
   Wallet,
+  Wifi,
+  WifiOff,
 } from 'lucide-vue-next'
 import Sortable from 'sortablejs'
 import {
@@ -53,6 +55,7 @@ import {
 import { appKey, normalizeServiceName } from '@/logo'
 import { usePrefs, uid, urlLogoKey, hasPortFavorite } from '@/store/prefs'
 import { useSearch } from '@/store/search'
+import { useFavStatus } from '@/store/favStatus'
 import { useOpenService } from '@/composables/useOpenService'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import BackgroundLayer from '@/components/BackgroundLayer.vue'
@@ -222,19 +225,24 @@ const allEntries = computed<FlatEntry[]>(() => {
   return out
 })
 
-// 根条目（「全部」视图）与文件夹列表（左侧分组栏）
-const rootEntries = computed<FavEntry[]>(() =>
-  favorites.value.filter((it): it is FavEntry => it.kind !== 'folder'),
-)
+// 文件夹列表（左侧分组栏）
 const folders = computed<FavFolder[]>(() =>
   favorites.value.filter((it): it is FavFolder => it.kind === 'folder'),
 )
 const entryCount = computed(() => allEntries.value.length)
 
-// 当前选中的分组：null = 「全部」（根条目），否则为文件夹 id
+// 当前选中的视图：null = 「全部」（所有条目），'online'/'offline' = 在线/离线视图，否则为文件夹 id
 const selectedGroup = ref<string | null>(null)
+const isOnlineView = computed(() => selectedGroup.value === 'online')
+const isOfflineView = computed(() => selectedGroup.value === 'offline')
+const isFolderView = computed(
+  () =>
+    selectedGroup.value != null &&
+    selectedGroup.value !== 'online' &&
+    selectedGroup.value !== 'offline',
+)
 const currentFolder = computed<FavFolder | null>(() => {
-  if (!selectedGroup.value) return null
+  if (!isFolderView.value) return null
   return folders.value.find((f) => f.id === selectedGroup.value) ?? null
 })
 
@@ -311,15 +319,10 @@ function ensureUrlFavicons() {
   }
 }
 
-// ── 搜索 / 离线筛选（过滤时扁平展示，隐藏分组结构）──
+// ── 搜索（过滤时扁平展示，隐藏分组结构）──
 // v1.6.6：搜索词来自顶栏全局搜索（store 单例，切页自动清空）
-const { query: search } = useSearch()
-const offlineOnly = ref(false)
-const filtering = computed(() => search.value.trim() !== '' || offlineOnly.value)
-
-const offlineCount = computed(
-  () => allEntries.value.filter((fe) => fe.entry.kind === 'port' && isOfflineEntry(fe.entry)).length,
-)
+const { query: search, activeTab } = useSearch()
+const searching = computed(() => search.value.trim() !== '')
 
 function entryMatches(entry: FavEntry, folder: FavFolder | null, q: string): boolean {
   if (entryName(entry).toLowerCase().includes(q)) return true
@@ -328,24 +331,58 @@ function entryMatches(entry: FavEntry, folder: FavFolder | null, q: string): boo
   return false
 }
 
-// 网格展示的条目：过滤时扁平全量；否则仅当前分组
+// 网格展示的条目：搜索 → 扁平匹配；在线/离线 → 扁平视图；文件夹 → 组内条目；「全部」→ 所有条目
 const visible = computed<FavEntry[]>(() => {
-  if (filtering.value) {
-    const q = search.value.trim().toLowerCase()
+  const q = search.value.trim().toLowerCase()
+  if (q) {
     const out: FavEntry[] = []
     for (const { entry, folder } of allEntries.value) {
-      if (offlineOnly.value && (entry.kind !== 'port' || !isOfflineEntry(entry))) continue
-      if (q && !entryMatches(entry, folder, q)) continue
+      if (!entryMatches(entry, folder, q)) continue
       out.push(entry)
     }
     return out
   }
-  if (selectedGroup.value) {
+  if (isOnlineView.value) return allEntries.value.filter((fe) => !isOfflineEntry(fe.entry)).map((fe) => fe.entry)
+  if (isOfflineView.value) return allEntries.value.filter((fe) => isOfflineEntry(fe.entry)).map((fe) => fe.entry)
+  if (isFolderView.value) {
     const f = currentFolder.value
     return f ? f.items : []
   }
-  return rootEntries.value
+  return allEntries.value.map((fe) => fe.entry)
 })
+
+// 当前视图名称（状态栏计数器用）
+const currentGroupName = computed(() => {
+  if (isOnlineView.value) return t('favorites.onlineGroup')
+  if (isOfflineView.value) return t('favorites.offlineGroup')
+  if (isFolderView.value) return currentFolder.value?.name ?? ''
+  return t('favorites.allGroup')
+})
+
+// ── 状态栏计数器联动（本页写入，App.vue 状态栏读取）──
+const { setFavStatus } = useFavStatus()
+watchEffect(() => {
+  const active = activeTab.value === 'favorites'
+  const list = visible.value
+  const off = list.filter((e) => isOfflineEntry(e)).length
+  setFavStatus({
+    active,
+    group: active ? currentGroupName.value : '',
+    total: active ? list.length : 0,
+    offline: active ? off : 0,
+    online: active ? list.length - off : 0,
+  })
+})
+
+// ── 默认分组：添加只允许在文件夹内，保证始终至少有一个分组 ──
+function ensureDefaultFolder() {
+  if (folders.value.length > 0) return
+  saveFavorites([
+    ...favorites.value,
+    { id: uid('folder'), kind: 'folder', name: t('favorites.defaultFolder'), icon: 'Folder', items: [] },
+  ])
+}
+watch(folders, () => ensureDefaultFolder(), { immediate: true })
 
 // ── 变更操作（全部整体 PATCH，走 saveFavorites 串行写入）──
 function addEntry(targetFolderId: string | null, entry: FavEntry) {
@@ -419,15 +456,6 @@ function deleteFolder(id: string) {
   if (selectedGroup.value === id) selectedGroup.value = null
 }
 
-// 重排根条目（保持文件夹位置不动，仅重排非文件夹项）
-function reorderRootEntries(oldIndex: number, newIndex: number): GridItem[] {
-  const root = [...rootEntries.value]
-  const [m] = root.splice(oldIndex, 1)
-  root.splice(newIndex, 0, m)
-  let i = 0
-  return favorites.value.map((it) => (it.kind === 'folder' ? it : root[i++]))
-}
-
 // 重排文件夹（保持根条目位置不动，仅重排文件夹项）
 function reorderFolders(oldIndex: number, newIndex: number): GridItem[] {
   const fs = [...folders.value]
@@ -490,6 +518,12 @@ function openFolderMenu(folder: FavFolder, e: MouseEvent) {
 }
 function openRootMenu(e: MouseEvent) {
   ctxMenu.value = { ...clampMenu(e), target: { kind: 'root' } }
+}
+// 网格空白处右键：仅文件夹视图弹出「添加」菜单（根下不允许添加）
+function onGridContextMenu(e: MouseEvent) {
+  if (!isFolderView.value) return
+  e.preventDefault()
+  openRootMenu(e)
 }
 function closeCtxMenu() {
   ctxMenu.value = null
@@ -571,14 +605,15 @@ function onRootDragMove(e: MouseEvent) {
   dragOverFolderId.value = tile?.dataset.folderId ?? null
 }
 
-// 网格：条目排序 + 拖到左侧分组栏移动
+// 网格：条目排序 + 拖到左侧分组栏移动（仅文件夹视图；扁平视图禁用拖拽）
 function setupRootSortable() {
   rootSortable?.destroy()
   rootSortable = null
-  if (loading.value || filtering.value || visible.value.length === 0 || !gridEl.value) return
+  if (loading.value || searching.value || !isFolderView.value || visible.value.length === 0 || !gridEl.value) return
   rootSortable = Sortable.create(gridEl.value, {
     animation: 150,
     group: 'fav-entries', // 独立分组：条目不会跨入侧栏文件夹列表
+    filter: '.fav-add-tile', // 「+」磁贴不可拖
     onStart: (evt) => {
       // 拖拽中的节点自身会挡住 elementFromPoint 命中检测，需排除
       ;(evt.item as HTMLElement).style.pointerEvents = 'none'
@@ -598,11 +633,10 @@ function setupRootSortable() {
       }
       const { oldIndex, newIndex } = evt
       if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
-      // 当前分组内排序：根 → 重排根条目；文件夹 → 重排该文件夹内部
-      if (selectedGroup.value) {
-        saveFavorites(reorderInFolder(oldIndex, newIndex, selectedGroup.value))
-      } else {
-        saveFavorites(reorderRootEntries(oldIndex, newIndex))
+      // 仅文件夹视图启用拖拽 → 重排该文件夹内部
+      const gid = selectedGroup.value
+      if (gid && gid !== 'online' && gid !== 'offline') {
+        saveFavorites(reorderInFolder(oldIndex, newIndex, gid))
       }
     },
   })
@@ -626,7 +660,7 @@ function setupFolderSortable() {
 }
 
 watch(
-  [loading, filtering, selectedGroup, () => visible.value.length],
+  [loading, searching, selectedGroup, () => visible.value.length],
   () => {
     void nextTick(() => setupRootSortable())
   },
@@ -891,22 +925,6 @@ onBeforeUnmount(() => {
       :src="backgroundUrl(backgroundVersion)"
       :blur="backgroundBlur"
     />
-    <div class="main-header">
-      <h1>
-        {{ t('favorites.title') }}
-        <span v-if="currentFolder" class="fav-current-name">/ {{ currentFolder.name }}</span>
-      </h1>
-      <div class="header-actions">
-        <span class="meta">{{ t('favorites.count', { n: entryCount }) }}</span>
-        <span v-if="offlineCount > 0" class="offline-badge" :title="t('favorites.offlineCount', { n: offlineCount })">
-          {{ t('favorites.offlineCount', { n: offlineCount }) }}
-        </span>
-        <button class="btn btn-primary btn-sm" @click="openAddModal(selectedGroup)">
-          <Plus :size="14" /> {{ t('favorites.add') }}
-        </button>
-      </div>
-    </div>
-
     <div class="main-body">
       <div v-if="loading" class="empty-state">
         <div class="empty-text">{{ t('common.loading') }}</div>
@@ -914,8 +932,8 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <div class="fav-layout">
-          <!-- 左侧分组栏：WeTab 式窄坞（纯图标 + hover 浮出名称，过滤时隐藏） -->
-          <aside v-if="!filtering" class="fav-sidebar">
+          <!-- 左侧分组栏：WeTab 式窄坞（纯图标 + hover 浮出名称，搜索时隐藏） -->
+          <aside v-if="!searching" class="fav-sidebar">
             <div
               class="fav-group-item all"
               data-folder-id="root"
@@ -925,6 +943,26 @@ onBeforeUnmount(() => {
               @mouseleave="onGroupLeave"
             >
               <Star :size="20" class="fav-group-ico" />
+            </div>
+
+            <div
+              class="fav-group-item"
+              :class="{ active: selectedGroup === 'online' }"
+              @click="selectedGroup = 'online'"
+              @mouseenter="onGroupEnter($event, t('favorites.onlineGroup'))"
+              @mouseleave="onGroupLeave"
+            >
+              <Wifi :size="20" class="fav-group-ico" />
+            </div>
+
+            <div
+              class="fav-group-item"
+              :class="{ active: selectedGroup === 'offline' }"
+              @click="selectedGroup = 'offline'"
+              @mouseenter="onGroupEnter($event, t('favorites.offlineGroup'))"
+              @mouseleave="onGroupLeave"
+            >
+              <WifiOff :size="20" class="fav-group-ico" />
             </div>
 
             <div class="fav-divider"></div>
@@ -957,30 +995,33 @@ onBeforeUnmount(() => {
             </button>
           </aside>
 
-          <!-- 右侧主区：工具栏 + 网格（搜索已上移顶栏全局搜索） -->
+          <!-- 右侧主区：网格（搜索已上移顶栏全局搜索） -->
           <div class="fav-main">
-            <div class="toolbar">
-              <button
-                class="chip"
-                :class="{ active: offlineOnly }"
-                @click="offlineOnly = !offlineOnly"
-              >
-                {{ t('favorites.offlineOnly') }} ({{ offlineCount }})
-              </button>
-            </div>
-
             <div v-if="entryCount === 0" class="empty-state">
               <div class="empty-icon">
                 <Star :size="32" />
               </div>
               <div class="empty-text">{{ t('favorites.empty') }}</div>
+              <button
+                v-if="folders.length > 0"
+                class="btn btn-primary btn-sm"
+                @click="openAddModal(folders[0].id)"
+              >
+                <Plus :size="14" /> {{ t('favorites.add') }}
+              </button>
             </div>
 
             <div v-else-if="visible.length === 0" class="empty-state">
               <div class="empty-text">{{ t('common.noResult') }}</div>
             </div>
 
-            <div v-else ref="gridEl" class="fav-grid" @contextmenu.prevent="openRootMenu($event)">
+            <div
+              v-else
+              ref="gridEl"
+              class="fav-grid"
+              :class="{ 'no-drag': !isFolderView || searching }"
+              @contextmenu="onGridContextMenu($event)"
+            >
               <div
                 v-for="entry in visible"
                 :key="entry.id"
@@ -1008,6 +1049,16 @@ onBeforeUnmount(() => {
                   <span v-else class="fav-name-text" @click="entry.kind === 'port' ? startEdit(entry) : openEntry(entry)">
                     {{ entryName(entry) }}
                   </span>
+                </div>
+              </div>
+
+              <!-- 「+」磁贴：仅文件夹视图显示（根下不允许添加） -->
+              <div v-if="isFolderView" class="fav-tile fav-add-tile" :title="t('favorites.add')" @click="openAddModal(selectedGroup)">
+                <div class="fav-tile-logo">
+                  <Plus :size="26" />
+                </div>
+                <div class="fav-tile-name">
+                  <span class="fav-name-text">{{ t('favorites.add') }}</span>
                 </div>
               </div>
             </div>
@@ -1232,26 +1283,21 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.favorites-view .main-header,
 .favorites-view .main-body {
   position: relative;
   z-index: 1;
 }
 
 /* 背景作用域 = 收藏页时，表面半透明让毛玻璃透出 */
-.favorites-view.has-bg .main-header {
-  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
-}
-
 .favorites-view.has-bg .main-body {
   background: transparent;
 }
 
-/* 两栏布局：左侧分组坞 + 右侧主区 */
+/* 两栏布局：左侧分组坞 + 右侧主区（侧栏垂直居中） */
 .fav-layout {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 /* WeTab 式窄坞：52px 玻璃面板、纯图标、hover 浮出名称 */
@@ -1261,7 +1307,7 @@ onBeforeUnmount(() => {
   z-index: 10;
   width: 52px;
   min-width: 52px;
-  align-self: stretch;
+  align-self: center;
   min-height: 240px;
   /* 长网格时坞高封顶到视口内，保证底部「+」始终可见 */
   max-height: calc(100vh - 180px);
@@ -1356,13 +1402,6 @@ onBeforeUnmount(() => {
   margin-top: auto;
 }
 
-/* 当前分组名（标题旁，触屏设备无 hover 也能看到所在分组） */
-.fav-current-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
 /* 分组弹窗内的图标网格 */
 .folder-icon-grid {
   display: grid;
@@ -1433,6 +1472,32 @@ onBeforeUnmount(() => {
   opacity: 0.55;
 }
 
+/* 「+」磁贴：虚线描边，hover 高亮 */
+.fav-add-tile {
+  cursor: pointer;
+}
+
+.fav-add-tile .fav-tile-logo {
+  border: 1px dashed var(--border-light);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.fav-add-tile:hover .fav-tile-logo {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+
+.fav-add-tile .fav-name-text {
+  cursor: pointer;
+}
+
+/* 扁平视图（全部/在线/离线）禁用拖拽外观 */
+.fav-grid.no-drag .fav-tile {
+  cursor: default;
+}
+
 .fav-tile .port-status-dot {
   position: absolute;
   top: 0;
@@ -1496,17 +1561,7 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-/* 顶栏离线徽标 */
-.offline-badge {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-}
-
-/* 筛选 chip */
+/* 弹窗内 chip */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -1538,6 +1593,10 @@ onBeforeUnmount(() => {
 
 .empty-sm {
   padding: 24px 0;
+}
+
+.empty-state .btn {
+  margin-top: 16px;
 }
 
 .add-tabs {
