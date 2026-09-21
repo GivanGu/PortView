@@ -1344,7 +1344,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   overflow-y: auto;
-  padding: 0 8px;
+  /* 禁止横向滚动条：垂直滚动条（6px）出现时会挤占内容区，
+     若保留 8px 水平 padding 会使 36px 图标溢出 → 横向滚动条。
+     图标 flex 居中无需 padding，内容区 52px 扣掉滚动条仍 > 36px。 */
+  overflow-x: hidden;
 }
 
 .fav-new-btn {
