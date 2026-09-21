@@ -9,8 +9,13 @@ import {
   type HiddenPortDetail,
 } from '@/api'
 import { EyeOff, Eye, Container, Server } from 'lucide-vue-next'
+import { useSearchFocus } from '@/composables/useSearchFocus'
 
 const { t } = useI18n()
+
+// v1.6.6：顶栏全局搜索 → 本页无过滤能力，命中行播放聚焦动画
+const rootRef = ref<HTMLElement | null>(null)
+useSearchFocus(rootRef, 'hidden')
 
 const hiddenPorts = ref<number[]>([])
 const details = ref<HiddenPortDetail[]>([])
@@ -56,7 +61,7 @@ onMounted(() => loadData())
 </script>
 
 <template>
-  <div>
+  <div ref="rootRef">
     <div class="main-header">
       <h1>{{ t('nav.hidden') }}</h1>
       <div class="header-actions">
@@ -83,6 +88,7 @@ onMounted(() => loadData())
           v-for="item in hiddenItems"
           :key="item.port"
           class="hidden-item hidden-item-detail"
+          data-sfocus
         >
           <div class="hidden-detail-main">
             <span class="port-label">{{ item.port }}</span>

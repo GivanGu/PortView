@@ -30,16 +30,18 @@ import {
 import { appKey, normalizeServiceName } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs, { hasPortFavorite, removePortFavorite, uid } from '@/store/prefs'
+import { useSearch } from '@/store/search'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import PortCardContent from '@/components/PortCardContent.vue'
-import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
+import { Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
 const loading = ref(false)
-const searchQuery = ref('')
+// v1.6.6：搜索词改由顶栏全局搜索驱动（store 单例，切页自动清空）
+const { query: searchQuery, activeTab: searchActiveTab } = useSearch()
 const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
 const editingPort = ref<number | null>(null)
@@ -464,9 +466,10 @@ function handleExport(format: ExportFormat) {
   exportPorts(analysis.value.port_cards, format)
 }
 
-// ── 搜索防抖 ──
+// ── 搜索防抖（v1.6.6：词来自顶栏全局搜索，仅本页激活时生效）──
 let searchTimer: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
+  if (searchActiveTab.value !== 'ports') return
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadData, 300)
 })
@@ -703,17 +706,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="main-body">
-      <!-- 工具栏 -->
+      <!-- 工具栏（搜索已上移顶栏全局搜索） -->
       <div class="toolbar">
-        <div class="search-box">
-          <span class="search-icon"><Search :size="15" /></span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('ports.searchPlaceholder')"
-          />
-        </div>
-
         <div class="filter-group">
           <button
             class="filter-btn"

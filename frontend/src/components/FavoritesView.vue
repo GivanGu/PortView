@@ -52,6 +52,7 @@ import {
 } from '@/api'
 import { appKey, normalizeServiceName } from '@/logo'
 import { usePrefs, uid, urlLogoKey, hasPortFavorite } from '@/store/prefs'
+import { useSearch } from '@/store/search'
 import { useOpenService } from '@/composables/useOpenService'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import BackgroundLayer from '@/components/BackgroundLayer.vue'
@@ -99,8 +100,16 @@ function folderIcon(f: FavFolder): Component {
   return (f.icon && FOLDER_ICON_MAP[f.icon]) || Folder
 }
 
-function setFolderIcon(id: string, icon: string) {
-  saveFavorites(favorites.value.map((it) => (it.kind === 'folder' && it.id === id ? { ...it, icon } : it)))
+// 侧栏 hover 名称标签：Teleport 到 body 用 fixed 定位（图标右侧）。
+// 不放在 .fav-group-list 内部 —— 该容器 overflow-y:auto 会强制 overflow-x:auto，
+// 内部绝对定位的标签会撑出常驻横向滚动条。
+const hoverLabel = ref<{ x: number; y: number; text: string } | null>(null)
+function onGroupEnter(e: MouseEvent, text: string) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  hoverLabel.value = { x: rect.right + 8, y: rect.top + rect.height / 2, text }
+}
+function onGroupLeave() {
+  hoverLabel.value = null
 }
 const { showAddrPrompt, loadManualSchemes, handleOpenService, onAddrConfigure, onAddrDismissed } = useOpenService()
 
@@ -302,7 +311,8 @@ function ensureUrlFavicons() {
 }
 
 // ── 搜索 / 离线筛选（过滤时扁平展示，隐藏分组结构）──
-const search = ref('')
+// v1.6.6：搜索词来自顶栏全局搜索（store 单例，切页自动清空）
+const { query: search } = useSearch()
 const offlineOnly = ref(false)
 const filtering = computed(() => search.value.trim() !== '' || offlineOnly.value)
 
@@ -389,12 +399,14 @@ function moveEntry(entryId: string, targetFolderId: string | null) {
   saveFavorites(stripped)
 }
 
-function addFolder(name: string) {
-  saveFavorites([...favorites.value, { id: uid('folder'), kind: 'folder', name, items: [] }])
+function addFolder(name: string, icon: string) {
+  saveFavorites([...favorites.value, { id: uid('folder'), kind: 'folder', name, icon, items: [] }])
 }
 
-function renameFolder(id: string, name: string) {
-  saveFavorites(favorites.value.map((it) => (it.kind === 'folder' && it.id === id ? { ...it, name } : it)))
+function saveFolderMeta(id: string, name: string, icon: string) {
+  saveFavorites(
+    favorites.value.map((it) => (it.kind === 'folder' && it.id === id ? { ...it, name, icon } : it)),
+  )
 }
 
 function deleteFolder(id: string) {
@@ -498,7 +510,6 @@ function onScrollCloseMenu() {
 function onKeydownCloseMenu(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (ctxMenu.value) ctxMenu.value = null
-    if (iconPicker.value) iconPicker.value = null
     if (nameModal.value) nameModal.value = null
   }
 }
@@ -779,51 +790,35 @@ async function onLogoFilePicked(e: Event) {
   }
 }
 
-// ── 新建 / 重命名分组弹窗 ──
+// ── 新建 / 重命名分组弹窗（名称 + 图标一体，v1.6.6 统一入口）──
 const nameModal = ref<{ mode: 'new' | 'rename'; folderId?: string } | null>(null)
 const nameInput = ref('')
+const iconInput = ref('Folder')
 
 function openNewGroup() {
   nameInput.value = ''
+  iconInput.value = 'Folder'
   nameModal.value = { mode: 'new' }
 }
 function openRenameFolder(folder: FavFolder) {
   closeCtxMenu()
   nameInput.value = folder.name
+  iconInput.value = folder.icon || 'Folder'
   nameModal.value = { mode: 'rename', folderId: folder.id }
 }
 function saveNameModal() {
   const name = nameInput.value.trim()
   if (!name || !nameModal.value) return
   if (nameModal.value.mode === 'new') {
-    addFolder(name)
+    addFolder(name, iconInput.value)
   } else if (nameModal.value.folderId) {
-    renameFolder(nameModal.value.folderId, name)
+    saveFolderMeta(nameModal.value.folderId, name, iconInput.value)
   }
   nameModal.value = null
 }
 
-// ── 分组图标选择器（从右键菜单打开，浮层网格）──
-const iconPicker = ref<{ x: number; y: number; folderId: string } | null>(null)
-const iconPickerFolder = computed<FavFolder | null>(() => {
-  const id = iconPicker.value?.folderId
-  return id ? (folders.value.find((f) => f.id === id) ?? null) : null
-})
-
-function openIconPicker(e: MouseEvent) {
-  const target = ctxMenu.value?.target
-  if (target?.kind !== 'folder') return
-  // 选择器约 244×236，超出视口时收回
-  let x = e.clientX
-  let y = e.clientY
-  if (x + 252 > window.innerWidth) x = Math.max(8, window.innerWidth - 252)
-  if (y + 244 > window.innerHeight) y = Math.max(8, window.innerHeight - 244)
-  iconPicker.value = { x, y, folderId: target.folder.id }
-  ctxMenu.value = null
-}
-function pickIcon(name: string) {
-  if (iconPicker.value) setFolderIcon(iconPicker.value.folderId, name)
-  iconPicker.value = null
+function pickModalIcon(name: string) {
+  iconInput.value = name
 }
 
 // ── 行内备注编辑（port 条目，与端口页备注同步）──
@@ -924,14 +919,15 @@ onBeforeUnmount(() => {
               data-folder-id="root"
               :class="{ active: selectedGroup === null, 'drag-over': dragOverFolderId === 'root' }"
               @click="selectedGroup = null"
+              @mouseenter="onGroupEnter($event, t('favorites.allGroup'))"
+              @mouseleave="onGroupLeave"
             >
               <Star :size="20" class="fav-group-ico" />
-              <span class="fav-group-label">{{ t('favorites.allGroup') }}</span>
             </div>
 
             <div class="fav-divider"></div>
 
-            <div ref="folderListEl" class="fav-group-list">
+            <div ref="folderListEl" class="fav-group-list" @scroll="onGroupLeave">
               <div
                 v-for="f in folders"
                 :key="f.id"
@@ -940,27 +936,28 @@ onBeforeUnmount(() => {
                 :data-folder-id="f.id"
                 @click="selectedGroup = f.id"
                 @contextmenu.prevent.stop="openFolderMenu(f, $event)"
+                @mouseenter="onGroupEnter($event, f.name)"
+                @mouseleave="onGroupLeave"
               >
                 <component :is="folderIcon(f)" :size="20" class="fav-group-ico" />
-                <span class="fav-group-label">{{ f.name }}</span>
               </div>
             </div>
 
             <div class="fav-divider"></div>
 
-            <button class="fav-group-item fav-new-btn" @click="openNewGroup">
+            <button
+              class="fav-group-item fav-new-btn"
+              @click="openNewGroup"
+              @mouseenter="onGroupEnter($event, t('favorites.newFolder'))"
+              @mouseleave="onGroupLeave"
+            >
               <Plus :size="20" class="fav-group-ico" />
-              <span class="fav-group-label">{{ t('favorites.newFolder') }}</span>
             </button>
           </aside>
 
-          <!-- 右侧主区：工具栏 + 网格 -->
+          <!-- 右侧主区：工具栏 + 网格（搜索已上移顶栏全局搜索） -->
           <div class="fav-main">
             <div class="toolbar">
-              <div class="search-box">
-                <span class="search-icon"><Search :size="15" /></span>
-                <input v-model="search" type="text" :placeholder="t('favorites.searchPlaceholder')" />
-              </div>
               <button
                 class="chip"
                 :class="{ active: offlineOnly }"
@@ -1098,7 +1095,7 @@ onBeforeUnmount(() => {
       </div>
     </Teleport>
 
-    <!-- 重命名分组弹窗 -->
+    <!-- 新建 / 重命名分组弹窗（名称 + 图标一体） -->
     <Teleport to="body">
       <div v-if="nameModal" class="modal-overlay" @click.self="nameModal = null">
         <div class="modal modal-sm">
@@ -1109,6 +1106,18 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <div class="modal-body">
+            <div class="folder-icon-grid">
+              <button
+                v-for="(Comp, name) in FOLDER_ICON_MAP"
+                :key="name"
+                class="folder-icon-item"
+                :class="{ active: iconInput === name }"
+                :title="String(name)"
+                @click="pickModalIcon(String(name))"
+              >
+                <component :is="Comp" :size="18" />
+              </button>
+            </div>
             <input
               v-model="nameInput"
               class="form-input"
@@ -1166,10 +1175,6 @@ onBeforeUnmount(() => {
 
           <template v-else-if="ctxFolder">
             <div class="settings-menu-group">
-              <button class="settings-menu-item" @click="openIconPicker($event)">
-                <span class="settings-menu-ico">◈</span>
-                <span>{{ t('favorites.icon') }}</span>
-              </button>
               <button class="settings-menu-item" @click="openRenameFolder(ctxFolder.folder)">
                 <span class="settings-menu-ico">✎</span>
                 <span>{{ t('favorites.renameFolder') }}</span>
@@ -1195,26 +1200,15 @@ onBeforeUnmount(() => {
       </template>
     </Teleport>
 
-    <!-- 分组图标选择器 -->
+    <!-- 侧栏 hover 名称标签（body 级 fixed，避免撑出侧栏横向滚动条） -->
     <Teleport to="body">
-      <template v-if="iconPicker">
-        <div class="settings-menu-overlay" @click="iconPicker = null"></div>
-        <div class="icon-picker" :style="{ left: iconPicker.x + 'px', top: iconPicker.y + 'px' }">
-          <div class="icon-picker-title">{{ t('favorites.pickIcon') }}</div>
-          <div class="icon-picker-grid">
-            <button
-              v-for="(Comp, name) in FOLDER_ICON_MAP"
-              :key="name"
-              class="icon-picker-item"
-              :class="{ active: iconPickerFolder?.icon === name }"
-              :title="String(name)"
-              @click="pickIcon(String(name))"
-            >
-              <component :is="Comp" :size="18" />
-            </button>
-          </div>
-        </div>
-      </template>
+      <div
+        v-if="hoverLabel"
+        class="fav-hover-label"
+        :style="{ left: hoverLabel.x + 'px', top: hoverLabel.y + 'px' }"
+      >
+        {{ hoverLabel.text }}
+      </div>
     </Teleport>
 
     <!-- 更换图标文件选择（隐藏） -->
@@ -1314,14 +1308,12 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* hover 浮出名称：图标右侧白色胶囊（WeTab 同款） */
-.fav-group-label {
-  position: absolute;
-  left: 48px;
-  top: 50%;
+/* hover 浮出名称：body 级 fixed 白色胶囊（WeTab 同款），定位在图标右侧 */
+.fav-hover-label {
+  position: fixed;
   transform: translateY(-50%);
-  z-index: 30;
-  max-width: 140px;
+  z-index: 1000;
+  max-width: 180px;
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid var(--border);
@@ -1333,13 +1325,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s;
-}
-
-.fav-group-item:hover .fav-group-label {
-  opacity: 1;
 }
 
 .fav-divider {
@@ -1372,48 +1358,35 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
-/* 分组图标选择器 */
-.icon-picker {
-  position: fixed;
-  z-index: 1000;
-  width: 244px;
-  padding: 10px;
-  border-radius: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-
-.icon-picker-title {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.icon-picker-grid {
+/* 分组弹窗内的图标网格 */
+.folder-icon-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 4px;
+  margin-bottom: 14px;
 }
 
-.icon-picker-item {
+.folder-icon-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 34px;
   border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.icon-picker-item:hover {
+.folder-icon-item:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
 }
 
-.icon-picker-item.active {
+.folder-icon-item.active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
   color: var(--accent);
 }
 
@@ -1679,11 +1652,6 @@ onBeforeUnmount(() => {
   .fav-new-btn {
     margin-top: 0;
     margin-left: auto;
-  }
-
-  /* 触屏无 hover：窄屏下常显名称胶囊 */
-  .fav-group-label {
-    opacity: 1;
   }
 }
 </style>

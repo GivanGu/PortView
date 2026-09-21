@@ -17,6 +17,9 @@
   },
   "topbar": {
     "searchPlaceholder": "Search ports, services, containers…",
+    "searchOverview": "Search stats, charts…",
+    "searchSettings": "Search settings…",
+    "searchClear": "Clear search",
     "searchKbd": "⌘K",
     "themeLight": "Light",
     "themeDark": "Dark",
@@ -180,12 +183,11 @@
     "offlineOnly": "Offline only",
     "offlineCount": "{n} offline",
     "dragToFolder": "Drag here to move into the folder",
-    "allGroup": "All",
-    "icon": "Icon",
-    "pickIcon": "Pick a group icon"
+    "allGroup": "All"
   },
   "hidden": {
     "total": "{n} total",
+    "searchPlaceholder": "Search hidden ports, services, containers…",
     "unhideAll": "Unhide all",
     "unhide": "Unhide",
     "unhideAllConfirm": "Unhide all {n} ports?",

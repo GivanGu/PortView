@@ -17,6 +17,7 @@ import {
   RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
@@ -31,10 +32,11 @@ import SettingsView from '@/components/SettingsView.vue'
 import LoginView from '@/components/LoginView.vue'
 import PasswordPrompt from '@/components/PasswordPrompt.vue'
 import BackgroundLayer from '@/components/BackgroundLayer.vue'
+import SearchFocusOverlay from '@/components/SearchFocusOverlay.vue'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
+import { useSearch, type Tab } from '@/store/search'
 
-type Tab = 'overview' | 'favorites' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
 type Lang = 'zh' | 'en'
 
@@ -370,7 +372,77 @@ const visited = reactive<Record<Tab, boolean>>({
 function switchTab(tab: Tab) {
   visited[tab] = true
   activeTab.value = tab
+  // 先更新 store 的激活页，再清空搜索词：
+  // 各视图的搜索 watch 以 store.activeTab 为守卫，顺序反了会让旧页面多跑一次空查询
+  setActiveTab(tab)
+  // 切页清空搜索词：每个页面从全新列表开始，避免跨页带词造成误判
+  clearSearch()
 }
+
+// ── v1.6.6：顶栏全局搜索 ──
+// 各页面不再有自己的搜索框，统一由顶栏输入框驱动（store.query）。
+// 有列表过滤能力的页面（端口/备注/收藏）watch query 做过滤；
+// 无过滤能力的页面（概览/设置/隐藏端口）用 useSearchFocus 播放聚焦动画。
+const {
+  query: searchQuery,
+  setQuery: setSearchQuery,
+  clear: clearSearch,
+  setActiveTab,
+  shakeNonce: searchShakeNonce,
+} = useSearch()
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchShaking = ref(false)
+
+const searchPlaceholder = computed(() => {
+  switch (activeTab.value) {
+    case 'overview':
+      return t('topbar.searchOverview')
+    case 'favorites':
+      return t('favorites.searchPlaceholder')
+    case 'ports':
+      return t('ports.searchPlaceholder')
+    case 'notes':
+      return t('notes.searchPlaceholder')
+    case 'hidden':
+      return t('hidden.searchPlaceholder')
+    default:
+      return t('topbar.searchSettings')
+  }
+})
+
+function onSearchInput(e: Event) {
+  setSearchQuery((e.target as HTMLInputElement).value)
+}
+
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
+
+// ⌘K / Ctrl+K 聚焦搜索框（顶栏 kbd 提示对应的行为）
+function onSearchKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    focusSearch()
+  }
+}
+
+function onSearchInputKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    clearSearch()
+  }
+}
+
+// 当前页无匹配 → 顶栏抖动一次
+watch(searchShakeNonce, () => {
+  searchShaking.value = false
+  nextTick(() => {
+    searchShaking.value = true
+    setTimeout(() => {
+      searchShaking.value = false
+    }, 400)
+  })
+})
 
 // v1.4.4：顶栏全局刷新按钮。手动模式下点一下即刷新状态栏指标 + 通知各视图重新拉数据。
 function handleGlobalRefresh() {
@@ -412,6 +484,9 @@ function onNavigate(e: Event) {
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
   document.addEventListener('portview:navigate', onNavigate)
+  document.addEventListener('keydown', onSearchKeydown)
+  // 初始页签可能不是 overview（默认主页设置），同步 store 守卫
+  setActiveTab(activeTab.value)
   theme.value = initialTheme()
   applyTheme(theme.value)
   accent.value = initialAccent()
@@ -462,6 +537,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('portview:navigate', onNavigate)
+  document.removeEventListener('keydown', onSearchKeydown)
   if (statsTimer) clearInterval(statsTimer)
 })
 </script>
@@ -478,10 +554,21 @@ onBeforeUnmount(() => {
         <span class="brand-name">{{ t('app.name') }}</span>
       </div>
 
-      <div class="topbar-search" role="search">
+      <div class="topbar-search" :class="{ 'search-shaking': searchShaking }" role="search">
         <Search class="search-icon" :size="16" />
-        <input type="text" :placeholder="t('topbar.searchPlaceholder')" aria-label="search" />
-        <kbd class="kbd">{{ t('topbar.searchKbd') }}</kbd>
+        <input
+          ref="searchInputRef"
+          type="text"
+          :value="searchQuery"
+          :placeholder="searchPlaceholder"
+          aria-label="search"
+          @input="onSearchInput"
+          @keydown="onSearchInputKeydown"
+        />
+        <button v-if="searchQuery" class="search-clear" :title="t('topbar.searchClear')" @click="clearSearch">
+          <X :size="14" />
+        </button>
+        <kbd v-else class="kbd">{{ t('topbar.searchKbd') }}</kbd>
       </div>
 
       <div class="topbar-actions">
@@ -611,6 +698,8 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
+    <!-- v1.6.6：非搜索页关键词聚焦动画层 -->
+    <SearchFocusOverlay />
   </div>
 
   <!-- v1.4.4：首次启动密码提示。放在 app-shell 外，避免 needsLogin 切换时

@@ -1858,6 +1858,43 @@ html, body {
   pointer-events: none;
 }
 
+/* v1.6.6：全局搜索 — 清除按钮（有搜索词时替换 kbd 提示） */
+.topbar-search .search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.topbar-search .search-clear:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+/* 当前页无匹配 → 搜索框抖动一次 */
+.topbar-search.search-shaking {
+  animation: searchShake 0.4s ease;
+}
+
+@keyframes searchShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -2549,6 +2586,8 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
+  /* v1.6.6：搜索框上移顶栏后，范围选择器靠右保持工具栏平衡 */
+  margin-left: auto;
 }
 .range-label {
   font-size: 12px;

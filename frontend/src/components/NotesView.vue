@@ -16,6 +16,7 @@ import {
 } from '@/api'
 import { appKey } from '@/logo'
 import { usePrefs } from '@/store/prefs'
+import { useSearch } from '@/store/search'
 import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -24,7 +25,8 @@ const { triggerRefresh } = usePrefs()
 const notes = ref<NoteRead[]>([])
 const loading = ref(false)
 const saving = ref(false)
-const searchQuery = ref('')
+// v1.6.6：搜索词改由顶栏全局搜索驱动（store 单例，切页自动清空）
+const { query: searchQuery, activeTab: searchActiveTab } = useSearch()
 
 // 轻提示（Logo 发现/上传结果反馈）
 const toast = ref('')
@@ -218,6 +220,7 @@ function openEditByPort(port: number, preset?: string) {
 
 let searchTimer: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
+  if (searchActiveTab.value !== 'notes') return
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadData, 300)
 })
@@ -316,15 +319,6 @@ onMounted(() => {
     </div>
 
     <div class="main-body">
-      <div class="search-box" v-if="notes.length || searchQuery">
-        <span class="search-icon"><Search :size="15" /></span>
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="t('notes.searchPlaceholder')"
-        />
-      </div>
-
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
         {{ t('common.loading') }}

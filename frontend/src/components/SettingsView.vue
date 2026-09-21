@@ -5,9 +5,14 @@ import { setLocale } from '@/i18n'
 import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, setBackground, deleteBackground, backgroundUrl, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
+import { useSearchFocus } from '@/composables/useSearchFocus'
 import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid, Home, Image as ImageIcon } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
+
+// v1.6.6：顶栏全局搜索 → 本页无过滤能力，命中卡片播放聚焦动画
+const rootRef = ref<HTMLElement | null>(null)
+useSearchFocus(rootRef, 'settings')
 
 // v1.2：登录/安全
 const auth = useAuth()
@@ -323,7 +328,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
 </script>
 
 <template>
-  <div>
+  <div ref="rootRef">
     <div class="main-header">
       <h1>{{ t('settings.title') }}</h1>
       <div class="header-actions">
@@ -339,7 +344,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
 
       <div class="settings-grid">
         <!-- v1.2：Login / Security -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <ShieldCheck :size="16" class="card-ico" />
             <span>{{ t('settings.security') }}</span>
@@ -407,7 +412,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Theme -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Sun :size="16" class="card-ico" />
             <span>{{ t('settings.theme') }}</span>
@@ -439,7 +444,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- v1.6.6：默认主页 -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Home :size="16" class="card-ico" />
             <span>{{ t('settings.home') }}</span>
@@ -470,7 +475,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- v1.6.6：背景图 -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <ImageIcon :size="16" class="card-ico" />
             <span>{{ t('settings.background') }}</span>
@@ -522,7 +527,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Accent -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Palette :size="16" class="card-ico" />
             <span>{{ t('settings.accent') }}</span>
@@ -544,7 +549,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Language -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Languages :size="16" class="card-ico" />
             <span>{{ t('settings.language') }}</span>
@@ -574,7 +579,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Refresh Interval -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Timer :size="16" class="card-ico" />
             <span>{{ t('settings.refreshInterval') }}</span>
@@ -625,7 +630,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- v1.5.15：Logo 展示（展示模式 + 遮罩 合并为一张卡片，遮罩为条件子区块） -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <LayoutGrid :size="16" class="card-ico" />
             <span>{{ t('settings.logoDisplay') }}</span>
@@ -709,7 +714,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Access Address -->
-        <section class="settings-card" id="settings-access-address">
+        <section class="settings-card" id="settings-access-address" data-sfocus>
           <header class="settings-card-title">
             <Globe :size="16" class="card-ico" />
             <span>{{ t('settings.accessAddress') }}</span>
@@ -734,7 +739,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- About -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Settings :size="16" class="card-ico" />
             <span>{{ t('settings.about') }}</span>
