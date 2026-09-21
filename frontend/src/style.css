@@ -2864,9 +2864,18 @@ html, body {
 
 /* ── v1.6.6：全应用毛玻璃背景（scope=all 且有图时，<html data-fav-bg="all">）──
    背景层是 fixed <img>（已 blur/brightness）。这里只把各表面转半透明让背景透出，
-   卡片（.port-card / .settings-card 等）保持不透明保证文字可读。 */
+   卡片（.port-card / .settings-card 等）保持不透明保证文字可读。
+   注意：fixed 背景是定位元素（z-index:0），会盖在静态定位内容之上 ——
+   必须给 topbar/app-body/statusbar 提升 z-index，否则整个页面被背景图盖住不可见。 */
 html[data-fav-bg='all'] .app-shell {
   background: transparent;
+}
+html[data-fav-bg='all'] .topbar,
+html[data-fav-bg='all'] .app-body,
+html[data-fav-bg='all'] .statusbar,
+html[data-fav-bg='all'] .main-header {
+  position: relative;
+  z-index: 1;
 }
 html[data-fav-bg='all'] .topbar,
 html[data-fav-bg='all'] .rail,
