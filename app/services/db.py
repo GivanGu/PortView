@@ -273,6 +273,19 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: user_prefs.background_blur added (default 10)")
 
+    # v1.6.9 迁移：清空 port_notes 表（一次性，schema_version < 4 时执行）。
+    # 旧「未备注端口」命名流程产生的备注已废弃 —— 备注的 service_name 从不应用到
+    # 端口卡片（只有 remark 会），服务名统一改走 config.json 的「编辑服务名」。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 4:
+        await conn.execute("DELETE FROM port_notes")
+        await conn.execute(
+            "UPDATE schema_version SET version = 4, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.9 clear port_notes"),
+        )
+        logger.info("migration: schema_version -> 4 (clear port_notes)")
+
     await conn.commit()
     if _db is not None:
         await _db.close()

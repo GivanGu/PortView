@@ -5,6 +5,7 @@ import {
   listNotes,
   upsertNote,
   deleteNote,
+  editPort,
   fetchPorts,
   fetchLogos,
   discoverLogo,
@@ -17,7 +18,7 @@ import {
 import { appKey } from '@/logo'
 import { usePrefs } from '@/store/prefs'
 import { useSearch } from '@/store/search'
-import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus } from 'lucide-vue-next'
+import { Search, StickyNote, Plus, Pencil, Trash2, X, AlertCircle, ImageOff, ImagePlus, Tag } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { triggerRefresh } = usePrefs()
@@ -60,14 +61,18 @@ const draft = ref<NotePayload>({
 
 const isEditing = computed(() => editingPort.value !== null)
 
-// v1.3：未备注端口 = 已用端口中有 port 但 notes 里没它的，且服务名未知
-// v1.4.3：同时覆盖后端标记为「未知服务」的端口（service_name === '未知服务'），
-// 让「看到未知服务→补备注」成为一条主路径。
+// v1.6.9：未知服务端口命名 —— 对应端口页「编辑服务名」（写 config.json），
+// 取代旧「补备注」流程（备注的 service_name 从不应用到卡片，命名实际不生效）。
+const namingPort = ref<number | null>(null)
+const nameDraft = ref('')
+const namingSaving = ref(false)
+
+// v1.3：未备注端口 = 已用端口中服务名未知的（v1.6.9 起不再以「有无备注」为条件，
+// 命名走 config.json，与备注相互独立）。
 const UNKNOWN_SVC = '未知服务'
 const unremarked = computed(() => {
-  const notedPorts = new Set(notes.value.map(n => n.port))
   return allUsedPorts.value
-    .filter(c => c.type === 'used' && c.port != null && !notedPorts.has(c.port) &&
+    .filter(c => c.type === 'used' && c.port != null &&
       (!c.service_name || c.service_name === UNKNOWN_SVC))
     .sort((a, b) => (a.port ?? 0) - (b.port ?? 0))
 })
@@ -218,6 +223,37 @@ function openEditByPort(port: number, preset?: string) {
   editorOpen.value = true
 }
 
+// v1.6.9：未知服务端口命名（走 config.json「编辑服务名」，与端口页一致）
+function openNamePort(port: number) {
+  namingPort.value = port
+  nameDraft.value = ''
+}
+
+function closeNameEditor() {
+  namingPort.value = null
+  nameDraft.value = ''
+}
+
+async function handleNameSave() {
+  if (namingPort.value === null) return
+  const name = nameDraft.value.trim()
+  if (!name) return
+  namingSaving.value = true
+  try {
+    await editPort(namingPort.value, name)
+    closeNameEditor()
+    // 服务名写入 config.json 后重新拉取端口，命名成功的端口即从列表消失
+    await loadAllPorts()
+    // 端口页 / 收藏页同步刷新
+    triggerRefresh()
+  } catch (e) {
+    console.error('name port failed:', e)
+    alert(t('notes.saveFailed'))
+  } finally {
+    namingSaving.value = false
+  }
+}
+
 let searchTimer: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
   if (searchActiveTab.value !== 'notes') return
@@ -345,10 +381,10 @@ onMounted(() => {
               <span class="unremarked-protocol" v-if="c.protocol">{{ c.protocol.toUpperCase() }}</span>
               <button
                 class="btn btn-sm btn-primary"
-                @click="openEditByPort(c.port!)"
+                @click="openNamePort(c.port!)"
                 :title="t('notes.unremarkedHint')"
               >
-                <Plus :size="13" /> {{ t('notes.unremarkedBtn') }}
+                <Tag :size="13" /> {{ t('notes.unremarkedBtn') }}
               </button>
             </div>
           </div>
@@ -495,6 +531,41 @@ onMounted(() => {
         <div class="modal-footer">
           <button class="btn" @click="closeEditor">{{ t('common.cancel') }}</button>
           <button class="btn btn-primary" :disabled="saving" @click="handleSave">
+            {{ t('common.save') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- v1.6.9：未知服务端口命名（写 config.json，与端口页「编辑服务名」一致） -->
+    <div v-if="namingPort !== null" class="modal-overlay" @click.self="closeNameEditor">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>{{ t('notes.nameTitle') }}</h2>
+          <button class="modal-close" @click="closeNameEditor">
+            <X :size="16" />
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">{{ t('notes.portLabel') }}</label>
+            <input :value="namingPort" class="form-input" type="number" disabled />
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('notes.serviceLabel') }}</label>
+            <input
+              v-model="nameDraft"
+              class="form-input"
+              type="text"
+              :placeholder="t('notes.servicePlaceholder')"
+              maxlength="120"
+              @keyup.enter="handleNameSave"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="closeNameEditor">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="namingSaving" @click="handleNameSave">
             {{ t('common.save') }}
           </button>
         </div>
