@@ -1365,9 +1365,10 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
-/* 背景作用域 = 收藏页时，表面半透明让毛玻璃透出 */
+/* 背景作用域 = 收藏页时，表面半透明让毛玻璃透出。
+   v1.6.9：用 --content-scrim 半透明底色替代全透明，非卡片文本不直接坐在原始背景图上 */
 .favorites-view.has-bg .main-body {
-  background: transparent;
+  background: color-mix(in srgb, var(--bg-primary) var(--content-scrim), transparent);
 }
 
 /* 两栏布局：左侧分组坞 + 右侧主区。

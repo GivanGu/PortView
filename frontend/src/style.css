@@ -59,6 +59,10 @@
   /* v1.6.6：背景图主题适配（亮度 + 玻璃表面浓度） */
   --bg-brightness: 0.75;
   --fav-bg-glass: 55%;
+
+  /* v1.6.9：内容区对比度底（背景图生效时内容区的半透明底色，
+     防止非卡片文本直接坐在原始背景图上） */
+  --content-scrim: 55%;
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -99,6 +103,9 @@
   /* v1.6.6：浅色主题背景图调亮 + 玻璃面加厚，避免白玻璃叠暗图发浑 */
   --bg-brightness: 1.05;
   --fav-bg-glass: 78%;
+
+  /* v1.6.9：浅色主题内容区底色加厚（深色文字需要更高不透明度保证对比度） */
+  --content-scrim: 80%;
 }
 
 /* ── 主题切换按钮 ── */
@@ -2966,5 +2973,7 @@ html[data-fav-bg='all'] .main-header {
   background: color-mix(in srgb, var(--bg-secondary) var(--fav-bg-glass), transparent);
 }
 html[data-fav-bg='all'] .main-content {
-  background: transparent;
+  /* v1.6.9：内容区对比度底 — 半透明底色替代全透明，
+     非卡片文本（可用端口/空状态/标题）不再直接坐在原始背景图上 */
+  background: color-mix(in srgb, var(--bg-primary) var(--content-scrim), transparent);
 }
