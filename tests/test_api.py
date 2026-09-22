@@ -59,28 +59,6 @@ class TestPorts:
 
 
 class TestConfig:
-    def test_get_config(self, client: TestClient):
-        resp = client.get("/api/config")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert isinstance(data["data"], dict)
-
-    def test_save_config(self, client: TestClient):
-        payload = {"test_service:host": "1234:tcp"}
-        resp = client.post("/api/config", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-
-    def test_save_config_invalid(self, client: TestClient):
-        payload = {"bad_key": "no_colon"}
-        resp = client.post("/api/config", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "error" in data
-
     def test_edit_port(self, client: TestClient):
         resp = client.post(
             "/api/config/edit",
@@ -89,6 +67,55 @@ class TestConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
+
+    def test_edit_same_name_two_ports(self, client: TestClient):
+        """v1.6.12：同一服务名可绑多端口（同应用 http+https），互不覆盖。"""
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        assert (
+            client.post("/api/config/edit", json={"port": 443, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+
+        client.post("/api/config/hidden", json={"port": 80})
+        client.post("/api/config/hidden", json={"port": 443})
+        details = {d["port"]: d for d in client.get("/api/config/hidden/details").json()["data"]}
+        assert details[80]["service_name"] == "MyApp"
+        assert details[443]["service_name"] == "MyApp"
+
+    def test_edit_one_port_does_not_affect_other(self, client: TestClient):
+        """v1.6.12 回归：改一个端口的名字不影响另一个同名端口的标注。"""
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        assert (
+            client.post("/api/config/edit", json={"port": 443, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        # 把 80 改成另一个名字
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "Other"}).json()[
+                "success"
+            ]
+            is True
+        )
+
+        client.post("/api/config/hidden", json={"port": 80})
+        client.post("/api/config/hidden", json={"port": 443})
+        details = {d["port"]: d for d in client.get("/api/config/hidden/details").json()["data"]}
+        assert details[80]["service_name"] == "Other"
+        assert details[443]["service_name"] == "MyApp"
 
     def test_hidden_ports_crud(self, client: TestClient):
         # 隐藏

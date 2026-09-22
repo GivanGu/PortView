@@ -26,15 +26,13 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-# 数据库文件：`<project>/.data/portview.db`（可由 PORTVIEW_DB 环境变量覆盖）
-_DB_PATH = os.environ.get(
-    "PORTVIEW_DB",
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        ".data",
-        "portview.db",
-    ),
-)
+# 数据库文件：`<project>/config/portview.db`（可由 PORTVIEW_DB 环境变量覆盖）。
+# v1.6.12 统一存储：DB 从 `.data/` 迁至 `config/`（唯一持久化点，Docker 中 bind mount）。
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DATA_DIR = os.environ.get("PORTVIEW_CONFIG_DIR", os.path.join(_PROJECT_ROOT, "config"))
+# 旧版 DB 位置（v1.6.12 迁移源，仅用于启动时搬家判定）
+_OLD_DB_PATH = os.path.join(_PROJECT_ROOT, ".data", "portview.db")
+_DB_PATH = os.environ.get("PORTVIEW_DB", os.path.join(_DATA_DIR, "portview.db"))
 
 # 连接引用 —— FastAPI 单例
 _db: aiosqlite.Connection | None = None
@@ -123,6 +121,19 @@ _SCHEMA = [
     "  mime       TEXT NOT NULL,"
     "  data       BLOB NOT NULL,"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+    # 端口标注（v1.6.12 统一存储）：端口为主键，服务名非唯一（同一名字可绑多端口，
+    # 如一个应用的 http + https）。取代旧 config.json 的「服务名:docker/host -> 端口:协议」格式。
+    "CREATE TABLE IF NOT EXISTS port_labels ("
+    "  port INTEGER PRIMARY KEY CHECK (port BETWEEN 1 AND 65535),"
+    "  service_name TEXT NOT NULL,"
+    "  port_type TEXT NOT NULL DEFAULT 'host' CHECK (port_type IN ('docker', 'host')),"
+    "  created_at INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+    # 隐藏端口（v1.6.12 统一存储）：从 hidden_ports.json 迁入，端口为主键。
+    "CREATE TABLE IF NOT EXISTS hidden_ports ("
+    "  port INTEGER PRIMARY KEY CHECK (port BETWEEN 1 AND 65535)"
     ")",
 ]
 
@@ -291,11 +302,32 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: schema_version -> 5 (drop port_notes)")
 
+    # v1.6.12 迁移：user_prefs 加 access_address 列（全局访问地址，
+    # 从旧 config.json 的 __access_address__ 键迁入）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols9 = {row[1] for row in await cur.fetchall()}
+    if "access_address" not in pref_cols9:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN access_address TEXT NOT NULL DEFAULT ''"
+        )
+        logger.info("migration: user_prefs.access_address added")
+
+    # v1.6.12 迁移：新增 port_labels / hidden_ports 表（统一存储，schema_version < 6 时执行）。
+    # 表由上方 _SCHEMA 幂等创建；这里仅 bump schema_version 追踪迁移。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 6:
+        await conn.execute(
+            "UPDATE schema_version SET version = 6, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.12 port_labels/hidden_ports"),
+        )
+        logger.info("migration: schema_version -> 6 (port_labels/hidden_ports)")
+
     await conn.commit()
     if _db is not None:
         await _db.close()
     _db = conn
-    logger.info("SQLite @ %s (WAL, 9 tables) ready", path)
+    logger.info("SQLite @ %s (WAL, 11 tables) ready", path)
     yield conn
     await conn.close()
     logger.info("SQLite @ %s closed", path)

@@ -16,13 +16,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # 唯一持久化点：SQLite 全量数据（密码 / 端口标注 / 监控区间 / 登录态 / 主题）。
+      # v1.6.12 起旧 portview-data 命名卷弃用。
       - ./config:/app/config
-      # 持久化运行时数据（密码 / 端口备注 / 监控区间 / 登录开关 / 主题），
-      # 避免每次 --force-recreate 后重置为全新空库、UI 回到设置密码首屏。
-      - portview-data:/app/.data
     environment:
       - PORTVIEW_PORT=8081
     restart: unless-stopped
-
-volumes:
-  portview-data:

@@ -61,12 +61,12 @@ docker pull crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwareh
 docker run -d --name portview \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v portview-data:/app/.data \
+  -v ./config:/app/config \
   -e PORTVIEW_PORT=8081 \
   ghcr.io/givangu/portview:latest
 ```
 
-> The named volume `portview-data` persists password, ranges, and login state across container rebuilds.
+> Bind-mount a `config/` directory to persist all data (password, ranges, port labels, hidden ports, login state) across container rebuilds. Everything is stored in the single `config/portview.db` SQLite file.
 
 ### Option 3: Local development
 
@@ -89,28 +89,15 @@ npm run dev   # http://localhost:3000 (proxies /api to :8081)
 | Variable | Default | Description |
 |---|---|---|
 | `PORTVIEW_PORT` | `8081` | Web service listen port |
-| `PORTVIEW_CONFIG_DIR` | `/app/config` | Config file directory |
+| `PORTVIEW_CONFIG_DIR` | `/app/config` | Config directory (holds the SQLite DB) |
 | `PORTVIEW_REQUIRE_AUTH` | unset | `1` force-enable login; `0` force-disable; unset reads DB |
-| `PORTVIEW_DB` | `/app/.data/portview.db` | SQLite data file path |
+| `PORTVIEW_DB` | `/app/config/portview.db` | SQLite data file path |
 
-### Service mapping (`config/config.json`)
+### Service labels & hidden ports
 
-Maps known services to ports for display:
+All user data is stored in the single `config/portview.db` SQLite file (since v1.6.12). Service labels (port → service name) and hidden ports are managed via the UI and persisted in the DB.
 
-```json
-{
-  "SSH:host": "22:tcp",
-  "MySQL:host": "3306:tcp",
-  "PortView:docker": "8081:tcp"
-}
-```
-
-Key format: `ServiceName:type` where type is `docker` or `host`.
-Value format: `port:protocol`.
-
-### Hidden ports
-
-Stored in `config/hidden_ports.json`, managed via the UI.
+> Legacy `config/config.json` (service→port map) and `config/hidden_ports.json` are auto-migrated into the DB on first start and then removed. No manual editing required.
 
 ## API
 
@@ -166,10 +153,9 @@ portview/
 │   │   ├── locales/
 │   │   └── style.css
 │   └── package.json
-├── config/               # Runtime config (volume mount)
-│   ├── config.json
-│   └── hidden_ports.json
-├── tests/                # Backend tests (63 cases)
+├── config/               # Runtime data (bind mount) — single SQLite DB
+│   └── portview.db       # all user data (labels, hidden ports, prefs, auth)
+├── tests/                # Backend tests
 ├── Dockerfile            # Multi-stage build
 ├── docker-compose.yml
 ├── pyproject.toml

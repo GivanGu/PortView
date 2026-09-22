@@ -221,7 +221,7 @@ class PortMonitor:
     # ------------------------------------------------------------------ #
     # Host
     # ------------------------------------------------------------------ #
-    def get_host_ports(self, config: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    def get_host_ports(self, config: dict[int, dict[str, str]]) -> dict[int, dict[str, Any]]:
         """获取主机监听端口（psutil 实现，替代 netstat）。"""
         port_info: dict[int, dict[str, Any]] = {}
         port_protocols: dict[int, dict[str, set[str]]] = {}
@@ -281,21 +281,19 @@ class PortMonitor:
 
         return port_info
 
-    def get_service_name(self, port: int, config: dict[str, Any]) -> str:
-        """根据端口号获取服务名称（自身端口 + 配置文件映射 + 默认映射）。"""
+    def get_service_name(self, port: int, config: dict[int, dict[str, str]]) -> str:
+        """根据端口号获取服务名称（自身端口 + 端口标注 + 默认映射）。
+
+        :param config: ``{port: {"service_name": str, "port_type": str}}``
+            （v1.6.12 起以端口为主键，由 ``load_config`` 从 DB 加载）。
+        """
         # PortView 自身端口优先级最高：无论通用端口库如何标注，都识别为 PortView。
         if port == self._self_port():
             return "PortView"
 
-        port_to_service: dict[int, str] = {}
-        for k, v in config.items():
-            if isinstance(v, dict) and "port" in v:
-                port_to_service[v["port"]] = k
-            elif isinstance(v, int):
-                port_to_service[v] = k
-
-        if port in port_to_service:
-            return port_to_service[port]
+        label = config.get(port)
+        if label:
+            return label["service_name"]
         if port in self.default_ports:
             return self.default_ports[port]
         return "未知服务"
@@ -402,7 +400,7 @@ class PortMonitor:
     # ------------------------------------------------------------------ #
     def get_port_analysis(
         self,
-        config: dict[str, Any],
+        config: dict[int, dict[str, str]],
         start_port: int = 1,
         end_port: int = 65535,
         protocol_filter: str | None = None,
@@ -465,13 +463,10 @@ class PortMonitor:
             if protocol_filter and protocol_filter.upper() not in protocol.upper():
                 continue
 
-            config_service_type = None
-            config_service_name = None
-            for service_name, service_config in config.items():
-                if isinstance(service_config, dict) and service_config.get("port") == port:
-                    config_service_type = service_config.get("service_type")
-                    config_service_name = service_name
-                    break
+            # 端口标注（v1.6.12 起以端口为主键，直接命中）
+            label = config.get(port)
+            config_service_type = label.get("port_type") if label else None
+            config_service_name = label.get("service_name") if label else None
 
             # PortView 自身端口（PORTVIEW_PORT，默认 8081）优先级最高：
             # 无论通用端口库如何标注（如 "模式注册:host"），都识别为 PortView / docker。

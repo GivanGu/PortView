@@ -96,8 +96,8 @@ async def api_ports(
         if start_port > end_port:
             start_port, end_port = end_port, start_port
 
-        config = load_config()
-        hidden_ports = load_hidden_ports()
+        config = await load_config()
+        hidden_ports = await load_hidden_ports()
         # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
@@ -127,8 +127,8 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
     try:
         # Docker 客户端重连是阻塞 I/O，放到线程池
         await asyncio.to_thread(monitor.reconnect)
-        config = load_config()
-        hidden_ports = load_hidden_ports()
+        config = await load_config()
+        hidden_ports = await load_hidden_ports()
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
             config,
@@ -140,11 +140,11 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
         return APIResponse(success=False, error=str(e))
 
 
-def _probe_hosts() -> list[str]:
+async def _probe_hosts() -> list[str]:
     """构造探测主机列表：访问地址优先（与浏览器访问目标一致），
     127.0.0.1 兜底（host 网络下即宿主机回环，覆盖只监听回环的服务）。"""
     hosts: list[str] = []
-    access = load_access_host()
+    access = await load_access_host()
     if access:
         hosts.append(access)
     if "127.0.0.1" not in hosts:
@@ -160,7 +160,7 @@ async def api_probe_scheme(req: ProbeSchemeRequest) -> APIResponse:
     阻塞 socket 通过 asyncio.to_thread 跑，避免卡事件循环。
     """
     try:
-        hosts = _probe_hosts()
+        hosts = await _probe_hosts()
         scheme = await asyncio.to_thread(
             scheme_probe.probe_scheme, hosts, req.port, req.container_id
         )
@@ -180,7 +180,7 @@ async def api_probe_schemes(req: ProbeSchemesRequest) -> APIResponse:
     unknown 时按端口号兜底（容器端口优先）。
     """
     try:
-        hosts = _probe_hosts()
+        hosts = await _probe_hosts()
         items = [(i.port, i.container_id, i.container_port) for i in req.items]
         schemes = await asyncio.to_thread(scheme_probe.probe_schemes_batch, hosts, items)
         return APIResponse(success=True, data={"schemes": schemes, "host": hosts[0]})

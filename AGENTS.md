@@ -80,10 +80,10 @@ cd frontend && npm install && npm run dev
 
 ### Backend (`app/`)
 - **Entry**: `app/main.py` → `create_app()` factory, lifespan inits config + SQLite
-- **Services**: `app/services/port_monitor.py` (Docker SDK + psutil → PortCard list), `app/services/db.py` (SQLite via aiosqlite, 5 tables), `app/services/auth.py` (argon2id sessions)
+- **Services**: `app/services/port_monitor.py` (Docker SDK + psutil → PortCard list), `app/services/db.py` (SQLite via aiosqlite, 11 tables), `app/services/auth.py` (argon2id sessions), `app/services/migrate.py` (v1.6.12 统一存储迁移：旧库搬家 + JSON 入库)
 - **Routers**: `app/routers/{ports,config,prefs,ranges,auth}.py` — all under `/api/`
 - **Auth guard**: middleware in `main.py` checks `portview_session` cookie; whitelist is `/api/health`, `/api/auth/*`
-- **Config**: `app/config.py` reads `config/config.json` + `config/hidden_ports.json`; `__access_address__` key stores global base URL for "open service" links
+- **Config**: `app/config.py` 全部落 SQLite（v1.6.12 统一存储）——端口标注 `port_labels` 表（端口主键，服务名非唯一）、访问地址 `user_prefs.access_address` 列、隐藏端口 `hidden_ports` 表。旧 `config/config.json` + `config/hidden_ports.json` 由 `migrate.py` 在启动时迁入 DB 并删除
 - **Access address API**: `GET/POST /api/config/access_address` — read/write the global base URL (e.g. `http://192.168.31.1`)
 
 ### Frontend (`frontend/`)
@@ -102,7 +102,7 @@ cd frontend && npm install && npm run dev
 
 ## Key Gotchas
 
-- **SQLite location**: default `/app/.data/portview.db`; must mount volume or data resets on recreate. `portview-data` named volume in compose files handles this.
+- **SQLite location**: default `/app/config/portview.db`（v1.6.12 起统一存储，DB 是唯一持久化点）。旧 `.data/portview.db` 由 `migrate.py` 在启动时自动搬家（复制→integrity_check→原子落位→删旧库）；旧 `config.json`/`hidden_ports.json` 同样自动入库并删除。Docker 中 bind mount `config/` 目录即可持久化。
 - **psutil 7.x breaking change**: `laddr.address` → `laddr.ip`, `.proto` → `.type` — already patched in `port_monitor.py`
 - **Frontend build required before backend SPA fallback works**: if `frontend/dist/` missing, root `/` returns a JSON hint instead of the app
 - **uv.lock**: backend deps are pinned in lockfile; use `uv sync --no-install-project --no-dev` in Docker for reproducible installs

@@ -26,6 +26,13 @@ Thumbs.db
 *.db-wal
 *.db-shm
 
+# 运行时数据（v1.6.12 起 config/ 为唯一持久化点：portview.db 及迁移源 JSON）
+config/*.json
+config/*.example
+config/*.db
+config/*.db-wal
+config/*.db-shm
+
 # Env
 .env
 .env.local

@@ -62,12 +62,12 @@ docker pull crpi-bywv2frq7uqt57e1.cn-hangzhou.personal.cr.aliyuncs.com/selfwareh
 docker run -d --name portview \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v portview-data:/app/.data \
+  -v ./config:/app/config \
   -e PORTVIEW_PORT=8081 \
   ghcr.io/givangu/portview:latest
 ```
 
-> 命名卷 `portview-data` 用于持久化密码、监控区间和登录态，跨容器重建保留。
+> 通过 bind mount 挂载 `config/` 目录，可持久化全部数据（密码、监控区间、端口标注、隐藏端口、登录态），跨容器重建保留。所有数据统一存储在单个 `config/portview.db` SQLite 文件中。
 
 ### 方式三：本地开发
 
@@ -90,28 +90,15 @@ npm run dev   # http://localhost:3000（proxy 到 :8081）
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `PORTVIEW_PORT` | `8081` | Web 服务监听端口 |
-| `PORTVIEW_CONFIG_DIR` | `/app/config` | 配置文件目录 |
+| `PORTVIEW_CONFIG_DIR` | `/app/config` | 配置目录（存放 SQLite 数据库） |
 | `PORTVIEW_REQUIRE_AUTH` | 未设 | `1` 强制开启登录；`0` 强制关闭；未设则读数据库 |
-| `PORTVIEW_DB` | `/app/.data/portview.db` | SQLite 数据文件路径 |
+| `PORTVIEW_DB` | `/app/config/portview.db` | SQLite 数据文件路径 |
 
-### 服务映射（`config/config.json`）
+### 服务标注与隐藏端口
 
-将已知服务映射到端口，用于展示：
+自 v1.6.12 起，全部用户数据统一存储在单个 `config/portview.db` SQLite 文件中。端口标注（端口 → 服务名）与隐藏端口通过界面管理并持久化到数据库。
 
-```json
-{
-  "远程登录:host": "22:tcp",
-  "MySQL数据库:host": "3306:tcp",
-  "PortView:docker": "8081:tcp"
-}
-```
-
-键格式：`服务名:类型`，类型为 `docker` 或 `host`。
-值格式：`端口:协议`。
-
-### 隐藏端口
-
-保存在 `config/hidden_ports.json`，通过界面管理。
+> 旧版 `config/config.json`（服务→端口映射）与 `config/hidden_ports.json` 会在首次启动时自动迁入数据库并删除，无需手动编辑。
 
 ## API
 
@@ -167,10 +154,9 @@ portview/
 │   │   ├── locales/
 │   │   └── style.css
 │   └── package.json
-├── config/               # 运行时配置（卷挂载）
-│   ├── config.json
-│   └── hidden_ports.json
-├── tests/                # 后端测试（63 用例）
+├── config/               # 运行时数据（bind mount）— 单个 SQLite 库
+│   └── portview.db       # 全部用户数据（标注、隐藏端口、偏好、鉴权）
+├── tests/                # 后端测试
 ├── Dockerfile            # 多阶段构建
 ├── docker-compose.yml
 ├── pyproject.toml

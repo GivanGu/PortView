@@ -18,7 +18,7 @@ def _make_monitor() -> PortMonitor:
 class TestGetServiceName:
     def test_from_config(self):
         monitor = _make_monitor()
-        config = {"my_service": {"port": 8080, "protocol": "TCP"}}
+        config = {8080: {"service_name": "my_service", "port_type": "host"}}
         assert monitor.get_service_name(8080, config) == "my_service"
 
     def test_from_default(self):
@@ -36,7 +36,7 @@ class TestGetServiceName:
         # 无配置
         assert monitor.get_service_name(8081, {}) == "PortView"
         # 通用端口库把 8081 标注为 "模式注册:host"，仍应识别为 PortView
-        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        config = {8081: {"service_name": "模式注册", "port_type": "host"}}
         assert monitor.get_service_name(8081, config) == "PortView"
 
 
@@ -259,7 +259,7 @@ class TestPortAnalysis:
     def test_no_docker_no_host(self):
         """无 Docker、无主机端口时，应返回全 gap。"""
         monitor = _make_monitor()
-        config = {"ssh": {"port": 22, "protocol": "TCP"}}
+        config = {22: {"service_name": "ssh", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=100)
 
         assert result["total_used"] == 0
@@ -283,7 +283,7 @@ class TestPortAnalysis:
         monitor = _make_monitor()
         # 模拟：手动构造一个有已用端口的场景
         # 由于没有 Docker 和主机端口，用 config 里的端口来测试
-        config_with_port = {"test": {"port": 80, "protocol": "TCP"}}
+        config_with_port = {80: {"service_name": "test", "port_type": "host"}}
         result = monitor.get_port_analysis(
             config_with_port, start_port=1, end_port=200, hidden_ports=[80]
         )
@@ -319,7 +319,7 @@ class TestPortAnalysis:
             "get_host_ports",
             lambda config: {3306: {"protocol": "TCP", "service_name": "MySQL"}},
         )
-        config = {"MySQL数据库": {"port": 3306, "protocol": "TCP", "service_type": "host"}}
+        config = {3306: {"service_name": "MySQL数据库", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
 
         card = next(c for c in result["port_cards"] if c.get("port") == 3306)
@@ -350,7 +350,7 @@ class TestPortAnalysis:
                 }
             },
         )
-        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
+        config = {8081: {"service_name": "模式注册", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
 
         card = next(c for c in result["port_cards"] if c.get("port") == 8081)
@@ -374,7 +374,7 @@ class TestPortAnalysis:
                 }
             },
         )
-        config = {"监控系统": {"port": 9090, "protocol": "TCP", "service_type": "host"}}
+        config = {9090: {"service_name": "监控系统", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
 
         card = next(c for c in result["port_cards"] if c.get("port") == 9090)

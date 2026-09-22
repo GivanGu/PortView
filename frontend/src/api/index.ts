@@ -45,10 +45,6 @@ export interface ApiResponse<T = unknown> {
   message: string | null
 }
 
-export interface ConfigEntry {
-  [key: string]: string
-}
-
 // ── 通用请求 ──────────────────────────────────────────
 
 async function request<T>(url: string, options?: RequestInit): Promise<ApiResponse<T>> {
@@ -142,15 +138,7 @@ export function clearPortScheme(port: number): Promise<ApiResponse> {
   return request(`/api/ports/scheme/${port}`, { method: 'DELETE' })
 }
 
-// ── 配置 ──────────────────────────────────────────────
-
-export function fetchConfig(): Promise<ApiResponse<ConfigEntry>> {
-  return request<ConfigEntry>('/api/config')
-}
-
-export function saveConfig(config: ConfigEntry): Promise<ApiResponse> {
-  return request('/api/config', { method: 'POST', body: JSON.stringify(config) })
-}
+// ── 访问地址 ──────────────────────────────────────────
 
 export function getAccessAddress(): Promise<ApiResponse<{ address: string }>> {
   return request<{ address: string }>('/api/config/access_address')
