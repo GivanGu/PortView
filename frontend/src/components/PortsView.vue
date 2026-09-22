@@ -44,6 +44,9 @@ const loading = ref(false)
 const { query: searchQuery, activeTab: searchActiveTab } = useSearch()
 const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
+// v1.6.11：快速筛选（独立 toggle，与协议/来源 AND 叠加）
+const unknownFilter = ref(false) // 仅显示「未知服务」端口，方便快速命名
+const noLogoFilter = ref(false) // 仅显示未显示 Logo 的卡片，方便逐一上传
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
 
@@ -478,18 +481,26 @@ watch(protocolFilter, () => {
   loadData()
 })
 
-// ── 源类型过滤（本地 / Docker）──────────────
+// ── 前端侧卡片过滤（源类型 / 未知服务 / 无 Logo）──────────────
 // 后端已把卡片分好：`source === 'docker'` 是 Docker 端；
 // `source ∈ {'host','system'}` 是主机/本地端。
 // 这里纯前端侧 v-show 即可，无需往返 API。
+// 各条件 AND 叠加；模板仅对 used 卡片调用本函数。
 function cardVisible(card: PortCard): boolean {
-  if (!sourceFilter.value) return true
-  // gap / unknown_range 卡片没有 source —— 归类筛选时一并隐藏，
-  // 让视图聚焦「本地/Docker 端」这一组。
   if (card.type !== 'used') return false
-  const s = (card.source || '').toLowerCase()
-  if (sourceFilter.value === 'docker') return s === 'docker'
-  if (sourceFilter.value === 'local') return s === 'host' || s === 'system'
+  // 源类型筛选（本地 / Docker）
+  if (sourceFilter.value) {
+    const s = (card.source || '').toLowerCase()
+    if (sourceFilter.value === 'docker' && s !== 'docker') return false
+    if (sourceFilter.value === 'local' && s !== 'host' && s !== 'system') return false
+  }
+  // 未知服务筛选：service_name 为空或字面量「未知服务」（后端固定值）
+  if (unknownFilter.value) {
+    const name = card.service_name
+    if (name && name !== '未知服务') return false
+  }
+  // 无 Logo 筛选：卡片实际未显示 Logo（无用户上传、无内置默认）
+  if (noLogoFilter.value && logoSrc(card) != null) return false
   return true
 }
 
@@ -755,6 +766,23 @@ onBeforeUnmount(() => {
           >
             {{ t('ports.filterDocker') }}
           </button>
+          <span class="filter-divider" aria-hidden="true"></span>
+          <button
+            class="filter-btn"
+            :class="{ active: unknownFilter }"
+            @click="unknownFilter = !unknownFilter"
+            :title="t('ports.filterUnknownTip')"
+          >
+            {{ t('ports.filterUnknown') }}
+          </button>
+          <button
+            class="filter-btn"
+            :class="{ active: noLogoFilter }"
+            @click="noLogoFilter = !noLogoFilter"
+            :title="t('ports.filterNoLogoTip')"
+          >
+            {{ t('ports.filterNoLogo') }}
+          </button>
         </div>
 
         <!-- v1.2：监控区间选择器 -->
@@ -887,8 +915,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-          <!-- 可用端口间隙：仅在无源类型过滤时显示 -->
-          <div v-else-if="card.type === 'gap'" v-show="sourceFilter === ''">
+          <!-- 可用端口间隙：仅在无源类型/未知服务/无Logo 过滤时显示 -->
+          <div v-else-if="card.type === 'gap'" v-show="sourceFilter === '' && !unknownFilter && !noLogoFilter">
             <div class="gap-card">
               <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
               <div class="gap-count">{{ t('ports.gapCount', { n: card.available_count }) }}</div>

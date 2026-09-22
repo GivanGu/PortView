@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
+import { Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
 import { usePrefs, hasPortFavorite } from '@/store/prefs'
 
@@ -57,12 +57,6 @@ const isFavorite = computed(
 
   <div class="port-service">
     {{ card.service_name || t('ports.unknownService') }}
-  </div>
-
-  <!-- v1.2：用户备注 -->
-  <div v-if="card.remark" class="port-remark" :title="card.remark">
-    <StickyNote :size="11" class="port-remark-icon" />
-    <span class="port-remark-text">{{ card.remark }}</span>
   </div>
 
   <div class="port-detail">

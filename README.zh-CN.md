@@ -5,7 +5,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 PortView 运行在 NAS / 服务器上，实时读取 Docker 容器的端口映射与本机监听端口，
-以卡片形式可视化展示，并支持自定义端口备注、隐藏端口、多段区间筛选、快速搜索。
+以卡片形式可视化展示，并支持隐藏端口、多段区间筛选、快速筛选、快速搜索。
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)
@@ -18,12 +18,12 @@ PortView 运行在 NAS / 服务器上，实时读取 Docker 容器的端口映�
 
 - **Docker 端口监控** — 实时读取所有容器（含已停止）的端口映射
 - **主机端口监控** — 检测本机监听端口（psutil）
-- **端口卡片展示** — 按服务分类，显示端口、协议、状态、备注
-- **自定义备注** — 为任意端口添加说明，备注直接展示在端口卡片上
+- **端口卡片展示** — 按服务分类，显示端口、协议、状态
 - **多段监控区间** — 定义任意段数区间（如 80s / 8000s），一键筛选仅看关心的区间
+- **快速筛选** — 工具栏一键筛选「未知服务」端口与未显示 Logo 的卡片
 - **密码登录（可关闭）** — 单用户密码 + 会话 Cookie（argon2id 哈希），适合暴露 8081 端口时防误触
 - **隐藏端口** — 一键隐藏不关心的端口
-- **快速搜索** — 按名称 / 端口号 / 备注即时过滤
+- **快速搜索** — 按名称 / 端口号即时过滤
 - **离线容器** — 已停止容器的端口映射同样展示
 - **暗色 / 亮色主题** — 6 种强调色可选
 - **国际化** — 英文 & 简体中文界面
@@ -67,7 +67,7 @@ docker run -d --name portview \
   ghcr.io/givangu/portview:latest
 ```
 
-> 命名卷 `portview-data` 用于持久化密码、备注、监控区间和登录态，跨容器重建保留。
+> 命名卷 `portview-data` 用于持久化密码、监控区间和登录态，跨容器重建保留。
 
 ### 方式三：本地开发
 
@@ -126,9 +126,6 @@ npm run dev   # http://localhost:3000（proxy 到 :8081）
 | POST | `/api/config/hidden` | 隐藏端口 |
 | POST | `/api/config/hidden/unhide` | 取消隐藏 |
 | POST | `/api/config/hidden/batch` | 批量隐藏/取消 |
-| GET | `/api/notes` | 备注列表（`?search=`） |
-| POST | `/api/notes` | 新建/更新备注（按端口 upsert） |
-| DELETE | `/api/notes/{port}` | 删除备注 |
 | GET | `/api/prefs` | 获取用户偏好 |
 | PATCH | `/api/prefs` | 更新偏好 |
 | POST | `/api/prefs/reset` | 重置为默认 |
@@ -155,7 +152,6 @@ portview/
 │   ├── routers/          # 路由
 │   │   ├── ports.py
 │   │   ├── config.py
-│   │   ├── notes.py
 │   │   ├── prefs.py
 │   │   ├── ranges.py
 │   │   └── auth.py

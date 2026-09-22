@@ -25,7 +25,6 @@ from app.models import (
     HiddenPortsBatchRequest,
     PortEditRequest,
 )
-from app.routers.ports import _load_notes_map
 from app.services.port_monitor import PortMonitor
 
 logger = logging.getLogger(__name__)
@@ -178,7 +177,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
             return APIResponse(success=True, data=[])
 
         config = load_config()
-        notes_map = await _load_notes_map()
         # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
@@ -186,7 +184,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
             start_port=1,
             end_port=65535,
             hidden_ports=[],  # 不过滤，拿到全部卡片
-            notes_map=notes_map,
         )
 
         card_by_port: dict[int, dict] = {}
@@ -207,7 +204,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
                         "container": card.get("container"),
                         "image": card.get("image"),
                         "is_running": card.get("is_running"),
-                        "remark": card.get("remark", ""),
                     }
                 )
             else:
@@ -220,7 +216,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
                         "container": None,
                         "image": None,
                         "is_running": False,
-                        "remark": "",
                     }
                 )
         return APIResponse(success=True, data=details)

@@ -106,9 +106,6 @@ onMounted(() => loadData())
             <span v-if="item.detail?.container" class="hidden-detail-container">
               {{ item.detail.container }}
             </span>
-            <span v-if="item.detail?.remark" class="hidden-detail-remark">
-              {{ item.detail.remark }}
-            </span>
             <span v-if="item.detail && !item.detail.is_running" class="hidden-detail-offline">
               {{ t('common.offline') }}
             </span>

@@ -1,7 +1,7 @@
 import { ref, readonly, type Ref } from 'vue'
 
 /** 导航页签（与 App.vue 的 navItems 一一对应）。 */
-export type Tab = 'overview' | 'favorites' | 'ports' | 'notes' | 'hidden' | 'settings'
+export type Tab = 'overview' | 'favorites' | 'ports' | 'hidden' | 'settings'
 
 /** 顶栏全局搜索的共享状态。
  * query 由顶栏输入框写入；各视图 watch 它后按当前页激活状态执行过滤。

@@ -136,64 +136,6 @@ class TestRefresh:
         assert "port_cards" in data["data"]
 
 
-class TestNotes:
-    """P1-1 端口备注端点。"""
-
-    def test_upsert_and_list(self, client: TestClient):
-        # 新建
-        r = client.post(
-            "/api/notes",
-            json={
-                "port": 8080,
-                "service_name": "http-svc",
-                "protocol": "tcp",
-                "remark": "web",
-            },
-        )
-        assert r.status_code == 200 and r.json()["success"] is True
-
-        # upsert（修改 remark）
-        r = client.post(
-            "/api/notes",
-            json={
-                "port": 8080,
-                "service_name": "http-svc",
-                "protocol": "tcp",
-                "remark": "web v2",
-            },
-        )
-        assert r.json()["success"] is True
-
-        # 列表应包含且只有一条 8080，remark 为 v2
-        lst = client.get("/api/notes").json()["data"]
-        mine = [n for n in lst if n["port"] == 8080]
-        assert len(mine) == 1
-        assert mine[0]["remark"] == "web v2"
-        assert mine[0]["protocol"] == "tcp"
-
-        # 清理
-        assert client.delete("/api/notes/8080").json()["success"] is True
-
-    def test_port_range_validation(self, client: TestClient):
-        # pydantic Field(ge=0, le=65535) 在请求层直接拦 422
-        r = client.post("/api/notes", json={"port": 99999, "service_name": "x"})
-        assert r.status_code == 422
-
-    def test_protocol_validation(self, client: TestClient):
-        # Literal['', 'tcp', 'udp', 'both'] 也在请求层拦
-        r = client.post("/api/notes", json={"port": 100, "protocol": "sctp"})
-        assert r.status_code == 422
-
-    def test_search(self, client: TestClient):
-        client.post(
-            "/api/notes",
-            json={"port": 5432, "service_name": "postgres", "protocol": "both", "remark": "db"},
-        )
-        data = client.get("/api/notes", params={"search": "postgres"}).json()["data"]
-        assert any(n["port"] == 5432 for n in data)
-        client.delete("/api/notes/5432")
-
-
 class TestPrefs:
     """P1-2 用户偏好端点。"""
 

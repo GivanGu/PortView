@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Network,
   Star,
-  StickyNote,
   EyeOff,
   Settings,
   Sun,
@@ -29,7 +28,6 @@ import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
 import FavoritesView from '@/components/FavoritesView.vue'
-import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
 import LoginView from '@/components/LoginView.vue'
@@ -169,7 +167,6 @@ const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
   { id: 'favorites' as Tab, icon: Star, label: t('nav.favorites') },
   { id: 'ports' as Tab, icon: Network, label: t('nav.ports') },
-  { id: 'notes' as Tab, icon: StickyNote, label: t('nav.notes') },
   { id: 'hidden' as Tab, icon: EyeOff, label: t('nav.hidden') },
   { id: 'settings' as Tab, icon: Settings, label: t('nav.settings') },
 ])
@@ -424,7 +421,6 @@ const visited = reactive<Record<Tab, boolean>>({
   overview: _defaultTab === 'overview',
   favorites: _defaultTab === 'favorites',
   ports: false,
-  notes: false,
   hidden: false,
   settings: false,
 })
@@ -441,7 +437,7 @@ function switchTab(tab: Tab) {
 
 // ── v1.6.6：顶栏全局搜索 ──
 // 各页面不再有自己的搜索框，统一由顶栏输入框驱动（store.query）。
-// 有列表过滤能力的页面（端口/备注/收藏）watch query 做过滤；
+// 有列表过滤能力的页面（端口/收藏）watch query 做过滤；
 // 无过滤能力的页面（概览/设置/隐藏端口）用 useSearchFocus 播放聚焦动画。
 const {
   query: searchQuery,
@@ -464,8 +460,6 @@ const searchPlaceholder = computed(() => {
       return t('favorites.searchPlaceholder')
     case 'ports':
       return t('ports.searchPlaceholder')
-    case 'notes':
-      return t('notes.searchPlaceholder')
     case 'hidden':
       return t('hidden.searchPlaceholder')
     default:
@@ -753,7 +747,6 @@ onBeforeUnmount(() => {
         <OverviewView v-if="visited.overview" v-show="activeTab === 'overview'" />
         <FavoritesView v-if="visited.favorites" v-show="activeTab === 'favorites'" />
         <PortsView v-if="visited.ports" v-show="activeTab === 'ports'" />
-        <NotesView v-if="visited.notes" v-show="activeTab === 'notes'" />
         <HiddenPortsView v-if="visited.hidden" v-show="activeTab === 'hidden'" />
         <SettingsView v-if="visited.settings" v-show="activeTab === 'settings'" />
       </main>

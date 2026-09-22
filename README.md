@@ -4,7 +4,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-PortView runs on a NAS or server, reads Docker container port mappings and local listening ports in real time, and displays them as visual cards. It supports custom port notes, port hiding, multi-range filtering, and quick search.
+PortView runs on a NAS or server, reads Docker container port mappings and local listening ports in real time, and displays them as visual cards. It supports port hiding, multi-range filtering, quick filters, and quick search.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)
@@ -17,12 +17,12 @@ PortView runs on a NAS or server, reads Docker container port mappings and local
 
 - **Docker port monitoring** — reads port mappings from all containers (including stopped ones)
 - **Host port monitoring** — detects local listening ports via psutil
-- **Port cards** — grouped by service, showing port, protocol, status, and notes
-- **Custom notes** — attach a remark to any port; notes appear directly on port cards
+- **Port cards** — grouped by service, showing port, protocol, and status
 - **Multi-range filtering** — define any number of port ranges (e.g. 80s / 8000s) and filter to only those
+- **Quick filters** — one-click toolbar filters for "unknown service" ports and cards without a logo
 - **Password login (optional)** — single-user password + session cookie (argon2id), useful when exposing port 8081
 - **Port hiding** — one-click hide for ports you don't care about
-- **Quick search** — instant filter by name / port number / note
+- **Quick search** — instant filter by name / port number
 - **Offline containers** — stopped containers' port mappings are still shown
 - **Dark / Light theme** — with 6 accent color choices
 - **i18n** — English & Simplified Chinese UI
@@ -66,7 +66,7 @@ docker run -d --name portview \
   ghcr.io/givangu/portview:latest
 ```
 
-> The named volume `portview-data` persists password, notes, ranges, and login state across container rebuilds.
+> The named volume `portview-data` persists password, ranges, and login state across container rebuilds.
 
 ### Option 3: Local development
 
@@ -125,9 +125,6 @@ Stored in `config/hidden_ports.json`, managed via the UI.
 | POST | `/api/config/hidden` | Hide port(s) |
 | POST | `/api/config/hidden/unhide` | Unhide port(s) |
 | POST | `/api/config/hidden/batch` | Batch hide/unhide |
-| GET | `/api/notes` | List notes (`?search=`) |
-| POST | `/api/notes` | Create/update note (upsert by port) |
-| DELETE | `/api/notes/{port}` | Delete note |
 | GET | `/api/prefs` | Get user preferences |
 | PATCH | `/api/prefs` | Update preferences |
 | POST | `/api/prefs/reset` | Reset to defaults |
@@ -154,7 +151,6 @@ portview/
 │   ├── routers/          # API routers
 │   │   ├── ports.py
 │   │   ├── config.py
-│   │   ├── notes.py
 │   │   ├── prefs.py
 │   │   ├── ranges.py
 │   │   └── auth.py

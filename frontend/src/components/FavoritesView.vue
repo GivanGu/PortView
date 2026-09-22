@@ -41,13 +41,11 @@ import {
   logoUrl,
   defaultLogoUrl,
   backgroundUrl,
-  upsertNote,
   uploadLogo,
   fetchFavicon,
   type PortCard,
   type LogoMeta,
   type HiddenPortDetail,
-  type NoteProtocol,
   type FavEntry,
   type FavFolder,
   type GridItem,
@@ -65,7 +63,6 @@ const {
   favorites,
   saveFavorites,
   refreshTick,
-  triggerRefresh,
   backgroundSet,
   backgroundVersion,
   backgroundScope,
@@ -148,7 +145,6 @@ function toCard(h: HiddenPortDetail): PortCard {
     image: h.image ?? undefined,
     is_running: h.is_running,
     service_name: h.service_name ?? undefined,
-    remark: h.remark || undefined,
   }
 }
 
@@ -250,7 +246,7 @@ const currentFolder = computed<FavFolder | null>(() => {
 function entryName(entry: FavEntry): string {
   if (entry.kind === 'port') {
     const card = entry.port != null ? cards.value.get(entry.port) : undefined
-    return card?.remark || card?.service_name || String(entry.port ?? '')
+    return card?.service_name || String(entry.port ?? '')
   }
   return entry.title || entry.url || ''
 }
@@ -729,7 +725,7 @@ const portCandidates = computed(() => {
   const list = [...cards.value.values()].filter((c) => c.port != null)
   const filtered = q
     ? list.filter((c) => {
-        const name = (c.remark || c.service_name || String(c.port)).toLowerCase()
+        const name = (c.service_name || String(c.port)).toLowerCase()
         return name.includes(q) || String(c.port).includes(q)
       })
     : list
@@ -886,51 +882,21 @@ function pickModalIcon(name: string) {
   iconInput.value = name
 }
 
-// ── 名称/备注编辑弹窗（port=备注，与端口页同步；url=显示名称）──
+// ── URL 条目重命名弹窗（port 条目显示名跟随服务名，不可在此改）──
 const nameEditModal = ref<{ entry: FavEntry } | null>(null)
 const nameEditInput = ref('')
 
 function openNameEdit(entry: FavEntry) {
   closeCtxMenu()
-  nameEditInput.value =
-    entry.kind === 'port'
-      ? ((entry.port != null ? cards.value.get(entry.port)?.remark : undefined) || '')
-      : entry.title || ''
+  nameEditInput.value = entry.title || ''
   nameEditModal.value = { entry }
 }
 
-async function saveNameEdit() {
+function saveNameEdit() {
   const target = nameEditModal.value
   if (!target) return
-  const entry = target.entry
-  const val = nameEditInput.value.trim()
-  if (entry.kind === 'port') {
-    if (entry.port == null) return
-    const card = cards.value.get(entry.port)
-    if (!card) return
-    try {
-      const protocol = ((card.protocol || '').toLowerCase() || '') as NoteProtocol
-      const resp = await upsertNote({
-        port: entry.port,
-        service_name: card.service_name ?? '',
-        protocol,
-        remark: val,
-      })
-      if (resp.success) {
-        card.remark = val || undefined
-        triggerRefresh()
-        nameEditModal.value = null
-      } else {
-        showToast(t('common.saveFailed'))
-      }
-    } catch (e) {
-      console.error('保存备注失败:', e)
-      showToast(t('common.saveFailed'))
-    }
-  } else {
-    renameEntry(entry.id, val)
-    nameEditModal.value = null
-  }
+  renameEntry(target.entry.id, nameEditInput.value.trim())
+  nameEditModal.value = null
 }
 
 // 重命名 url 条目（改 title，根/文件夹内均可）
@@ -1153,7 +1119,7 @@ onBeforeUnmount(() => {
                 @click="addPortEntry(card)"
               >
                 <span class="port-status-dot" :class="card.is_running === false ? 'is-offline' : 'is-online'"></span>
-                <span class="add-port-name">{{ card.remark || card.service_name || String(card.port) }}</span>
+                <span class="add-port-name">{{ card.service_name || String(card.port) }}</span>
                 <span class="add-port-num">:{{ card.port }}</span>
               </div>
             </div>
@@ -1235,13 +1201,13 @@ onBeforeUnmount(() => {
       </div>
     </Teleport>
 
-    <!-- 名称/备注编辑弹窗（port=备注，与端口页同步；url=显示名称） -->
+    <!-- URL 条目重命名弹窗 -->
     <Teleport to="body">
       <div v-if="nameEditModal" class="modal-overlay" @click.self="nameEditModal = null">
         <div class="modal modal-sm">
           <div class="modal-header">
             <h2>
-              {{ nameEditModal.entry.kind === 'port' ? t('favorites.editRemark') : t('favorites.renameEntry') }}
+              {{ t('favorites.renameEntry') }}
             </h2>
             <button class="modal-close" :title="t('common.close')" @click="nameEditModal = null">
               <X :size="16" />
@@ -1288,11 +1254,13 @@ onBeforeUnmount(() => {
                 <span class="settings-menu-ico">◈</span>
                 <span>{{ t('favorites.changeLogo') }}</span>
               </button>
-              <button class="settings-menu-item" @click="openNameEdit(ctxEntry.entry)">
+              <button
+                v-if="ctxEntry.entry.kind === 'url'"
+                class="settings-menu-item"
+                @click="openNameEdit(ctxEntry.entry)"
+              >
                 <span class="settings-menu-ico">✎</span>
-                <span>
-                  {{ ctxEntry.entry.kind === 'port' ? t('favorites.editRemark') : t('favorites.renameEntry') }}
-                </span>
+                <span>{{ t('favorites.renameEntry') }}</span>
               </button>
             </div>
             <div v-if="ctxCanRemove" class="settings-menu-group">

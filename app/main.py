@@ -27,7 +27,6 @@ from app.routers import auth as auth_router
 from app.routers import background as background_router
 from app.routers import config as config_router
 from app.routers import logos as logos_router
-from app.routers import notes as notes_router
 from app.routers import ports as ports_router
 from app.routers import prefs as prefs_router
 from app.routers import ranges as ranges_router
@@ -112,7 +111,6 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router)  # P1.1 登录
     app.include_router(ports_router.router)
     app.include_router(config_router.router)
-    app.include_router(notes_router.router)  # P1-1
     app.include_router(prefs_router.router)  # P1-2
     app.include_router(ranges_router.router)  # P1.1 监控区间
     app.include_router(logos_router.router)  # v1.5.0 应用 Logo

@@ -81,7 +81,7 @@ cd frontend && npm install && npm run dev
 ### Backend (`app/`)
 - **Entry**: `app/main.py` → `create_app()` factory, lifespan inits config + SQLite
 - **Services**: `app/services/port_monitor.py` (Docker SDK + psutil → PortCard list), `app/services/db.py` (SQLite via aiosqlite, 5 tables), `app/services/auth.py` (argon2id sessions)
-- **Routers**: `app/routers/{ports,config,notes,prefs,ranges,auth}.py` — all under `/api/`
+- **Routers**: `app/routers/{ports,config,prefs,ranges,auth}.py` — all under `/api/`
 - **Auth guard**: middleware in `main.py` checks `portview_session` cookie; whitelist is `/api/health`, `/api/auth/*`
 - **Config**: `app/config.py` reads `config/config.json` + `config/hidden_ports.json`; `__access_address__` key stores global base URL for "open service" links
 - **Access address API**: `GET/POST /api/config/access_address` — read/write the global base URL (e.g. `http://192.168.31.1`)
@@ -89,7 +89,7 @@ cd frontend && npm install && npm run dev
 ### Frontend (`frontend/`)
 - Vue 3 + TypeScript + vue-i18n, dark theme, no UI framework
 - `@` alias → `frontend/src/`
-- Components in `frontend/src/components/` — main views: `OverviewView`, `PortsView`, `NotesView`, `HiddenPortsView`, `SettingsView`, `LoginView`, `PasswordPrompt`
+- Components in `frontend/src/components/` — main views: `OverviewView`, `PortsView`, `HiddenPortsView`, `SettingsView`, `LoginView`, `PasswordPrompt`
 - i18n: `frontend/src/locales/{zh,en}.json`, fallback `zh`
 - Built assets (`frontend/dist/`) are served by FastAPI in production via SPA fallback
 
@@ -97,7 +97,7 @@ cd frontend && npm install && npm run dev
 1. `port_monitor.get_docker_ports()` — Docker SDK reads container port mappings (including stopped containers)
 2. `port_monitor.get_host_ports()` — psutil reads local listening ports
 3. `merge` → deduplicated `PortCard` list
-4. `config.py` overlays user notes + hide rules
+4. `config.py` overlays hide rules
 5. Frontend renders cards with search/filter
 
 ## Key Gotchas

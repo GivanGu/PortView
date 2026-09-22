@@ -162,14 +162,6 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
             "INSERT INTO user_prefs (id, theme, accent, lang, updated_at) VALUES (1, 'dark', 'indigo', 'zh', 0)"
         )
 
-    # P1 迁移：port_notes 表在 0.7 阶段定义时未含 `remark` 自由文本列，
-    # 在此做幂等补列（老库也安全），避免旧库访问 /api/notes 时报 `no such column: remark`。
-    cur = await conn.execute("PRAGMA table_info(port_notes)")
-    cols = {row[1] for row in await cur.fetchall()}
-    if "remark" not in cols:
-        await conn.execute("ALTER TABLE port_notes ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
-        logger.info("migration: port_notes.remark added")
-
     # P1.1 迁移：user_prefs 加 require_auth 列（0=关闭登录，1=开启，默认 0 以不破坏现有部署）
     cur = await conn.execute("PRAGMA table_info(user_prefs)")
     pref_cols = {row[1] for row in await cur.fetchall()}
@@ -285,6 +277,19 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
             (int(time.time()), " v1.6.9 clear port_notes"),
         )
         logger.info("migration: schema_version -> 4 (clear port_notes)")
+
+    # v1.6.11 迁移：删除 port_notes 表（备注功能整体移除，schema_version < 5 时执行）。
+    # 备注页、卡片 remark 展示、收藏页备注编辑、隐藏端口 remark 均已一并拆除。
+    # DDL 保留 CREATE TABLE：新库建表后由本迁移 DROP，保证 v1.6.9 历史迁移在新库可执行。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 5:
+        await conn.execute("DROP TABLE IF EXISTS port_notes")
+        await conn.execute(
+            "UPDATE schema_version SET version = 5, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.11 drop port_notes"),
+        )
+        logger.info("migration: schema_version -> 5 (drop port_notes)")
 
     await conn.commit()
     if _db is not None:

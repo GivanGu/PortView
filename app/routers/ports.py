@@ -18,16 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ports"])
 
 
-async def _load_notes_map() -> dict[int, str]:
-    """从 port_notes 表读 {port: remark}。P1.1 起用于给卡片打 remark。"""
-    conn = db_service.get_db()
-    if conn is None:
-        return {}
-    cur = await conn.execute("SELECT port, remark FROM port_notes")
-    rows = await cur.fetchall()
-    return {r["port"]: (r["remark"] or "") for r in rows if r["remark"]}
-
-
 async def _resolve_range_ids(range_ids: list[int]) -> set[int] | None:
     """把 range_rules.id 列表展平为端口集合。空/无效 → None（表示不限制）。"""
     if not range_ids:
@@ -90,7 +80,7 @@ async def api_ports(
     protocol: str = Query("", description="协议过滤：TCP / UDP / 空"),
     start_port: int = Query(1, ge=0, le=65535),
     end_port: int = Query(65535, ge=0, le=65535),
-    search: str = Query("", description="搜索端口 / 服务名 / 容器名 / 备注"),
+    search: str = Query("", description="搜索端口 / 服务名 / 容器名"),
     range_ids: list[int] = Query([], description="监控区间 id 列表；空=全段，非空=仅这些区间"),
 ) -> APIResponse:
     """获取端口信息。"""
@@ -108,7 +98,6 @@ async def api_ports(
 
         config = load_config()
         hidden_ports = load_hidden_ports()
-        notes_map = await _load_notes_map()
         # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
@@ -117,7 +106,6 @@ async def api_ports(
             end_port=end_port,
             protocol_filter=protocol_filter,
             hidden_ports=hidden_ports,
-            notes_map=notes_map,
         )
 
         # P1.1：按监控区间收窄
@@ -141,12 +129,10 @@ async def api_refresh(monitor: PortMonitor = Depends(get_monitor)) -> APIRespons
         await asyncio.to_thread(monitor.reconnect)
         config = load_config()
         hidden_ports = load_hidden_ports()
-        notes_map = await _load_notes_map()
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
             config,
             hidden_ports=hidden_ports,
-            notes_map=notes_map,
         )
         return APIResponse(success=True, data=port_data, message="端口信息已刷新")
     except Exception as e:
@@ -271,7 +257,6 @@ def _apply_search(port_data: dict, search_term: str) -> dict:
                     card.get("service_name", "") or "",
                     card.get("container", "") or "",
                     card.get("protocol", "") or "",
-                    card.get("remark", "") or "",  # P1.1：备注也纳入搜索
                 ]
             ).lower()
             if search_term in text:

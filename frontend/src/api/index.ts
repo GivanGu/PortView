@@ -21,7 +21,6 @@ export interface PortCard {
   is_running?: boolean
   container_status?: string
   is_host_network?: boolean
-  remark?: string
   // gap
   start_port?: number
   end_port?: number
@@ -201,7 +200,6 @@ export interface HiddenPortDetail {
   container: string | null
   image: string | null
   is_running: boolean
-  remark: string
 }
 
 export function fetchHiddenPortDetails(): Promise<ApiResponse<HiddenPortDetail[]>> {
@@ -212,39 +210,6 @@ export function fetchHiddenPortDetails(): Promise<ApiResponse<HiddenPortDetail[]
 
 export function healthCheck(): Promise<{ status: string; version: string; channel?: string }> {
   return fetch('/api/health').then(r => r.json())
-}
-
-// ── P1-1 端口备注 ─────────────────────────────────────────
-
-export type NoteProtocol = '' | 'tcp' | 'udp' | 'both'
-
-export interface NoteRead {
-  port: number
-  service_name: string
-  protocol: NoteProtocol
-  remark: string
-  created_at: number
-  updated_at: number
-}
-
-export interface NotePayload {
-  port: number
-  service_name: string
-  protocol: NoteProtocol
-  remark: string
-}
-
-export function listNotes(search = ''): Promise<ApiResponse<NoteRead[]>> {
-  const qs = search ? `?search=${encodeURIComponent(search)}` : ''
-  return request<NoteRead[]>(`/api/notes${qs}`)
-}
-
-export function upsertNote(payload: NotePayload): Promise<ApiResponse> {
-  return request('/api/notes', { method: 'POST', body: JSON.stringify(payload) })
-}
-
-export function deleteNote(port: number): Promise<ApiResponse> {
-  return request(`/api/notes/${port}`, { method: 'DELETE' })
 }
 
 // ── 收藏网格（v1.6.5）─────────────────────────────────
@@ -369,9 +334,6 @@ export function updateRange(id: number, patch: { name?: string; start_port?: num
 export function deleteRange(id: number): Promise<ApiResponse> {
   return request(`/api/ranges/${id}`, { method: 'DELETE' })
 }
-
-// ── notes (upsert with remark) ──────────────────────
-// NotePayload / upsertNote 已存在；此处仅确保 remark 字段被允许。
 
 // ── logos (v1.5.0) ──────────────────────────────────
 
