@@ -501,7 +501,7 @@ html, body {
   position: relative;
   overflow: hidden;
   /* v1.5.2：固定高度，所有卡片等高 */
-  height: 130px;
+  height: 140px;
   display: flex;
   flex-direction: column;
   /* v1.5.2：3D 立体阴影 */
@@ -523,7 +523,7 @@ html, body {
 /* 编辑模式：展开卡片高度，让输入框可见 */
 .port-card.editing {
   height: auto;
-  min-height: 130px;
+  min-height: 140px;
   overflow: visible;
 }
 
@@ -657,17 +657,22 @@ html, body {
 }
 
 /* ── v1.5.11：Logo 框展示模式（box）──
-   64px Logo 框 + 信息列，与 background 模式互斥。
-   .port-card 本身是 flex column，.port-card-body 作为 flex:1 的行容器。 */
+   上段 64px Logo 框 + 头部信息列，下段 detail/镜像行整宽（与 Logo 左对齐）。
+   .port-card 本身是 flex column，.port-card-body 作为 flex:1 的列容器。 */
 .port-card-body {
   position: relative;
   z-index: 2;
   display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 14px;
+  flex-direction: column;
   flex: 1;
   padding: 14px 16px;
+}
+
+.port-card-top {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .port-logo {
@@ -732,7 +737,7 @@ html, body {
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: nowrap;
   margin-top: auto; /* 把状态行推到卡片底部，配合 min-height 形成稳定布局 */
@@ -1122,8 +1127,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 与 port-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
-  min-height: 135px;
+  /* 与 port-card 等高（145px = 最富 4 行场景），避免网格内视觉抖动 */
+  min-height: 145px;
 }
 
 .gap-info {
@@ -1159,7 +1164,7 @@ html, body {
   border: 1px dashed var(--border-light);
   border-radius: var(--radius);
   padding: 14px 16px;
-  min-height: 135px;
+  min-height: 145px;
   display: flex;
   flex-direction: column;
   align-items: center;

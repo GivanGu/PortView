@@ -5,13 +5,17 @@ import { Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } 
 import type { PortCard } from '@/api'
 import { usePrefs, hasPortFavorite } from '@/store/prefs'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   card: PortCard
   // 最终展示的服务协议（人工指定 > 自动探测）；unknown 或未探测时不传
   scheme?: 'http' | 'https' | 'unknown'
   // 是否为人工指定（徽章显示铅笔标记）
   manual?: boolean
-}>()
+  // box 模式下分段渲染：top=头部+服务名，bottom=detail+镜像行，all=完整（默认）
+  section?: 'top' | 'bottom' | 'all'
+}>(), {
+  section: 'all',
+})
 
 const emit = defineEmits<{
   (e: 'scheme-toggle'): void
@@ -28,6 +32,7 @@ const isFavorite = computed(
 </script>
 
 <template>
+  <template v-if="section !== 'bottom'">
   <div class="port-card-header">
     <span class="port-header-left">
       <span
@@ -58,7 +63,9 @@ const isFavorite = computed(
   <div class="port-service">
     {{ card.service_name || t('ports.unknownService') }}
   </div>
+  </template>
 
+  <template v-if="section !== 'top'">
   <div class="port-detail">
     <span class="port-detail-left">
       <span
@@ -121,6 +128,7 @@ const isFavorite = computed(
   <!-- 镜像信息独立成一行，避免卡片高度不齐 -->
   <div v-if="card.image" class="port-image">
     <span class="port-image-label">{{ t('ports.image') }}</span>
-    <span class="port-image-value">{{ card.image }}</span>
+    <span class="port-image-value" :title="card.image">{{ card.image }}</span>
   </div>
+  </template>
 </template>

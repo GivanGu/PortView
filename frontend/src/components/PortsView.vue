@@ -861,27 +861,38 @@ onBeforeUnmount(() => {
                 </div>
               </template>
               <div v-else class="port-card-body">
-                <!-- box：64px Logo 框 + 信息列 -->
-                <div class="port-logo">
-                  <img
-                    v-if="logoSrc(card)"
-                    :src="logoSrc(card)!"
-                    class="port-logo-img"
-                    :style="{ display: hasLogoError(card) ? 'none' : '' }"
-                    :alt="card.service_name || 'logo'"
-                    @error="markLogoError(card)"
-                  />
-                  <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
+                <!-- box：上段 64px Logo 框 + 头部信息列，下段 detail/镜像行整宽（与 Logo 左对齐） -->
+                <div class="port-card-top">
+                  <div class="port-logo">
+                    <img
+                      v-if="logoSrc(card)"
+                      :src="logoSrc(card)!"
+                      class="port-logo-img"
+                      :style="{ display: hasLogoError(card) ? 'none' : '' }"
+                      :alt="card.service_name || 'logo'"
+                      @error="markLogoError(card)"
+                    />
+                    <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
+                  </div>
+                  <div class="port-info">
+                    <PortCardContent
+                      :card="card"
+                      :scheme="effectiveScheme(card)"
+                      :manual="isManualScheme(card)"
+                      section="top"
+                      @scheme-toggle="handleSchemeToggle(card)"
+                      @favorite-toggle="toggleFavorite(card)"
+                    />
+                  </div>
                 </div>
-                <div class="port-info">
-                  <PortCardContent
-                    :card="card"
-                    :scheme="effectiveScheme(card)"
-                    :manual="isManualScheme(card)"
-                    @scheme-toggle="handleSchemeToggle(card)"
-                    @favorite-toggle="toggleFavorite(card)"
-                  />
-                </div>
+                <PortCardContent
+                  :card="card"
+                  :scheme="effectiveScheme(card)"
+                  :manual="isManualScheme(card)"
+                  section="bottom"
+                  @scheme-toggle="handleSchemeToggle(card)"
+                  @favorite-toggle="toggleFavorite(card)"
+                />
               </div>
 
               <div class="port-actions">
