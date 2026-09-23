@@ -16,6 +16,22 @@ frontend/dist/
 *.swp
 *.swo
 
+# AI 助手配置（本地，不纳入版本管理）
+.opencode/
+.qoder/
+.claude/
+.cursor/
+.windsurf/
+.aider/
+.codex/
+.continue/
+.roo/
+.cline/
+.gemini/
+.trae/
+.lingma/
+.iflow/
+
 # OS
 .DS_Store
 Thumbs.db
