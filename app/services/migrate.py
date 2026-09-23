@@ -128,6 +128,12 @@ async def migrate_json_files(config_dir: str, db: Any) -> None:
 
     labels: dict[int, tuple[str, str]] = {}
     access_address = ""
+    # PortView 自身监听端口走统一逻辑（默认映射 8081 → PortView），
+    # 旧 config.json 里的自身端口条目是陈旧默认值（如 "模式注册:host"），跳过以免重新污染标注。
+    try:
+        self_port = int(os.environ.get("PORTVIEW_PORT", "8081"))
+    except ValueError:
+        self_port = 8081
     if os.path.exists(config_file):
         with open(config_file, encoding="utf-8") as f:
             raw = json.load(f)
@@ -140,6 +146,9 @@ async def migrate_json_files(config_dir: str, db: Any) -> None:
             name, ptype, port = _parse_legacy_entry(key, value)
             if port is None:
                 logger.warning("跳过无法识别的配置项: %s=%r", key, value)
+                continue
+            if port == self_port:
+                logger.info("跳过 PortView 自身端口条目（统一逻辑处理）: %s=%r", key, value)
                 continue
             if port in labels:
                 logger.warning(

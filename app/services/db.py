@@ -323,6 +323,24 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         )
         logger.info("migration: schema_version -> 6 (port_labels/hidden_ports)")
 
+    # v1.6.13 迁移：清理 PortView 自身监听端口的陈旧标注（schema_version < 7 时执行）。
+    # 旧 config.json 默认含 "模式注册:host": "8081:tcp"，v1.6.12 迁移后 8081 被标注为
+    # "模式注册"——这是陈旧默认值，非用户意图。v1.6.13 起自身端口走统一逻辑
+    # （默认映射 8081 → PortView），删除标注让其回落到默认名；用户编辑后重新写入。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 7:
+        try:
+            self_port = int(os.environ.get("PORTVIEW_PORT", "8081"))
+        except ValueError:
+            self_port = 8081
+        await conn.execute("DELETE FROM port_labels WHERE port = ?", (self_port,))
+        await conn.execute(
+            "UPDATE schema_version SET version = 7, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.13 clear self-port label"),
+        )
+        logger.info("migration: schema_version -> 7 (clear port_labels @ %s)", self_port)
+
     await conn.commit()
     if _db is not None:
         await _db.close()

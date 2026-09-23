@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 
 from app.config import load_access_address, load_config, load_hidden_ports
+from app.services import db as db_service
 from app.services import migrate
 
 
@@ -181,3 +182,79 @@ class TestMigrateJsonFiles:
         (tmp_path / "hidden_ports.json").write_text(json.dumps([1234, 0, 70000, "bad"]))
         await migrate.migrate_json_files(str(tmp_path), db)
         assert await load_hidden_ports() == [1234]
+
+    async def test_self_port_entry_skipped(self, tmp_path, db, monkeypatch):
+        """v1.6.13：旧 config.json 的自身端口条目被跳过（统一逻辑处理，避免陈旧标注入库）。"""
+        monkeypatch.setenv("PORTVIEW_PORT", "8081")
+        (tmp_path / "config.json").write_text(
+            json.dumps({"MyApp:host": "80:tcp", "模式注册:host": "8081:tcp"})
+        )
+        await migrate.migrate_json_files(str(tmp_path), db)
+        config = await load_config()
+        assert 80 in config
+        assert 8081 not in config
+
+
+class TestSelfPortLabelCleanup:
+    """v1.6.13：升级时清理自身端口的陈旧标注（schema 6 → 7）。"""
+
+    async def test_v7_clears_self_port_label(self, tmp_path, monkeypatch):
+        """模拟 v1.6.12 库（schema=6，8081 标注为陈旧默认值），升级后标注被清、版本升 7。"""
+        db_path = str(tmp_path / "portview.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE schema_version (id INTEGER PRIMARY KEY, version INTEGER, "
+            "applied_at INTEGER, note TEXT)"
+        )
+        conn.execute("INSERT INTO schema_version VALUES (1, 6, 0, 'old')")
+        conn.execute(
+            "CREATE TABLE port_labels (port INTEGER PRIMARY KEY, service_name TEXT, "
+            "port_type TEXT, created_at INTEGER, updated_at INTEGER)"
+        )
+        conn.execute("INSERT INTO port_labels VALUES (8081, '模式注册', 'host', 0, 0)")
+        conn.execute(
+            "CREATE TABLE user_prefs (id INTEGER PRIMARY KEY, theme TEXT, accent TEXT, "
+            "lang TEXT, updated_at INTEGER)"
+        )
+        conn.execute("INSERT INTO user_prefs VALUES (1, 'dark', 'indigo', 'zh', 0)")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setenv("PORTVIEW_PORT", "8081")
+        async with db_service.init_db(db_path):
+            db = db_service.get_db()
+            cur = await db.execute("SELECT version FROM schema_version WHERE id = 1")
+            row = await cur.fetchone()
+            assert row[0] == 7
+            cur = await db.execute("SELECT COUNT(*) FROM port_labels WHERE port = 8081")
+            row = await cur.fetchone()
+            assert row[0] == 0
+
+    async def test_v7_only_runs_once(self, tmp_path, monkeypatch):
+        """schema 已是 7 时不再清理（用户后续编辑的标注不被误删）。"""
+        db_path = str(tmp_path / "portview.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE schema_version (id INTEGER PRIMARY KEY, version INTEGER, "
+            "applied_at INTEGER, note TEXT)"
+        )
+        conn.execute("INSERT INTO schema_version VALUES (1, 7, 0, 'old')")
+        conn.execute(
+            "CREATE TABLE port_labels (port INTEGER PRIMARY KEY, service_name TEXT, "
+            "port_type TEXT, created_at INTEGER, updated_at INTEGER)"
+        )
+        conn.execute("INSERT INTO port_labels VALUES (8081, '我的监控', 'host', 0, 0)")
+        conn.execute(
+            "CREATE TABLE user_prefs (id INTEGER PRIMARY KEY, theme TEXT, accent TEXT, "
+            "lang TEXT, updated_at INTEGER)"
+        )
+        conn.execute("INSERT INTO user_prefs VALUES (1, 'dark', 'indigo', 'zh', 0)")
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setenv("PORTVIEW_PORT", "8081")
+        async with db_service.init_db(db_path):
+            db = db_service.get_db()
+            cur = await db.execute("SELECT service_name FROM port_labels WHERE port = 8081")
+            row = await cur.fetchone()
+            assert row is not None and row[0] == "我的监控"
