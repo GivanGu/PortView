@@ -53,7 +53,7 @@ cd frontend && npm install && npm run dev
 ## AI 工具插件
 
 ### OpenCodeReview (OCR)
-- **位置**: `.opencode/plugins/open-code-review.ts` — 项目级插件，随仓库提交（`.opencode/.gitignore` 已排除 `node_modules` 等生成物）
+- **位置**: `.opencode/plugins/open-code-review.ts` — 项目级插件；`.opencode/` 已加入 `.gitignore` 不随仓库提交，新环境需自行放置该插件文件
 - **工具**: `ocr_review`（对 workspace 变更 / 单个 commit / ref 范围做行级审查，返回结构化 findings；`preview=true` 只列待审文件不调 LLM）、`ocr_health`（检查 OCR 版本与 LLM 连通性）
 - **LLM 配置**: `~/.opencodereview/config.json` — provider `local-llm`，指向本地 LiteLLM 代理（`http://192.168.31.4:22511/v1`，model `Qwen3.8-27B-Q4_K_M`）
 - **注意**: 本地 27B 模型较慢，审查建议 `timeoutMinutes: 20`、`overallTimeoutMinutes: 40`
