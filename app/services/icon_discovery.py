@@ -108,19 +108,21 @@ def _dedupe(items: list[str]) -> list[str]:
     return out
 
 
-async def discover_icon(host: str, port: int, base_path: str = "/") -> tuple[bytes, str] | None:
-    """抓取 ``http://{host}:{port}`` 的 favicon，返回 ``(bytes, mime)`` 或 ``None``。
+async def discover_icon_origin(
+    origin: str, base_path: str = "/", verify_tls: bool = False
+) -> tuple[bytes, str] | None:
+    """抓取 ``origin``（如 ``http://127.0.0.1:8080`` / ``https://example.com``）的 favicon。
 
-    任何网络错误 / 超时 / 无有效图片都静默返回 ``None``（由调用方落 ``not_found``）。
+    返回 ``(bytes, mime)`` 或 ``None``。任何网络错误 / 超时 / 无有效图片都静默返回
+    ``None``（由调用方落 ``not_found``）。
+
+    ``verify_tls``：端口服务默认 False（loopback / 自签证书跳过校验）；
+    外部 URL 传 True 走正常证书校验。
     """
-    if not (1 <= port <= 65535):
-        return None
-
     base_path = (base_path or "/").strip()
     if not base_path.startswith("/"):
         base_path = "/" + base_path
     root = base_path.rstrip("/")
-    origin = f"http://{host}:{port}"
 
     headers = {"User-Agent": "PortView/1.5 (+favicon-discovery)"}
 
@@ -128,7 +130,7 @@ async def discover_icon(host: str, port: int, base_path: str = "/") -> tuple[byt
         timeout=TIMEOUT,
         follow_redirects=True,
         max_redirects=MAX_REDIRECTS,
-        verify=False,  # loopback / 自签证书跳过 TLS 校验
+        verify=verify_tls,
         headers=headers,
     ) as client:
         candidates: list[str] = []
@@ -168,9 +170,14 @@ async def discover_icon(host: str, port: int, base_path: str = "/") -> tuple[byt
                 continue
             mime = detect_mime(data)
             if mime:
-                logger.info(
-                    "icon discovered for %s:%s -> %s (%d bytes)", host, port, mime, len(data)
-                )
+                logger.info("icon discovered for %s -> %s (%d bytes)", origin, mime, len(data))
                 return data, mime
 
     return None
+
+
+async def discover_icon(host: str, port: int, base_path: str = "/") -> tuple[bytes, str] | None:
+    """抓取 ``http://{host}:{port}`` 的 favicon（端口服务的原入口，行为不变）。"""
+    if not (1 <= port <= 65535):
+        return None
+    return await discover_icon_origin(f"http://{host}:{port}", base_path)

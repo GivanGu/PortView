@@ -3,8 +3,13 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchPorts, type PortCard } from '@/api'
 import usePrefs from '@/store/prefs'
+import { useSearchFocus } from '@/composables/useSearchFocus'
 
 const { t, locale } = useI18n()
+
+// v1.6.6：顶栏全局搜索 → 本页无过滤能力，命中卡片播放聚焦动画
+const rootRef = ref<HTMLElement | null>(null)
+useSearchFocus(rootRef, 'overview')
 
 interface OverviewStats {
   totalUsed: number
@@ -145,7 +150,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="view">
+  <div class="view" ref="rootRef">
     <div class="view-header">
       <div>
         <h2>{{ t('overview.title') }}</h2>
@@ -160,23 +165,23 @@ onBeforeUnmount(() => {
 
     <!-- 统计卡片 -->
     <div class="stat-cards">
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value">{{ total }}</div>
         <div class="stat-label">{{ t('overview.totalPorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--green)">{{ stats.totalUsed }}</div>
         <div class="stat-label">{{ t('overview.usedPorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--blue)">{{ stats.totalAvailable }}</div>
         <div class="stat-label">{{ t('overview.availablePorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--cyan)">{{ stats.hostPorts }}</div>
         <div class="stat-label">{{ t('overview.hostPorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--purple)">{{ stats.dockerPorts }}</div>
         <div class="stat-label">{{ t('overview.dockerPorts') }}</div>
         <div class="stat-sub">
@@ -184,15 +189,15 @@ onBeforeUnmount(() => {
           <span class="stat-sub-item offline"><span class="sub-dot"></span>{{ stats.dockerOffline }} {{ t('overview.dockerOffline') }}</span>
         </div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--yellow)">{{ stats.hiddenPorts.length }}</div>
         <div class="stat-label">{{ t('overview.hiddenPorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--accent)">{{ stats.tcpUsed }}</div>
         <div class="stat-label">{{ t('overview.tcpPorts') }}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" data-sfocus>
         <div class="stat-value" style="color: var(--orange)">{{ stats.udpUsed }}</div>
         <div class="stat-label">{{ t('overview.udpPorts') }}</div>
       </div>
@@ -200,7 +205,7 @@ onBeforeUnmount(() => {
 
     <!-- 图表区 -->
     <div class="chart-row">
-      <div class="chart-card">
+      <div class="chart-card" data-sfocus>
         <div class="chart-title">{{ t('overview.usageRate') }}</div>
         <div class="ring-wrap">
           <svg viewBox="0 0 120 120" class="ring-svg">
@@ -225,7 +230,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card" data-sfocus>
         <div class="chart-title">{{ t('overview.protocolDist') }}</div>
         <div class="pie-wrap">
           <svg viewBox="0 0 120 120" class="pie-svg">
@@ -264,7 +269,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card" data-sfocus>
         <div class="chart-title">{{ t('overview.sourceDist') }}</div>
         <div class="pie-wrap">
           <svg viewBox="0 0 120 120" class="pie-svg">
@@ -303,7 +308,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card" data-sfocus>
         <div class="chart-title">{{ t('overview.statusDist') }}</div>
         <div class="pie-wrap">
           <svg viewBox="0 0 120 120" class="pie-svg">

@@ -22,6 +22,7 @@ import binascii
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, Response
@@ -29,6 +30,7 @@ from fastapi.responses import JSONResponse, Response
 from app.models import (
     APIResponse,
     DiscoverRequest,
+    LogoFetchRequest,
     LogoMeta,
     LogoUploadRequest,
 )
@@ -67,6 +69,30 @@ async def _get_logo_row(app_key: str) -> dict | None:
     )
     row = await cur.fetchone()
     return dict(row) if row is not None else None
+
+
+async def _upsert_logo(app_key: str, status: str, mime: str | None, data: bytes | None) -> None:
+    """按终态写入 logo 行（discover / fetch 共用）。"""
+    now = int(time.time())
+    conn = db_service._db
+    if status == "found":
+        await conn.execute(
+            "INSERT INTO service_logos (app_key, status, mime, data, created_at, updated_at) "
+            "VALUES (?, 'found', ?, ?, ?, ?) "
+            "ON CONFLICT(app_key) DO UPDATE SET "
+            "  status = 'found', mime = excluded.mime, data = excluded.data, "
+            "  updated_at = excluded.updated_at",
+            (app_key, mime, data, now, now),
+        )
+    else:
+        await conn.execute(
+            "INSERT INTO service_logos (app_key, status, mime, data, created_at, updated_at) "
+            "VALUES (?, 'not_found', NULL, NULL, ?, ?) "
+            "ON CONFLICT(app_key) DO UPDATE SET "
+            "  status = 'not_found', mime = NULL, data = NULL, updated_at = excluded.updated_at",
+            (app_key, now, now),
+        )
+    await conn.commit()
 
 
 @router.get("", response_model=APIResponse)
@@ -198,31 +224,61 @@ async def api_discover_logo(req: DiscoverRequest) -> APIResponse:
             icon_discovery.DISCOVER_HOST, req.port, req.path
         )
 
-    now = int(time.time())
-    conn = db_service._db
     if result is not None:
         data, mime = result
-        await conn.execute(
-            "INSERT INTO service_logos (app_key, status, mime, data, created_at, updated_at) "
-            "VALUES (?, 'found', ?, ?, ?, ?) "
-            "ON CONFLICT(app_key) DO UPDATE SET "
-            "  status = 'found', mime = excluded.mime, data = excluded.data, "
-            "  updated_at = excluded.updated_at",
-            (req.app_key, mime, data, now, now),
-        )
-        await conn.commit()
+        await _upsert_logo(req.app_key, "found", mime, data)
         return APIResponse(
             success=True, data={"status": "found", "mime": mime}, message="discovered"
         )
 
-    await conn.execute(
-        "INSERT INTO service_logos (app_key, status, mime, data, created_at, updated_at) "
-        "VALUES (?, 'not_found', NULL, NULL, ?, ?) "
-        "ON CONFLICT(app_key) DO UPDATE SET "
-        "  status = 'not_found', mime = NULL, data = NULL, updated_at = excluded.updated_at",
-        (req.app_key, now, now),
+    await _upsert_logo(req.app_key, "not_found", None, None)
+    return APIResponse(
+        success=True, data={"status": "not_found", "mime": None}, message="not-found"
     )
-    await conn.commit()
+
+
+@router.post("/fetch", response_model=APIResponse)
+async def api_fetch_logo(req: LogoFetchRequest) -> APIResponse:
+    """外部 URL favicon 抓取（v1.6.5，收藏页自定义网址用）。
+
+    从 URL 的 origin（scheme://host[:port]）抓取 favicon，存为 ``app_key``；
+    与 discover 同幂等语义：已有终态记录直接返回，不重复抓取。
+    服务端抓取，不依赖任何外部 favicon CDN（国内环境 Google 服务不可达）。
+
+    安全取舍：有意允许抓取私网 / 内网地址（本工具为自建 LAN 场景，收藏 URL
+    大量指向内网服务）。此为盲 SSRF（响应体不返回、无数据外泄路径），且鉴权
+    由中间件统一控制；不封私网段以免破坏内网 favicon 抓取这一核心用途。
+    """
+    if db_service._db is None:
+        return APIResponse(success=False, error="db not ready")
+    if not _valid_app_key(req.app_key):
+        return APIResponse(success=False, error="invalid app_key")
+
+    u = urlsplit(req.url.strip())
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return APIResponse(success=False, error="url must be http(s) with a valid host")
+
+    existing = await _get_logo_row(req.app_key)
+    if existing is not None:
+        return APIResponse(
+            success=True,
+            data={"status": existing["status"], "mime": existing["mime"]},
+            message="cached",
+        )
+
+    # 去掉内嵌 user:pass，避免 httpx 自动附加 Authorization 头把凭证明文发给目标站
+    netloc = u.netloc.split("@", 1)[-1]
+    origin = f"{u.scheme}://{netloc}"
+    result = await icon_discovery.discover_icon_origin(origin, verify_tls=True)
+
+    if result is not None:
+        data, mime = result
+        await _upsert_logo(req.app_key, "found", mime, data)
+        return APIResponse(
+            success=True, data={"status": "found", "mime": mime}, message="discovered"
+        )
+
+    await _upsert_logo(req.app_key, "not_found", None, None)
     return APIResponse(
         success=True, data={"status": "not_found", "mime": None}, message="not-found"
     )

@@ -22,11 +22,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.config import init_config
 from app.routers import auth as auth_router
+from app.routers import background as background_router
 from app.routers import config as config_router
 from app.routers import logos as logos_router
-from app.routers import notes as notes_router
 from app.routers import ports as ports_router
 from app.routers import prefs as prefs_router
 from app.routers import ranges as ranges_router
@@ -49,13 +48,19 @@ _FRONTEND_DIST = os.path.join(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """应用生命周期：启动时初始化配置 + SQLite 数据库。"""
+    """应用生命周期：启动时迁移（旧库搬家 + JSON 入库）+ 初始化 SQLite。"""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    init_config()
+    from app.services import migrate as _migrate
+
+    # v1.6.12 统一存储：旧库搬家（幂等）须在 init_db 之前，
+    # 否则 init_db 会在空目录新建库，搬家被跳过。
+    _migrate.relocate_legacy_db()
     async with _db_service.init_db():
+        # JSON 文件迁移（config.json / hidden_ports.json → DB，幂等）
+        await _migrate.migrate_json_files(_db_service._DATA_DIR, _db_service.get_db())
         if CHANNEL == "dev":
             logger.info("PortView dev-%s 启动完成（SQLite ready）", __version__)
         else:
@@ -111,10 +116,10 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router)  # P1.1 登录
     app.include_router(ports_router.router)
     app.include_router(config_router.router)
-    app.include_router(notes_router.router)  # P1-1
     app.include_router(prefs_router.router)  # P1-2
     app.include_router(ranges_router.router)  # P1.1 监控区间
     app.include_router(logos_router.router)  # v1.5.0 应用 Logo
+    app.include_router(background_router.router)  # v1.6.6 自定义背景图
 
     # 健康检查
     @app.get("/api/health", tags=["meta"])

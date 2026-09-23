@@ -26,15 +26,13 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-# 数据库文件：`<project>/.data/portview.db`（可由 PORTVIEW_DB 环境变量覆盖）
-_DB_PATH = os.environ.get(
-    "PORTVIEW_DB",
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        ".data",
-        "portview.db",
-    ),
-)
+# 数据库文件：`<project>/config/portview.db`（可由 PORTVIEW_DB 环境变量覆盖）。
+# v1.6.12 统一存储：DB 从 `.data/` 迁至 `config/`（唯一持久化点，Docker 中 bind mount）。
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DATA_DIR = os.environ.get("PORTVIEW_CONFIG_DIR", os.path.join(_PROJECT_ROOT, "config"))
+# 旧版 DB 位置（v1.6.12 迁移源，仅用于启动时搬家判定）
+_OLD_DB_PATH = os.path.join(_PROJECT_ROOT, ".data", "portview.db")
+_DB_PATH = os.environ.get("PORTVIEW_DB", os.path.join(_DATA_DIR, "portview.db"))
 
 # 连接引用 —— FastAPI 单例
 _db: aiosqlite.Connection | None = None
@@ -116,6 +114,27 @@ _SCHEMA = [
     "  scheme     TEXT NOT NULL CHECK (scheme IN ('http', 'https')),"
     "  updated_at INTEGER NOT NULL DEFAULT 0"
     ")",
+    # 自定义背景图（v1.6.6）：单行 id=1，BLOB 存图片字节。
+    # 不进 user_prefs——prefs 每次全量读取，4MiB 图片会拖垮 GET /api/prefs。
+    "CREATE TABLE IF NOT EXISTS backgrounds ("
+    "  id         INTEGER PRIMARY KEY CHECK (id = 1),"
+    "  mime       TEXT NOT NULL,"
+    "  data       BLOB NOT NULL,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+    # 端口标注（v1.6.12 统一存储）：端口为主键，服务名非唯一（同一名字可绑多端口，
+    # 如一个应用的 http + https）。取代旧 config.json 的「服务名:docker/host -> 端口:协议」格式。
+    "CREATE TABLE IF NOT EXISTS port_labels ("
+    "  port INTEGER PRIMARY KEY CHECK (port BETWEEN 1 AND 65535),"
+    "  service_name TEXT NOT NULL,"
+    "  port_type TEXT NOT NULL DEFAULT 'host' CHECK (port_type IN ('docker', 'host')),"
+    "  created_at INTEGER NOT NULL DEFAULT 0,"
+    "  updated_at INTEGER NOT NULL DEFAULT 0"
+    ")",
+    # 隐藏端口（v1.6.12 统一存储）：从 hidden_ports.json 迁入，端口为主键。
+    "CREATE TABLE IF NOT EXISTS hidden_ports ("
+    "  port INTEGER PRIMARY KEY CHECK (port BETWEEN 1 AND 65535)"
+    ")",
 ]
 
 
@@ -153,14 +172,6 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         await conn.execute(
             "INSERT INTO user_prefs (id, theme, accent, lang, updated_at) VALUES (1, 'dark', 'indigo', 'zh', 0)"
         )
-
-    # P1 迁移：port_notes 表在 0.7 阶段定义时未含 `remark` 自由文本列，
-    # 在此做幂等补列（老库也安全），避免旧库访问 /api/notes 时报 `no such column: remark`。
-    cur = await conn.execute("PRAGMA table_info(port_notes)")
-    cols = {row[1] for row in await cur.fetchall()}
-    if "remark" not in cols:
-        await conn.execute("ALTER TABLE port_notes ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
-        logger.info("migration: port_notes.remark added")
 
     # P1.1 迁移：user_prefs 加 require_auth 列（0=关闭登录，1=开启，默认 0 以不破坏现有部署）
     cur = await conn.execute("PRAGMA table_info(user_prefs)")
@@ -237,11 +248,104 @@ async def init_db(path: str = _DB_PATH) -> AsyncIterator[aiosqlite.Connection]:
         await conn.execute("ALTER TABLE user_prefs ADD COLUMN favorites TEXT NOT NULL DEFAULT '[]'")
         logger.info("migration: user_prefs.favorites added (default '[]')")
 
+    # v1.6.6 迁移：user_prefs 加 default_tab 列（默认主页：overview / favorites）。
+    # 默认 favorites 保持 v1.6.5 现状（收藏页为默认首页）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols6 = {row[1] for row in await cur.fetchall()}
+    if "default_tab" not in pref_cols6:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN default_tab TEXT NOT NULL DEFAULT 'favorites'"
+        )
+        logger.info("migration: user_prefs.default_tab added (default 'favorites')")
+
+    # v1.6.6 迁移：user_prefs 加 background_scope 列（背景图作用域：favorites / all）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols7 = {row[1] for row in await cur.fetchall()}
+    if "background_scope" not in pref_cols7:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN background_scope TEXT NOT NULL DEFAULT 'favorites'"
+        )
+        logger.info("migration: user_prefs.background_scope added (default 'favorites')")
+
+    # v1.6.6 迁移：user_prefs 加 background_blur 列（背景图模糊度 px，0-30，默认 10）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols8 = {row[1] for row in await cur.fetchall()}
+    if "background_blur" not in pref_cols8:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN background_blur INTEGER NOT NULL DEFAULT 10"
+        )
+        logger.info("migration: user_prefs.background_blur added (default 10)")
+
+    # v1.6.9 迁移：清空 port_notes 表（一次性，schema_version < 4 时执行）。
+    # 旧「未备注端口」命名流程产生的备注已废弃 —— 备注的 service_name 从不应用到
+    # 端口卡片（只有 remark 会），服务名统一改走 config.json 的「编辑服务名」。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 4:
+        await conn.execute("DELETE FROM port_notes")
+        await conn.execute(
+            "UPDATE schema_version SET version = 4, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.9 clear port_notes"),
+        )
+        logger.info("migration: schema_version -> 4 (clear port_notes)")
+
+    # v1.6.11 迁移：删除 port_notes 表（备注功能整体移除，schema_version < 5 时执行）。
+    # 备注页、卡片 remark 展示、收藏页备注编辑、隐藏端口 remark 均已一并拆除。
+    # DDL 保留 CREATE TABLE：新库建表后由本迁移 DROP，保证 v1.6.9 历史迁移在新库可执行。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 5:
+        await conn.execute("DROP TABLE IF EXISTS port_notes")
+        await conn.execute(
+            "UPDATE schema_version SET version = 5, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.11 drop port_notes"),
+        )
+        logger.info("migration: schema_version -> 5 (drop port_notes)")
+
+    # v1.6.12 迁移：user_prefs 加 access_address 列（全局访问地址，
+    # 从旧 config.json 的 __access_address__ 键迁入）。
+    cur = await conn.execute("PRAGMA table_info(user_prefs)")
+    pref_cols9 = {row[1] for row in await cur.fetchall()}
+    if "access_address" not in pref_cols9:
+        await conn.execute(
+            "ALTER TABLE user_prefs ADD COLUMN access_address TEXT NOT NULL DEFAULT ''"
+        )
+        logger.info("migration: user_prefs.access_address added")
+
+    # v1.6.12 迁移：新增 port_labels / hidden_ports 表（统一存储，schema_version < 6 时执行）。
+    # 表由上方 _SCHEMA 幂等创建；这里仅 bump schema_version 追踪迁移。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 6:
+        await conn.execute(
+            "UPDATE schema_version SET version = 6, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.12 port_labels/hidden_ports"),
+        )
+        logger.info("migration: schema_version -> 6 (port_labels/hidden_ports)")
+
+    # v1.6.13 迁移：清理 PortView 自身监听端口的陈旧标注（schema_version < 7 时执行）。
+    # 旧 config.json 默认含 "模式注册:host": "8081:tcp"，v1.6.12 迁移后 8081 被标注为
+    # "模式注册"——这是陈旧默认值，非用户意图。v1.6.13 起自身端口走统一逻辑
+    # （默认映射 8081 → PortView），删除标注让其回落到默认名；用户编辑后重新写入。
+    cur = await conn.execute("SELECT version FROM schema_version WHERE id = 1")
+    row = await cur.fetchone()
+    if row is not None and row["version"] < 7:
+        try:
+            self_port = int(os.environ.get("PORTVIEW_PORT", "8081"))
+        except ValueError:
+            self_port = 8081
+        await conn.execute("DELETE FROM port_labels WHERE port = ?", (self_port,))
+        await conn.execute(
+            "UPDATE schema_version SET version = 7, applied_at = ?, note = note || ? WHERE id = 1",
+            (int(time.time()), " v1.6.13 clear self-port label"),
+        )
+        logger.info("migration: schema_version -> 7 (clear port_labels @ %s)", self_port)
+
     await conn.commit()
     if _db is not None:
         await _db.close()
     _db = conn
-    logger.info("SQLite @ %s (WAL, 8 tables) ready", path)
+    logger.info("SQLite @ %s (WAL, 11 tables) ready", path)
     yield conn
     await conn.close()
     logger.info("SQLite @ %s closed", path)

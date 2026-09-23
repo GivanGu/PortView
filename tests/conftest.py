@@ -29,6 +29,10 @@ os.environ["PORTVIEW_CONFIG_DIR"] = _TEST_CONFIG_DIR
 # 不让 env 层强制开启 auth，由测试自行控制
 os.environ.pop("PORTVIEW_REQUIRE_AUTH", None)
 
+# 必须在环境变量就位后再 import db：db 模块在 import 时读取 PORTVIEW_DB 计算
+# _DB_PATH，若先 import 会指向真实 config/ 目录，导致测试污染本地库。
+from app.services import db as db_service  # noqa: E402
+
 
 @pytest.fixture(autouse=True)
 def _fresh_db():
@@ -38,3 +42,16 @@ def _fresh_db():
         if os.path.exists(path):
             os.remove(path)
     yield
+
+
+@pytest.fixture
+async def db(tmp_path):
+    """打开临时 DB（init_db 幂等建表 + 迁移），供直接读写表结构的测试使用。
+
+    用 ``tmp_path`` 生成每用例唯一路径，避免与共享 ``_TEST_DB`` 路径的
+    文件删除时序竞争（autouse 清理夹具与 init_db 连接顺序不定，
+    共享路径下会读到上一用例残留数据）。
+    """
+    db_path = str(tmp_path / "portview.db")
+    async with db_service.init_db(db_path):
+        yield db_service.get_db()

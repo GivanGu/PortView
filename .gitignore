@@ -16,6 +16,22 @@ frontend/dist/
 *.swp
 *.swo
 
+# AI 助手配置（本地，不纳入版本管理）
+.opencode/
+.qoder/
+.claude/
+.cursor/
+.windsurf/
+.aider/
+.codex/
+.continue/
+.roo/
+.cline/
+.gemini/
+.trae/
+.lingma/
+.iflow/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -25,6 +41,13 @@ Thumbs.db
 *.db
 *.db-wal
 *.db-shm
+
+# 运行时数据（v1.6.12 起 config/ 为唯一持久化点：portview.db 及迁移源 JSON）
+config/*.json
+config/*.example
+config/*.db
+config/*.db-wal
+config/*.db-shm
 
 # Env
 .env

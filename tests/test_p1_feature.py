@@ -1,11 +1,10 @@
-"""P1.1 测试：auth + ranges + remark 打通。
+"""P1.1 测试：auth + ranges 打通。
 
 覆盖：
 - 设置密码 / 登录 / 登出 / 401 守卫
 - 关闭 auth 时全放行
 - range_rules CRUD
 - /api/ports?range_ids=... 过滤
-- /api/ports 卡片带 remark
 
 DB / 配置目录隔离由 tests/conftest.py 统一处理（临时路径 + 每用例全新 DB）。
 """
@@ -188,55 +187,6 @@ class TestRangeFilter:
         # 清理
         for aid in aids:
             client.delete(f"/api/ranges/{aid}")
-
-
-# --------------------- A3: remark 注入 ---------------------
-
-
-class TestRemark:
-    def test_remark_in_used_card(self, client: TestClient):
-        # 起一个真监听 → 让 host 的 port 变成"已用"（不依赖 Docker）
-        import socket
-
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("127.0.0.1", 0))
-        port = srv.getsockname()[1]
-        srv.listen(1)
-        try:
-            # 塞备注
-            r = client.post(
-                "/api/notes",
-                json={
-                    "port": port,
-                    "service_name": "test-svc",
-                    "protocol": "tcp",
-                    "remark": "http entry",
-                },
-            )
-            assert r.status_code == 200
-            # 查该端口 → 应"已用"且带 remark
-            resp = client.get("/api/ports", params={"start_port": port, "end_port": port})
-            assert resp.status_code == 200
-            used = [
-                c
-                for c in resp.json()["data"]["port_cards"]
-                if c["type"] == "used" and c.get("port") == port
-            ]
-            assert used, (
-                f"port {port} should be 'used' (card set: {resp.json()['data']['port_cards']})"
-            )
-            assert used[0].get("remark") == "http entry", used[0]
-            # 搜索命中备注
-            s = client.get(
-                "/api/ports", params={"search": "http entry", "start_port": 1, "end_port": 65535}
-            )
-            hits = [c for c in s.json()["data"]["port_cards"] if c.get("remark")]
-            assert any(c.get("port") == port for c in hits), (
-                f"remark-search missed {port}; hits={hits}"
-            )
-        finally:
-            srv.close()
 
 
 # --------------------- A1: 登录守卫开启 ---------------------

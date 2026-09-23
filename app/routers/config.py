@@ -1,21 +1,19 @@
-"""配置与隐藏端口路由。"""
+"""配置与隐藏端口路由（v1.6.12 起全部落 SQLite）。"""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from fastapi import APIRouter, Depends
 
 from app.config import (
-    ACCESS_ADDRESS_KEY,
     load_access_address,
     load_config,
     load_hidden_ports,
-    load_raw_config,
     save_access_address,
     save_hidden_ports,
-    save_raw_config,
 )
 from app.dependencies import get_monitor
 from app.models import (
@@ -25,90 +23,35 @@ from app.models import (
     HiddenPortsBatchRequest,
     PortEditRequest,
 )
-from app.routers.ports import _load_notes_map
+from app.services import db as db_service
 from app.services.port_monitor import PortMonitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
-@router.get("", response_model=APIResponse)
-def api_get_config() -> APIResponse:
-    """获取当前配置（原始 JSON 格式）。"""
-    try:
-        raw = load_raw_config()
-        return APIResponse(success=True, data=raw)
-    except Exception as e:
-        logger.error("获取配置失败: %s", e)
-        return APIResponse(success=False, error=str(e))
-
-
-@router.post("", response_model=APIResponse)
-def api_save_config(payload: dict) -> APIResponse:
-    """整份保存配置（设置界面「保存」按钮）。"""
-    try:
-        if not isinstance(payload, dict):
-            return APIResponse(success=False, error="配置必须是 JSON 对象")
-
-        # 校验每个条目
-        for key, value in payload.items():
-            if key == ACCESS_ADDRESS_KEY:
-                continue
-            if not isinstance(value, str):
-                return APIResponse(success=False, error=f"配置项 {key} 的值必须是字符串")
-            if ":" not in key:
-                return APIResponse(
-                    success=False, error=f"配置项 {key} 格式错误，应为「服务名:docker/host」"
-                )
-            service_type = key.rsplit(":", 1)[-1]
-            if service_type not in ("docker", "host"):
-                return APIResponse(
-                    success=False, error=f"配置项 {key} 的服务类型必须是 docker 或 host"
-                )
-            parts = value.split(":")
-            if len(parts) < 2:
-                return APIResponse(
-                    success=False, error=f"配置项 {key} 的值格式错误，应为「端口:协议」"
-                )
-            try:
-                port = int(parts[0])
-            except ValueError:
-                return APIResponse(success=False, error=f"配置项 {key} 的端口号必须是数字")
-            if not 1 <= port <= 65535:
-                return APIResponse(success=False, error=f"配置项 {key} 的端口号超出范围 (1-65535)")
-            if parts[1].upper() not in ("TCP", "UDP"):
-                return APIResponse(success=False, error=f"配置项 {key} 的协议必须是 TCP 或 UDP")
-
-        if save_raw_config(payload):
-            return APIResponse(success=True, message="配置已保存")
-        return APIResponse(success=False, error="保存失败")
-    except Exception as e:
-        logger.error("保存配置失败: %s", e)
-        return APIResponse(success=False, error=str(e))
-
-
 @router.get("/access_address", response_model=APIResponse)
-def api_get_access_address() -> APIResponse:
-    """获取全局访问地址（如 http://192.168.31.1）。"""
+async def api_get_access_address() -> APIResponse:
+    """获取全局访问地址（如 192.168.31.1）。"""
     try:
-        return APIResponse(success=True, data={"address": load_access_address()})
+        return APIResponse(success=True, data={"address": await load_access_address()})
     except Exception as e:
         logger.error("获取访问地址失败: %s", e)
         return APIResponse(success=False, error=str(e))
 
 
 @router.post("/access_address", response_model=APIResponse)
-def api_save_access_address(req: AccessAddressRequest) -> APIResponse:
+async def api_save_access_address(req: AccessAddressRequest) -> APIResponse:
     """保存全局访问地址。空字符串表示清除。
 
     裸 IP / 域名（无协议前缀）会自动补 ``http://``，响应里回传规范化后的地址，
     供前端即时回填输入框。
     """
     try:
-        if save_access_address(req.address):
+        if await save_access_address(req.address):
             return APIResponse(
                 success=True,
-                data={"address": load_access_address()},
+                data={"address": await load_access_address()},
                 message="访问地址已保存",
             )
         return APIResponse(success=False, error="保存失败")
@@ -118,33 +61,28 @@ def api_save_access_address(req: AccessAddressRequest) -> APIResponse:
 
 
 @router.post("/edit", response_model=APIResponse)
-def api_edit_port(req: PortEditRequest) -> APIResponse:
-    """编辑单个端口的服务名（卡片「编辑」按钮）。"""
+async def api_edit_port(req: PortEditRequest) -> APIResponse:
+    """编辑单个端口的服务名（卡片「编辑」按钮）。
+
+    端口为主键 upsert：只影响该端口一行；服务名非唯一，
+    同一名字可绑多端口（如一个应用的 http + https 共用名字）。
+    """
     try:
-        raw = load_raw_config()
-
-        # 找到对应端口的条目并更新
-        found = False
-        for key in list(raw.keys()):
-            parts = str(raw[key]).split(":")
-            if parts and parts[0] == str(req.port):
-                service_type = key.rsplit(":", 1)[-1] if ":" in key else req.service_type
-                raw[f"{req.service_name}:{service_type}"] = (
-                    f"{req.port}:{parts[1] if len(parts) > 1 else 'tcp'}"
-                )
-                # 如果 key 变了，删掉旧 key
-                if key != f"{req.service_name}:{service_type}":
-                    del raw[key]
-                found = True
-                break
-
-        if not found:
-            # 端口不存在，新增
-            raw[f"{req.service_name}:{req.service_type}"] = f"{req.port}:tcp"
-
-        if save_raw_config(raw):
-            return APIResponse(success=True, message=f"端口 {req.port} 已更新为 {req.service_name}")
-        return APIResponse(success=False, error="保存失败")
+        conn = db_service.get_db()
+        if conn is None:
+            return APIResponse(success=False, error="数据库未就绪")
+        now = int(time.time())
+        await conn.execute(
+            "INSERT INTO port_labels (port, service_name, port_type, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(port) DO UPDATE SET "
+            "service_name = excluded.service_name, "
+            "port_type = excluded.port_type, "
+            "updated_at = excluded.updated_at",
+            (req.port, req.service_name, req.service_type, now, now),
+        )
+        await conn.commit()
+        return APIResponse(success=True, message=f"端口 {req.port} 已更新为 {req.service_name}")
     except Exception as e:
         logger.error("编辑端口失败: %s", e)
         return APIResponse(success=False, error=str(e))
@@ -154,10 +92,10 @@ def api_edit_port(req: PortEditRequest) -> APIResponse:
 # 隐藏端口
 # ------------------------------------------------------------------ #
 @router.get("/hidden", response_model=APIResponse)
-def api_get_hidden() -> APIResponse:
+async def api_get_hidden() -> APIResponse:
     """获取隐藏端口列表。"""
     try:
-        hidden = load_hidden_ports()
+        hidden = await load_hidden_ports()
         return APIResponse(success=True, data=hidden)
     except Exception as e:
         logger.error("获取隐藏端口失败: %s", e)
@@ -170,23 +108,21 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
 
     隐藏端口只存了端口号；这里重新跑一次分析（不过滤隐藏），
     把每个隐藏端口能还原出的字段都带出来。当前未监听的端口，
-    仅能从配置 / 默认映射推断服务名。
+    仅能从标注 / 默认映射推断服务名。
     """
     try:
-        hidden = load_hidden_ports()
+        hidden = await load_hidden_ports()
         if not hidden:
             return APIResponse(success=True, data=[])
 
-        config = load_config()
-        notes_map = await _load_notes_map()
-        # 阻塞的 Docker SDK + psutil 调用放到线程池，避免卡住事件循环
+        config = await load_config()
+        # 阻塞的 Docker SDK + psutil 调用放到线程池
         port_data = await asyncio.to_thread(
             monitor.get_port_analysis,
             config,
             start_port=1,
             end_port=65535,
             hidden_ports=[],  # 不过滤，拿到全部卡片
-            notes_map=notes_map,
         )
 
         card_by_port: dict[int, dict] = {}
@@ -207,7 +143,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
                         "container": card.get("container"),
                         "image": card.get("image"),
                         "is_running": card.get("is_running"),
-                        "remark": card.get("remark", ""),
                     }
                 )
             else:
@@ -220,7 +155,6 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
                         "container": None,
                         "image": None,
                         "is_running": False,
-                        "remark": "",
                     }
                 )
         return APIResponse(success=True, data=details)
@@ -230,14 +164,14 @@ async def api_get_hidden_details(monitor: PortMonitor = Depends(get_monitor)) ->
 
 
 @router.post("/hidden", response_model=APIResponse)
-def api_hide_port(req: HiddenPortRequest) -> APIResponse:
+async def api_hide_port(req: HiddenPortRequest) -> APIResponse:
     """隐藏单个端口。"""
     try:
-        hidden = load_hidden_ports()
+        hidden = await load_hidden_ports()
         if req.port not in hidden:
             hidden.append(req.port)
             hidden.sort()
-        if save_hidden_ports(hidden):
+        if await save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"端口 {req.port} 已隐藏")
         return APIResponse(success=False, error="保存失败")
     except Exception as e:
@@ -246,12 +180,12 @@ def api_hide_port(req: HiddenPortRequest) -> APIResponse:
 
 
 @router.delete("/hidden/{port}", response_model=APIResponse)
-def api_unhide_port(port: int) -> APIResponse:
+async def api_unhide_port(port: int) -> APIResponse:
     """取消隐藏单个端口。"""
     try:
-        hidden = load_hidden_ports()
+        hidden = await load_hidden_ports()
         hidden = [p for p in hidden if p != port]
-        if save_hidden_ports(hidden):
+        if await save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"端口 {port} 已取消隐藏")
         return APIResponse(success=False, error="保存失败")
     except Exception as e:
@@ -260,13 +194,12 @@ def api_unhide_port(port: int) -> APIResponse:
 
 
 @router.post("/hidden/batch", response_model=APIResponse)
-def api_batch_hide(req: HiddenPortsBatchRequest) -> APIResponse:
+async def api_batch_hide(req: HiddenPortsBatchRequest) -> APIResponse:
     """批量隐藏端口。"""
     try:
-        hidden = set(load_hidden_ports())
+        hidden = set(await load_hidden_ports())
         hidden.update(req.ports)
-        hidden_list = sorted(hidden)
-        if save_hidden_ports(hidden_list):
+        if await save_hidden_ports(sorted(hidden)):
             return APIResponse(success=True, message=f"已隐藏 {len(req.ports)} 个端口")
         return APIResponse(success=False, error="保存失败")
     except Exception as e:
@@ -275,13 +208,13 @@ def api_batch_hide(req: HiddenPortsBatchRequest) -> APIResponse:
 
 
 @router.post("/hidden/unhide/batch", response_model=APIResponse)
-def api_batch_unhide(req: HiddenPortsBatchRequest) -> APIResponse:
+async def api_batch_unhide(req: HiddenPortsBatchRequest) -> APIResponse:
     """批量取消隐藏端口。"""
     try:
-        hidden = load_hidden_ports()
+        hidden = await load_hidden_ports()
         to_remove = set(req.ports)
         hidden = [p for p in hidden if p not in to_remove]
-        if save_hidden_ports(hidden):
+        if await save_hidden_ports(hidden):
             return APIResponse(success=True, message=f"已取消隐藏 {len(req.ports)} 个端口")
         return APIResponse(success=False, error="保存失败")
     except Exception as e:

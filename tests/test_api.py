@@ -59,28 +59,6 @@ class TestPorts:
 
 
 class TestConfig:
-    def test_get_config(self, client: TestClient):
-        resp = client.get("/api/config")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-        assert isinstance(data["data"], dict)
-
-    def test_save_config(self, client: TestClient):
-        payload = {"test_service:host": "1234:tcp"}
-        resp = client.post("/api/config", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-
-    def test_save_config_invalid(self, client: TestClient):
-        payload = {"bad_key": "no_colon"}
-        resp = client.post("/api/config", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "error" in data
-
     def test_edit_port(self, client: TestClient):
         resp = client.post(
             "/api/config/edit",
@@ -89,6 +67,55 @@ class TestConfig:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
+
+    def test_edit_same_name_two_ports(self, client: TestClient):
+        """v1.6.12：同一服务名可绑多端口（同应用 http+https），互不覆盖。"""
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        assert (
+            client.post("/api/config/edit", json={"port": 443, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+
+        client.post("/api/config/hidden", json={"port": 80})
+        client.post("/api/config/hidden", json={"port": 443})
+        details = {d["port"]: d for d in client.get("/api/config/hidden/details").json()["data"]}
+        assert details[80]["service_name"] == "MyApp"
+        assert details[443]["service_name"] == "MyApp"
+
+    def test_edit_one_port_does_not_affect_other(self, client: TestClient):
+        """v1.6.12 回归：改一个端口的名字不影响另一个同名端口的标注。"""
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        assert (
+            client.post("/api/config/edit", json={"port": 443, "service_name": "MyApp"}).json()[
+                "success"
+            ]
+            is True
+        )
+        # 把 80 改成另一个名字
+        assert (
+            client.post("/api/config/edit", json={"port": 80, "service_name": "Other"}).json()[
+                "success"
+            ]
+            is True
+        )
+
+        client.post("/api/config/hidden", json={"port": 80})
+        client.post("/api/config/hidden", json={"port": 443})
+        details = {d["port"]: d for d in client.get("/api/config/hidden/details").json()["data"]}
+        assert details[80]["service_name"] == "Other"
+        assert details[443]["service_name"] == "MyApp"
 
     def test_hidden_ports_crud(self, client: TestClient):
         # 隐藏
@@ -136,64 +163,6 @@ class TestRefresh:
         assert "port_cards" in data["data"]
 
 
-class TestNotes:
-    """P1-1 端口备注端点。"""
-
-    def test_upsert_and_list(self, client: TestClient):
-        # 新建
-        r = client.post(
-            "/api/notes",
-            json={
-                "port": 8080,
-                "service_name": "http-svc",
-                "protocol": "tcp",
-                "remark": "web",
-            },
-        )
-        assert r.status_code == 200 and r.json()["success"] is True
-
-        # upsert（修改 remark）
-        r = client.post(
-            "/api/notes",
-            json={
-                "port": 8080,
-                "service_name": "http-svc",
-                "protocol": "tcp",
-                "remark": "web v2",
-            },
-        )
-        assert r.json()["success"] is True
-
-        # 列表应包含且只有一条 8080，remark 为 v2
-        lst = client.get("/api/notes").json()["data"]
-        mine = [n for n in lst if n["port"] == 8080]
-        assert len(mine) == 1
-        assert mine[0]["remark"] == "web v2"
-        assert mine[0]["protocol"] == "tcp"
-
-        # 清理
-        assert client.delete("/api/notes/8080").json()["success"] is True
-
-    def test_port_range_validation(self, client: TestClient):
-        # pydantic Field(ge=0, le=65535) 在请求层直接拦 422
-        r = client.post("/api/notes", json={"port": 99999, "service_name": "x"})
-        assert r.status_code == 422
-
-    def test_protocol_validation(self, client: TestClient):
-        # Literal['', 'tcp', 'udp', 'both'] 也在请求层拦
-        r = client.post("/api/notes", json={"port": 100, "protocol": "sctp"})
-        assert r.status_code == 422
-
-    def test_search(self, client: TestClient):
-        client.post(
-            "/api/notes",
-            json={"port": 5432, "service_name": "postgres", "protocol": "both", "remark": "db"},
-        )
-        data = client.get("/api/notes", params={"search": "postgres"}).json()["data"]
-        assert any(n["port"] == 5432 for n in data)
-        client.delete("/api/notes/5432")
-
-
 class TestPrefs:
     """P1-2 用户偏好端点。"""
 
@@ -232,6 +201,131 @@ class TestPrefs:
         # 重置清空收藏
         client.post("/api/prefs/reset")
         assert client.get("/api/prefs").json()["data"]["favorites"] == []
+
+    def test_favorites_grid_roundtrip(self, client: TestClient):
+        # v1.6.5：GridItem 数组（port/url 条目 + 文件夹）后端透传不解析
+        grid = [
+            {"id": "port-80", "kind": "port", "port": 80},
+            {
+                "id": "url-1",
+                "kind": "url",
+                "url": "https://example.com",
+                "title": "Example",
+                "logoKey": "url:example.com",
+            },
+            {
+                "id": "folder-1",
+                "kind": "folder",
+                "name": "Dev",
+                "items": [{"id": "port-3000", "kind": "port", "port": 3000}],
+            },
+        ]
+        r = client.patch("/api/prefs", json={"favorites": grid})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["favorites"] == grid
+
+    def test_default_tab_and_scope_roundtrip(self, client: TestClient):
+        # v1.6.6：默认主页 + 背景作用域，PATCH 局部更新 + 读回
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "favorites"
+        assert d["background_scope"] == "favorites"
+
+        r = client.patch("/api/prefs", json={"default_tab": "overview", "background_scope": "all"})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "overview"
+        assert d["background_scope"] == "all"
+
+    def test_bad_default_tab_rejected(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"default_tab": "ports"})
+        assert r.json()["success"] is False
+
+    def test_bad_background_scope_rejected(self, client: TestClient):
+        r = client.patch("/api/prefs", json={"background_scope": "everywhere"})
+        assert r.json()["success"] is False
+
+    def test_background_blur_roundtrip(self, client: TestClient):
+        # v1.6.6：背景模糊度（px，0-30），默认 10
+        d = client.get("/api/prefs").json()["data"]
+        assert d["background_blur"] == 10
+
+        r = client.patch("/api/prefs", json={"background_blur": 18})
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["background_blur"] == 18
+
+    def test_background_blur_out_of_range_rejected(self, client: TestClient):
+        # pydantic Field(ge=0, le=30) 在请求层直接拦 422
+        assert client.patch("/api/prefs", json={"background_blur": -1}).status_code == 422
+        assert client.patch("/api/prefs", json={"background_blur": 31}).status_code == 422
+
+    def test_reset_restores_home_and_scope(self, client: TestClient):
+        client.patch(
+            "/api/prefs",
+            json={"default_tab": "overview", "background_scope": "all", "background_blur": 25},
+        )
+        r = client.post("/api/prefs/reset")
+        assert r.json()["success"] is True
+        d = client.get("/api/prefs").json()["data"]
+        assert d["default_tab"] == "favorites"
+        assert d["background_scope"] == "favorites"
+        assert d["background_blur"] == 10
+
+
+class TestBackground:
+    """v1.6.6 自定义背景图端点。"""
+
+    def _png_1x1(self) -> str:
+        import base64
+
+        return base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+
+    def test_get_unset_404(self, client: TestClient):
+        client.delete("/api/background")
+        r = client.get("/api/background")
+        assert r.status_code == 404
+
+    def test_upload_get_delete_roundtrip(self, client: TestClient):
+        data = self._png_1x1()
+        r = client.put("/api/background", json={"mime": "image/png", "data": data})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+        r = client.get("/api/background")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "image/png"
+        assert len(r.content) > 0
+
+        r = client.delete("/api/background")
+        assert r.json()["success"] is True
+        assert client.get("/api/background").status_code == 404
+
+    def test_upload_invalid_mime(self, client: TestClient):
+        import base64
+
+        data = base64.b64encode(b"hello").decode()
+        r = client.put("/api/background", json={"mime": "text/plain", "data": data})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_upload_too_large_rejected(self, client: TestClient):
+        # 4MiB + 1 字节 → 拒绝
+        import base64
+
+        big = base64.b64encode(b"\x00" * (4 * 1024 * 1024 + 1)).decode()
+        r = client.put("/api/background", json={"mime": "image/png", "data": big})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+
+    def test_delete_idempotent(self, client: TestClient):
+        r = client.delete("/api/background")
+        assert r.status_code == 200
+        assert r.json()["success"] is True
 
 
 class TestLogos:
@@ -324,6 +418,142 @@ class TestLogos:
 
         # 清理
         client.delete("/api/logos/idem-app")
+
+    def test_fetch_invalid_url(self, client: TestClient):
+        # 非 http(s) 或无 host → 拒绝
+        r = client.post("/api/logos/fetch", json={"app_key": "bad-url", "url": "ftp://example.com"})
+        assert r.status_code == 200
+        assert r.json()["success"] is False
+        r = client.post("/api/logos/fetch", json={"app_key": "bad-url2", "url": "https://"})
+        assert r.json()["success"] is False
+
+    def test_fetch_idempotent(self, client: TestClient):
+        # 已有终态记录 → cached，不重复抓取
+        import base64
+
+        png_1x1 = base64.b64encode(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+            )
+        ).decode()
+        client.put("/api/logos/fetch-idem", json={"mime": "image/png", "data": png_1x1})
+        r = client.post(
+            "/api/logos/fetch", json={"app_key": "fetch-idem", "url": "https://example.com"}
+        )
+        assert r.json()["success"] is True
+        assert r.json()["message"] == "cached"
+        client.delete("/api/logos/fetch-idem")
+
+    def test_fetch_unreachable_not_found(self, client: TestClient):
+        # 127.0.0.1:1 连接被拒 → 落 not_found
+        r = client.post(
+            "/api/logos/fetch", json={"app_key": "fetch-miss", "url": "http://127.0.0.1:1/"}
+        )
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert r.json()["data"]["status"] == "not_found"
+        client.delete("/api/logos/fetch-miss")
+
+    def test_fetch_found_local_server(self, client: TestClient):
+        # 本地起一个 HTTP 服务提供 /favicon.ico → 抓取成功落 found
+        import http.server
+        import socketserver
+        import threading
+
+        png_1x1 = bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+        )
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/favicon.ico":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.end_headers()
+                    self.wfile.write(png_1x1)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+            port = httpd.server_address[1]
+            th = threading.Thread(target=httpd.serve_forever, daemon=True)
+            th.start()
+            try:
+                # URL 带路径：抓取应只取 origin（scheme://host[:port]）
+                r = client.post(
+                    "/api/logos/fetch",
+                    json={"app_key": "fetch-ok", "url": f"http://127.0.0.1:{port}/some/path"},
+                )
+                assert r.json()["success"] is True
+                assert r.json()["data"]["status"] == "found"
+                assert r.json()["data"]["mime"] == "image/png"
+                img = client.get("/api/logos/fetch-ok")
+                assert img.status_code == 200
+                assert img.content == png_1x1
+            finally:
+                httpd.shutdown()
+                th.join(timeout=2)
+            client.delete("/api/logos/fetch-ok")
+
+    def test_fetch_url_too_long(self, client: TestClient):
+        # url 超过 2048 → Pydantic 校验拒绝（422）
+        r = client.post(
+            "/api/logos/fetch",
+            json={"app_key": "long-url", "url": "https://example.com/" + "a" * 3000},
+        )
+        assert r.status_code == 422
+
+    def test_fetch_userinfo_stripped(self, client: TestClient):
+        # URL 内嵌 user:pass → 抓取时不得附加 Authorization 头
+        import http.server
+        import socketserver
+        import threading
+
+        png_1x1 = bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+        )
+        seen_auth: list[str | None] = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen_auth.append(self.headers.get("Authorization"))
+                if self.path == "/favicon.ico":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.end_headers()
+                    self.wfile.write(png_1x1)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+            port = httpd.server_address[1]
+            th = threading.Thread(target=httpd.serve_forever, daemon=True)
+            th.start()
+            try:
+                r = client.post(
+                    "/api/logos/fetch",
+                    json={
+                        "app_key": "fetch-auth",
+                        "url": f"http://user:pass@127.0.0.1:{port}/",
+                    },
+                )
+                assert r.json()["success"] is True
+                assert r.json()["data"]["status"] == "found"
+            finally:
+                httpd.shutdown()
+                th.join(timeout=2)
+            client.delete("/api/logos/fetch-auth")
+        # 目标站收到的所有请求都不应带 Authorization 头
+        assert seen_auth, "local server received no request"
+        assert all(a is None for a in seen_auth), f"Authorization leaked: {seen_auth}"
 
     def test_default_logos_list(self, client: TestClient):
         # v1.5.13：内置默认 Logo 匹配表应含 names + ports

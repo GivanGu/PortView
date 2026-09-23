@@ -49,9 +49,9 @@ RUN set -eux; \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-install-project --no-dev --python 3.12
 
-# 应用代码 + 前端产物 + 示例配置
+# 应用代码 + 前端产物
+# 注意：config/ 目录由宿主机 bind mount 提供（唯一持久化点），镜像内不预置
 COPY app/ ./app/
-COPY config/config.json.example ./config/config.json.example
 COPY --from=frontend /build/dist ./frontend/dist
 
 EXPOSE 8081

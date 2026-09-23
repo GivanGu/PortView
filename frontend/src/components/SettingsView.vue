@@ -2,12 +2,17 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, type UserPrefs } from '@/api'
+import { getPrefs, patchPrefs, resetPrefs, getAccessAddress, setAccessAddress, setBackground, deleteBackground, backgroundUrl, type UserPrefs } from '@/api'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
-import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid } from 'lucide-vue-next'
+import { useSearchFocus } from '@/composables/useSearchFocus'
+import { Settings, Sun, Moon, Languages, RotateCcw, Palette, Check, ShieldCheck, Timer, AlertTriangle, Globe, LayoutGrid, Home, Image as ImageIcon } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
+
+// v1.6.6：顶栏全局搜索 → 本页无过滤能力，命中卡片播放聚焦动画
+const rootRef = ref<HTMLElement | null>(null)
+useSearchFocus(rootRef, 'settings')
 
 // v1.2：登录/安全
 const auth = useAuth()
@@ -85,10 +90,92 @@ function currentAccent(): string {
 const theme = ref<'dark' | 'light'>(currentTheme())
 const accent = ref<string>(currentAccent())
 const lang = ref<'zh' | 'en'>(locale.value as 'zh' | 'en')
-const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode } = usePrefs()
+const { refreshInterval, setRefreshInterval, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
 const savingPref = ref(false)
 const toast = ref('')
 const toastVisible = ref(false)
+
+// v1.6.6：默认主页（本地镜像防闪烁，服务端权威，下次启动生效）
+const DEFAULT_TAB_KEY = 'portview.defaultTab'
+const DEFAULT_TABS = ['overview', 'favorites'] as const
+type DefaultTab = (typeof DEFAULT_TABS)[number]
+
+function initialDefaultTab(): DefaultTab {
+  try {
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY)
+    if (saved && DEFAULT_TABS.includes(saved as DefaultTab)) return saved as DefaultTab
+  } catch { /* ignore */ }
+  return 'favorites'
+}
+const defaultTab = ref<DefaultTab>(initialDefaultTab())
+
+function onHomeChange(v: DefaultTab) {
+  defaultTab.value = v
+  try {
+    localStorage.setItem(DEFAULT_TAB_KEY, v)
+  } catch { /* ignore */ }
+  void persistPartial({ default_tab: v })
+}
+
+// v1.6.6：背景图（≤4MiB，前端预检）
+const BG_MAX = 4 * 1024 * 1024
+async function onBgFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > BG_MAX) {
+    showToast(t('settings.bgTooLarge'))
+    return
+  }
+  try {
+    const { mime, b64 } = await readImageFile(file)
+    const resp = await setBackground(mime, b64)
+    if (resp.success) {
+      setBackgroundSet(true)
+      showToast(t('settings.bgSaved'))
+    } else {
+      showToast(t('settings.bgSaveFailed'))
+    }
+  } catch {
+    showToast(t('settings.bgSaveFailed'))
+  }
+}
+
+async function handleRemoveBg() {
+  try {
+    await deleteBackground()
+    setBackgroundSet(false)
+    showToast(t('settings.bgRemoved'))
+  } catch {
+    showToast(t('settings.bgSaveFailed'))
+  }
+}
+
+function onBgScopeChange(v: 'favorites' | 'all') {
+  setBackgroundScope(v)
+  void persistPartial({ background_scope: v })
+}
+
+// 背景模糊度：拖动实时预览（input），松手才落库（change），避免每像素一次 PATCH
+function onBgBlurInput(e: Event) {
+  setBackgroundBlur(Number((e.target as HTMLInputElement).value))
+}
+function onBgBlurChange(e: Event) {
+  void persistPartial({ background_blur: Number((e.target as HTMLInputElement).value) })
+}
+
+function readImageFile(file: File): Promise<{ mime: string; b64: string }> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => {
+      const dataUrl = String(r.result)
+      resolve({ mime: file.type, b64: dataUrl.split(',')[1] || '' })
+    }
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(file)
+  })
+}
 
 function showToast(msg: string) {
   toast.value = msg
@@ -210,6 +297,17 @@ async function handleReset() {
   setRefreshInterval(0)
   setLogoScrim('left')
   setLogoDisplayMode('background')
+  // v1.6.6：默认主页 + 背景作用域 + 清除背景图
+  defaultTab.value = 'favorites'
+  try {
+    localStorage.setItem(DEFAULT_TAB_KEY, 'favorites')
+  } catch { /* ignore */ }
+  setBackgroundScope('favorites')
+  setBackgroundBlur(10)
+  try {
+    await deleteBackground()
+    setBackgroundSet(false)
+  } catch { /* ignore */ }
   showToast(t('settings.resetDone'))
 }
 
@@ -225,6 +323,10 @@ onMounted(async () => {
       setRefreshInterval(p.refresh_interval ?? 0)
       if (p.logo_scrim) setLogoScrim(p.logo_scrim)
       if (p.logo_display_mode) setLogoDisplayMode(p.logo_display_mode)
+      // v1.6.6：默认主页（服务端权威）
+      if (p.default_tab) defaultTab.value = p.default_tab
+      if (p.background_scope) setBackgroundScope(p.background_scope)
+      if (p.background_blur != null) setBackgroundBlur(p.background_blur)
     }
   } catch {
     /* 后端不可用，本地偏好仍然生效 */
@@ -236,7 +338,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
 </script>
 
 <template>
-  <div>
+  <div ref="rootRef">
     <div class="main-header">
       <h1>{{ t('settings.title') }}</h1>
       <div class="header-actions">
@@ -252,7 +354,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
 
       <div class="settings-grid">
         <!-- v1.2：Login / Security -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <ShieldCheck :size="16" class="card-ico" />
             <span>{{ t('settings.security') }}</span>
@@ -320,7 +422,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Theme -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Sun :size="16" class="card-ico" />
             <span>{{ t('settings.theme') }}</span>
@@ -351,8 +453,108 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
           </div>
         </section>
 
+        <!-- v1.6.6：默认主页 -->
+        <section class="settings-card" data-sfocus>
+          <header class="settings-card-title">
+            <Home :size="16" class="card-ico" />
+            <span>{{ t('settings.home') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.homeHint') }}</p>
+          <div class="radio-2col">
+            <label class="radio-pill" :class="{ active: defaultTab === 'overview' }">
+              <input
+                type="radio"
+                name="pv-home"
+                value="overview"
+                :checked="defaultTab === 'overview'"
+                @change="onHomeChange('overview')"
+              />
+              <span>{{ t('settings.homeOverview') }}</span>
+            </label>
+            <label class="radio-pill" :class="{ active: defaultTab === 'favorites' }">
+              <input
+                type="radio"
+                name="pv-home"
+                value="favorites"
+                :checked="defaultTab === 'favorites'"
+                @change="onHomeChange('favorites')"
+              />
+              <span>{{ t('settings.homeFavorites') }}</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- v1.6.6：背景图 -->
+        <section class="settings-card" data-sfocus>
+          <header class="settings-card-title">
+            <ImageIcon :size="16" class="card-ico" />
+            <span>{{ t('settings.background') }}</span>
+          </header>
+          <p class="settings-hint">{{ t('settings.backgroundHint') }}</p>
+          <div v-if="backgroundSet" class="bg-row">
+            <img :src="backgroundUrl(backgroundVersion)" class="bg-preview" alt="" />
+            <div class="bg-actions">
+              <label class="btn btn-small">
+                {{ t('settings.bgChange') }}
+                <input type="file" accept="image/*" class="hidden-input" @change="onBgFilePicked" />
+              </label>
+              <button class="btn btn-small btn-danger" @click="handleRemoveBg">
+                {{ t('settings.bgRemove') }}
+              </button>
+            </div>
+          </div>
+          <label v-else class="btn btn-small">
+            {{ t('settings.bgUpload') }}
+            <input type="file" accept="image/*" class="hidden-input" @change="onBgFilePicked" />
+          </label>
+          <div class="settings-sub">
+            <div class="settings-sub-title">{{ t('settings.bgScope') }}</div>
+            <div class="radio-2col">
+              <label class="radio-pill" :class="{ active: backgroundScope === 'favorites', disabled: !backgroundSet }">
+                <input
+                  type="radio"
+                  name="pv-bg-scope"
+                  value="favorites"
+                  :checked="backgroundScope === 'favorites'"
+                  :disabled="!backgroundSet"
+                  @change="onBgScopeChange('favorites')"
+                />
+                <span>{{ t('settings.bgScopeFavorites') }}</span>
+              </label>
+              <label class="radio-pill" :class="{ active: backgroundScope === 'all', disabled: !backgroundSet }">
+                <input
+                  type="radio"
+                  name="pv-bg-scope"
+                  value="all"
+                  :checked="backgroundScope === 'all'"
+                  :disabled="!backgroundSet"
+                  @change="onBgScopeChange('all')"
+                />
+                <span>{{ t('settings.bgScopeAll') }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-sub">
+            <div class="settings-sub-title">
+              {{ t('settings.bgBlur') }}
+              <span class="bg-blur-val">{{ backgroundBlur }}</span>
+            </div>
+            <input
+              type="range"
+              class="bg-blur-slider"
+              min="0"
+              max="30"
+              step="1"
+              :value="backgroundBlur"
+              :disabled="!backgroundSet"
+              @input="onBgBlurInput"
+              @change="onBgBlurChange"
+            />
+          </div>
+        </section>
+
         <!-- Accent -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Palette :size="16" class="card-ico" />
             <span>{{ t('settings.accent') }}</span>
@@ -374,7 +576,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Language -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Languages :size="16" class="card-ico" />
             <span>{{ t('settings.language') }}</span>
@@ -404,7 +606,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Refresh Interval -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Timer :size="16" class="card-ico" />
             <span>{{ t('settings.refreshInterval') }}</span>
@@ -455,7 +657,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- v1.5.15：Logo 展示（展示模式 + 遮罩 合并为一张卡片，遮罩为条件子区块） -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <LayoutGrid :size="16" class="card-ico" />
             <span>{{ t('settings.logoDisplay') }}</span>
@@ -539,7 +741,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- Access Address -->
-        <section class="settings-card" id="settings-access-address">
+        <section class="settings-card" id="settings-access-address" data-sfocus>
           <header class="settings-card-title">
             <Globe :size="16" class="card-ico" />
             <span>{{ t('settings.accessAddress') }}</span>
@@ -564,7 +766,7 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
         </section>
 
         <!-- About -->
-        <section class="settings-card">
+        <section class="settings-card" data-sfocus>
           <header class="settings-card-title">
             <Settings :size="16" class="card-ico" />
             <span>{{ t('settings.about') }}</span>
@@ -584,3 +786,83 @@ const savingText = computed(() => (savingPref.value ? t('settings.saving') : '')
     </div>
   </div>
 </template>
+
+<style scoped>
+/* v1.6.6：背景图卡片 */
+.bg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bg-preview {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bg-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 模糊度滑动条：拖动实时预览，数值随标题右侧显示 */
+.bg-blur-val {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-blur-slider {
+  width: 100%;
+  height: 4px;
+  margin-top: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.bg-blur-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.bg-blur-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.bg-blur-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.bg-blur-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hidden-input {
+  display: none;
+}
+</style>

@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Network,
   Star,
-  StickyNote,
   EyeOff,
   Settings,
   Sun,
@@ -17,23 +16,29 @@ import {
   RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '@/i18n'
-import { fetchPorts, healthCheck, getPrefs } from '@/api'
+import { fetchPorts, healthCheck, getPrefs, backgroundUrl, hasBackground } from '@/api'
 import type { PortAnalysis } from '@/api'
 import OverviewView from '@/components/OverviewView.vue'
 import PortsView from '@/components/PortsView.vue'
 import FavoritesView from '@/components/FavoritesView.vue'
-import NotesView from '@/components/NotesView.vue'
 import HiddenPortsView from '@/components/HiddenPortsView.vue'
 import SettingsView from '@/components/SettingsView.vue'
 import LoginView from '@/components/LoginView.vue'
 import PasswordPrompt from '@/components/PasswordPrompt.vue'
+import BackgroundLayer from '@/components/BackgroundLayer.vue'
+import SearchFocusOverlay from '@/components/SearchFocusOverlay.vue'
 import useAuth from '@/store/auth'
 import usePrefs from '@/store/prefs'
+import { useSearch, type Tab } from '@/store/search'
+import { useFavStatus } from '@/store/favStatus'
 
-type Tab = 'overview' | 'favorites' | 'ports' | 'notes' | 'hidden' | 'settings'
 type Theme = 'dark' | 'light'
 type Lang = 'zh' | 'en'
 
@@ -73,6 +78,11 @@ const THEME_KEY = 'portview.theme'
 const ACCENT_KEY = 'portview.accent'
 const LOGO_SCRIM_KEY = 'portview.logoScrim'
 const LOGO_MODE_KEY = 'portview.logoDisplayMode'
+// v1.6.6：默认主页（启动时打开的标签页）。localStorage 镜像防首屏闪烁，
+// 服务端 prefs 为权威源（onMounted 同步回来）。改设置下次启动生效。
+const DEFAULT_TAB_KEY = 'portview.defaultTab'
+const DEFAULT_TABS = ['overview', 'favorites'] as const
+type DefaultTab = (typeof DEFAULT_TABS)[number]
 
 const ACCENTS = [
   { id: 'indigo', color: '#6366f1' },
@@ -85,7 +95,18 @@ const ACCENTS = [
 
 type AccentId = (typeof ACCENTS)[number]['id']
 
-const activeTab = ref<Tab>('overview')
+function initialDefaultTab(): DefaultTab {
+  try {
+    const saved = localStorage.getItem(DEFAULT_TAB_KEY)
+    if (saved && DEFAULT_TABS.includes(saved as DefaultTab)) return saved as DefaultTab
+  } catch {
+    /* ignore */
+  }
+  return 'favorites'
+}
+
+// v1.6.6：默认首页由设置决定（默认收藏页，保持 v1.6.5 现状）
+const activeTab = ref<Tab>(initialDefaultTab())
 const theme = ref<Theme>('dark')
 const accent = ref<AccentId>('indigo')
 const version = ref('')
@@ -140,13 +161,12 @@ const stats = ref<{ used: number; available: number; containers: number }>({
   containers: 0,
 })
 
-const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites } = usePrefs()
+const { refreshInterval, setRefreshInterval, triggerRefresh, logoScrim, setLogoScrim, logoDisplayMode, setLogoDisplayMode, setFavorites, markFavoritesLoaded, backgroundSet, backgroundVersion, backgroundScope, backgroundBlur, setBackgroundSet, setBackgroundScope, setBackgroundBlur } = usePrefs()
 
 const navItems = computed(() => [
   { id: 'overview' as Tab, icon: LayoutDashboard, label: t('nav.overview') },
   { id: 'favorites' as Tab, icon: Star, label: t('nav.favorites') },
   { id: 'ports' as Tab, icon: Network, label: t('nav.ports') },
-  { id: 'notes' as Tab, icon: StickyNote, label: t('nav.notes') },
   { id: 'hidden' as Tab, icon: EyeOff, label: t('nav.hidden') },
   { id: 'settings' as Tab, icon: Settings, label: t('nav.settings') },
 ])
@@ -255,6 +275,62 @@ function toggleRail() {
   }
 }
 
+// v1.6.6：侧栏自动隐藏。开启后 rail 默认收起不占空间，悬停左缘标签滑出、移出 300ms 滑回；
+// 点标签钉住/取消钉住（触摸设备无 hover，点按即唤出）。localStorage 持久化，与收起/展开同惯例。
+const RAIL_AUTO_KEY = 'portview.railAutoHide'
+const railAutoHide = ref(false)
+const railPinned = ref(false)
+const railHoverOpen = ref(false)
+let railCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+function initialRailAutoHide(): boolean {
+  try {
+    return localStorage.getItem(RAIL_AUTO_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function toggleRailAutoHide() {
+  railAutoHide.value = !railAutoHide.value
+  railPinned.value = false
+  railHoverOpen.value = false
+  try {
+    localStorage.setItem(RAIL_AUTO_KEY, railAutoHide.value ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function cancelRailClose() {
+  if (railCloseTimer) {
+    clearTimeout(railCloseTimer)
+    railCloseTimer = null
+  }
+}
+
+function openRailHover() {
+  if (!railAutoHide.value) return
+  cancelRailClose()
+  railHoverOpen.value = true
+}
+
+function scheduleRailClose() {
+  if (!railAutoHide.value) return
+  cancelRailClose()
+  railCloseTimer = setTimeout(() => {
+    railHoverOpen.value = false
+    railCloseTimer = null
+  }, 300)
+}
+
+function toggleRailPin() {
+  railPinned.value = !railPinned.value
+  if (!railPinned.value) railHoverOpen.value = false
+}
+
+const railVisible = computed(() => !railAutoHide.value || railPinned.value || railHoverOpen.value)
+
 function toggleTheme() {
   const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
   theme.value = next
@@ -326,13 +402,25 @@ watch(logoDisplayMode, (v) => {
   applyLogoMode(v)
 })
 
+// v1.6.6：全应用背景。scope=all 且有图时，挂 fixed 背景层 + <html data-fav-bg="all">
+// 驱动 style.css 把顶栏/侧栏/状态栏/页头转半透明（卡片保持不透明保证可读）。
+const showAllBg = computed(() => backgroundSet.value && backgroundScope.value === 'all')
+watch(
+  showAllBg,
+  (v) => {
+    if (v) document.documentElement.setAttribute('data-fav-bg', 'all')
+    else document.documentElement.removeAttribute('data-fav-bg')
+  },
+  { immediate: true },
+)
+
 // v1.4.5：标签页「懒挂载 + 保活」。首次点到的 tab 才 mount（v-if），
 // 之后切换只切换显隐（v-show），不再卸载/重挂 → 概览等视图切走再切回不重新拉数据。
+const _defaultTab = activeTab.value
 const visited = reactive<Record<Tab, boolean>>({
-  overview: true,
-  favorites: false,
+  overview: _defaultTab === 'overview',
+  favorites: _defaultTab === 'favorites',
   ports: false,
-  notes: false,
   hidden: false,
   settings: false,
 })
@@ -340,7 +428,78 @@ const visited = reactive<Record<Tab, boolean>>({
 function switchTab(tab: Tab) {
   visited[tab] = true
   activeTab.value = tab
+  // 先更新 store 的激活页，再清空搜索词：
+  // 各视图的搜索 watch 以 store.activeTab 为守卫，顺序反了会让旧页面多跑一次空查询
+  setActiveTab(tab)
+  // 切页清空搜索词：每个页面从全新列表开始，避免跨页带词造成误判
+  clearSearch()
 }
+
+// ── v1.6.6：顶栏全局搜索 ──
+// 各页面不再有自己的搜索框，统一由顶栏输入框驱动（store.query）。
+// 有列表过滤能力的页面（端口/收藏）watch query 做过滤；
+// 无过滤能力的页面（概览/设置/隐藏端口）用 useSearchFocus 播放聚焦动画。
+const {
+  query: searchQuery,
+  setQuery: setSearchQuery,
+  clear: clearSearch,
+  setActiveTab,
+  shakeNonce: searchShakeNonce,
+} = useSearch()
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchShaking = ref(false)
+
+// 收藏页状态栏计数器（FavoritesView 写入，离开收藏页 active=false）
+const { status: favStatus } = useFavStatus()
+
+const searchPlaceholder = computed(() => {
+  switch (activeTab.value) {
+    case 'overview':
+      return t('topbar.searchOverview')
+    case 'favorites':
+      return t('favorites.searchPlaceholder')
+    case 'ports':
+      return t('ports.searchPlaceholder')
+    case 'hidden':
+      return t('hidden.searchPlaceholder')
+    default:
+      return t('topbar.searchSettings')
+  }
+})
+
+function onSearchInput(e: Event) {
+  setSearchQuery((e.target as HTMLInputElement).value)
+}
+
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
+
+// ⌘K / Ctrl+K 聚焦搜索框（顶栏 kbd 提示对应的行为）
+function onSearchKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    focusSearch()
+  }
+}
+
+function onSearchInputKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    clearSearch()
+  }
+}
+
+// 当前页无匹配 → 顶栏抖动一次
+watch(searchShakeNonce, () => {
+  searchShaking.value = false
+  nextTick(() => {
+    searchShaking.value = true
+    setTimeout(() => {
+      searchShaking.value = false
+    }, 400)
+  })
+})
 
 // v1.4.4：顶栏全局刷新按钮。手动模式下点一下即刷新状态栏指标 + 通知各视图重新拉数据。
 function handleGlobalRefresh() {
@@ -382,6 +541,9 @@ function onNavigate(e: Event) {
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
   document.addEventListener('portview:navigate', onNavigate)
+  document.addEventListener('keydown', onSearchKeydown)
+  // 初始页签可能不是 overview（默认主页设置），同步 store 守卫
+  setActiveTab(activeTab.value)
   theme.value = initialTheme()
   applyTheme(theme.value)
   accent.value = initialAccent()
@@ -389,6 +551,7 @@ onMounted(async () => {
   applyLogoScrim(initialLogoScrim())
   setLogoDisplayMode(initialLogoMode())
   railCollapsed.value = initialRailCollapsed()
+  railAutoHide.value = initialRailAutoHide()
   // v1.2：先查登录态
   await refreshAuth()
   authChecked.value = true
@@ -410,8 +573,21 @@ onMounted(async () => {
       if (prefs.data.logo_scrim) setLogoScrim(prefs.data.logo_scrim)
       if (prefs.data.logo_display_mode) setLogoDisplayMode(prefs.data.logo_display_mode)
       if (prefs.data.favorites) setFavorites(prefs.data.favorites)
+      // v1.6.7：服务端数据已就绪（含「无收藏」的空态），放行收藏页归一逻辑
+      markFavoritesLoaded()
+      // v1.6.6：默认主页（服务端权威，同步到 localStorage，下次启动生效）
+      if (prefs.data.default_tab) {
+        try {
+          localStorage.setItem(DEFAULT_TAB_KEY, prefs.data.default_tab)
+        } catch { /* ignore */ }
+      }
+      // v1.6.6：背景图作用域 + 模糊度
+      if (prefs.data.background_scope) setBackgroundScope(prefs.data.background_scope)
+      if (prefs.data.background_blur != null) setBackgroundBlur(prefs.data.background_blur)
     }
   } catch { /* ignore */ }
+  // v1.6.6：探测背景图是否已设置（驱动全应用背景层显隐）
+  void hasBackground().then((set) => setBackgroundSet(set))
   applyStatsTimer()
   loading.value = false
   loadStats()
@@ -422,6 +598,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('portview:navigate', onNavigate)
+  document.removeEventListener('keydown', onSearchKeydown)
   if (statsTimer) clearInterval(statsTimer)
 })
 </script>
@@ -429,6 +606,8 @@ onBeforeUnmount(() => {
 <template>
   <LoginView v-if="needsLogin" />
   <div v-else class="app-shell">
+    <!-- v1.6.6：全应用毛玻璃背景（scope=all 且有图时） -->
+    <BackgroundLayer v-if="showAllBg" fixed :src="backgroundUrl(backgroundVersion)" :blur="backgroundBlur" />
     <!-- 顶栏：logo + 搜索 + 主题/语言 -->
     <header class="topbar">
       <div class="topbar-brand">
@@ -436,10 +615,21 @@ onBeforeUnmount(() => {
         <span class="brand-name">{{ t('app.name') }}</span>
       </div>
 
-      <div class="topbar-search" role="search">
+      <div class="topbar-search" :class="{ 'search-shaking': searchShaking }" role="search">
         <Search class="search-icon" :size="16" />
-        <input type="text" :placeholder="t('topbar.searchPlaceholder')" aria-label="search" />
-        <kbd class="kbd">{{ t('topbar.searchKbd') }}</kbd>
+        <input
+          ref="searchInputRef"
+          type="text"
+          :value="searchQuery"
+          :placeholder="searchPlaceholder"
+          aria-label="search"
+          @input="onSearchInput"
+          @keydown="onSearchInputKeydown"
+        />
+        <button v-if="searchQuery" class="search-clear" :title="t('topbar.searchClear')" @click="clearSearch">
+          <X :size="14" />
+        </button>
+        <kbd v-else class="kbd">{{ t('topbar.searchKbd') }}</kbd>
       </div>
 
       <div class="topbar-actions">
@@ -496,7 +686,12 @@ onBeforeUnmount(() => {
 
     <div class="app-body">
       <!-- 图标导航轨 -->
-      <aside class="rail" :class="{ collapsed: railCollapsed }">
+      <aside
+        class="rail"
+        :class="{ collapsed: railCollapsed, 'auto-hidden': railAutoHide && !railVisible }"
+        @mouseenter="openRailHover"
+        @mouseleave="scheduleRailClose"
+      >
         <nav class="rail-nav">
           <button
             v-for="item in navItems"
@@ -511,6 +706,15 @@ onBeforeUnmount(() => {
           </button>
         </nav>
         <button
+          class="rail-toggle rail-auto-toggle"
+          :title="railAutoHide ? t('nav.autoHideOff') : t('nav.autoHide')"
+          :aria-label="railAutoHide ? t('nav.autoHideOff') : t('nav.autoHide')"
+          @click="toggleRailAutoHide"
+        >
+          <EyeOff v-if="railAutoHide" :size="18" />
+          <Eye v-else :size="18" />
+        </button>
+        <button
           class="rail-toggle"
           :title="railCollapsed ? t('nav.expand') : t('nav.collapse')"
           :aria-label="railCollapsed ? t('nav.expand') : t('nav.collapse')"
@@ -521,12 +725,28 @@ onBeforeUnmount(() => {
         </button>
       </aside>
 
+      <!-- 自动隐藏模式：左缘半圆标签（悬停滑出 / 点按钉住） -->
+      <button
+        v-if="railAutoHide"
+        class="rail-tab"
+        :class="{ open: railVisible }"
+        :title="railVisible ? t('nav.hideRail') : t('nav.expand')"
+        :aria-label="railVisible ? t('nav.hideRail') : t('nav.expand')"
+        @click="toggleRailPin"
+        @mouseenter="openRailHover"
+        @mouseleave="scheduleRailClose"
+      >
+        <ChevronLeft v-if="railVisible" :size="14" />
+        <ChevronRight v-else :size="14" />
+      </button>
+      <!-- 自动隐藏模式：rail 隐藏时的左缘窄悬停区 -->
+      <div v-if="railAutoHide && !railVisible" class="rail-edge-zone" @mouseenter="openRailHover"></div>
+
       <!-- 主内容 -->
       <main class="main-content">
         <OverviewView v-if="visited.overview" v-show="activeTab === 'overview'" />
         <FavoritesView v-if="visited.favorites" v-show="activeTab === 'favorites'" />
         <PortsView v-if="visited.ports" v-show="activeTab === 'ports'" />
-        <NotesView v-if="visited.notes" v-show="activeTab === 'notes'" />
         <HiddenPortsView v-if="visited.hidden" v-show="activeTab === 'hidden'" />
         <SettingsView v-if="visited.settings" v-show="activeTab === 'settings'" />
       </main>
@@ -552,6 +772,16 @@ onBeforeUnmount(() => {
         </span>
       </div>
       <div class="status-item status-right">
+        <!-- 收藏页计数器：分组名 · 总数 · 离线 · 在线（仅收藏页前台时显示） -->
+        <span v-if="favStatus.active" class="fav-status">
+          <span class="fav-status-group">{{ favStatus.group }}</span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.total')">{{ t('statusbar.total') }} <b>{{ favStatus.total }}</b></span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.offline')">{{ t('statusbar.offline') }} <b>{{ favStatus.offline }}</b></span>
+          <span class="status-sep">·</span>
+          <span :title="t('statusbar.online')">{{ t('statusbar.online') }} <b>{{ favStatus.online }}</b></span>
+        </span>
         <button
           v-if="!auth.has_password"
           class="pw-chip"
@@ -569,6 +799,8 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
+    <!-- v1.6.6：非搜索页关键词聚焦动画层 -->
+    <SearchFocusOverlay />
   </div>
 
   <!-- v1.4.4：首次启动密码提示。放在 app-shell 外，避免 needsLogin 切换时

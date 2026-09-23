@@ -124,29 +124,6 @@ class HiddenPortsBatchRequest(BaseModel):
     ports: list[int]
 
 
-# ── P1-1 端口备注 ─────────────────────────────────────────
-
-
-class NoteCreateRequest(BaseModel):
-    """新建 / 更新一条端口备注。``port`` 唯一，存在则 upsert。"""
-
-    port: int = Field(ge=0, le=65535)
-    service_name: str = ""
-    protocol: Literal["", "tcp", "udp", "both"] = ""
-    remark: str = Field(default="", max_length=1024, description="用户备注，自由文本")
-
-
-class NoteRead(BaseModel):
-    """返回给前端的备注记录。"""
-
-    port: int
-    service_name: str
-    protocol: Literal["", "tcp", "udp", "both"]
-    remark: str
-    created_at: int
-    updated_at: int
-
-
 # ── P1-2 用户偏好 ─────────────────────────────────────────
 
 
@@ -159,7 +136,14 @@ class UserPrefsRead(BaseModel):
     refresh_interval: int = 0
     logo_scrim: Literal["none", "left", "overlay", "glass"] = "left"
     logo_display_mode: Literal["background", "box"] = "background"
-    favorites: list[int] = []
+    # 收藏网格（v1.6.5）：GridItem 数组（port/url 条目 + 文件夹），后端透传不解析
+    favorites: list = []
+    # 默认主页（v1.6.6）：启动时打开的标签页
+    default_tab: str = "favorites"
+    # 背景图作用域（v1.6.6）：favorites=仅收藏页 / all=全应用
+    background_scope: str = "favorites"
+    # 背景图模糊度（v1.6.6）：px，0-30，默认 10
+    background_blur: int = 10
 
 
 class UserPrefsPatch(BaseModel):
@@ -171,7 +155,13 @@ class UserPrefsPatch(BaseModel):
     refresh_interval: int | None = Field(default=None, ge=0, le=300)
     logo_scrim: Literal["none", "left", "overlay", "glass"] | None = None
     logo_display_mode: Literal["background", "box"] | None = None
-    favorites: list[int] | None = None
+    # 收藏网格（v1.6.5）：GridItem 数组，后端透传不解析
+    favorites: list | None = None
+    # 默认主页 / 背景作用域（v1.6.6）：str + 路由内白名单校验（同 accent 惯例）
+    default_tab: str | None = None
+    background_scope: str | None = None
+    # 背景图模糊度（v1.6.6）：px，0-30
+    background_blur: int | None = Field(default=None, ge=0, le=30)
 
 
 # ── v1.5.0 应用 Logo ──────────────────────────────────────
@@ -211,3 +201,10 @@ class LogoUploadRequest(BaseModel):
 
     mime: str
     data: str
+
+
+class LogoFetchRequest(BaseModel):
+    """外部 URL favicon 抓取（v1.6.5）：服务端从 URL 的 origin 抓取 favicon，存为 ``app_key``。"""
+
+    app_key: str
+    url: str = Field(..., max_length=2048)

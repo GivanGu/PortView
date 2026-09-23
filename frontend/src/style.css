@@ -55,6 +55,10 @@
   /* v1.5.2：Logo 遮罩 */
   --scrim: rgba(8, 10, 18, 0.55);
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+
+  /* v1.6.6：背景图主题适配（亮度 + 玻璃表面浓度） */
+  --bg-brightness: 0.75;
+  --fav-bg-glass: 55%;
 }
 
 /* ── 亮色主题：仅覆盖颜色变量，结构类不变 ── */
@@ -69,11 +73,13 @@
 
   --text-primary: #1a1d27;
   --text-secondary: #4a5169;
-  --text-muted: #8a90a6;
+  /* 浅色主题对比度修复：muted 加深（导航图标/徽标在白底可读，≥3:1） */
+  --text-muted: #6b7290;
 
   --accent: #6366f1;
   --accent-hover: #4f46e5;
-  --accent-light: rgba(99, 102, 241, 0.1);
+  /* 品牌 mark 底色加深，白底上不再发虚 */
+  --accent-light: rgba(99, 102, 241, 0.18);
 
   --green-light: rgba(34, 197, 94, 0.12);
   --red-light: rgba(239, 68, 68, 0.1);
@@ -86,9 +92,13 @@
   --shadow: 0 4px 24px rgba(30, 41, 59, 0.08);
   --shadow-sm: 0 2px 8px rgba(30, 41, 59, 0.06);
 
-  /* v1.5.2：Logo 遮罩（亮色） */
-  --scrim: rgba(255, 255, 255, 0.62);
+  /* v1.5.2：Logo 遮罩（亮色）：白 62% 会把浅色 Logo 洗掉，降到 30% */
+  --scrim: rgba(255, 255, 255, 0.3);
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  /* v1.6.6：浅色主题背景图调亮 + 玻璃面加厚，避免白玻璃叠暗图发浑 */
+  --bg-brightness: 1.05;
+  --fav-bg-glass: 78%;
 }
 
 /* ── 主题切换按钮 ── */
@@ -373,110 +383,6 @@ html, body {
   color: white;
 }
 
-/* ── 备注页：未备注端口分区（v1.3）────────────────
-   独立卡片，用黄色系（预警/待办）区别于已备注的白卡，
-   让用户一眼识别"这些端口还欠一条备注"。 */
-.unremarked-panel {
-  background: var(--yellow-light);
-  border: 1px solid var(--yellow);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-}
-
-.unremarked-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  color: var(--yellow);
-  font-weight: 600;
-}
-
-.unremarked-icon {
-  flex-shrink: 0;
-}
-
-.unremarked-title {
-  font-size: 13px;
-}
-
-.unremarked-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  margin-left: 6px;
-  border-radius: 9px;
-  background: var(--yellow);
-  color: #1a1d27;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.unremarked-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.unremarked-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-}
-
-.unremarked-row .row-actions {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.unremarked-row .row-actions .btn {
-  margin-left: 0;
-  flex-shrink: 0;
-}
-
-.unremarked-port {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--text-primary);
-  min-width: 40px;
-}
-
-.unremarked-src {
-  font-size: 10px;
-  padding: 1px 7px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.unremarked-src.docker { background: var(--blue-light); color: var(--blue); }
-.unremarked-src.system { background: var(--green-light); color: var(--green); }
-.unremarked-src.host { background: var(--orange-light); color: var(--orange); }
-
-.unremarked-svc {
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.unremarked-protocol {
-  font-size: 10px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
 /* 源类型过滤（本地 / Docker）— 与协议组共用 filter-btn 样式，
    仅在 filter-group 内用竖分隔符区分，避免视觉粘连。 */
 .filter-divider {
@@ -595,7 +501,7 @@ html, body {
   position: relative;
   overflow: hidden;
   /* v1.5.2：固定高度，所有卡片等高 */
-  height: 130px;
+  height: 140px;
   display: flex;
   flex-direction: column;
   /* v1.5.2：3D 立体阴影 */
@@ -617,7 +523,7 @@ html, body {
 /* 编辑模式：展开卡片高度，让输入框可见 */
 .port-card.editing {
   height: auto;
-  min-height: 130px;
+  min-height: 140px;
   overflow: visible;
 }
 
@@ -751,17 +657,28 @@ html, body {
 }
 
 /* ── v1.5.11：Logo 框展示模式（box）──
-   64px Logo 框 + 信息列，与 background 模式互斥。
-   .port-card 本身是 flex column，.port-card-body 作为 flex:1 的行容器。 */
+   上段 64px Logo 框 + 头部信息列，下段 detail/镜像行整宽（与 Logo 左对齐）。
+   .port-card 本身是 flex column，.port-card-body 作为 flex:1 的列容器。 */
 .port-card-body {
   position: relative;
   z-index: 2;
   display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 14px;
+  flex-direction: column;
   flex: 1;
   padding: 14px 16px;
+  gap: 8px; /* 上段（Logo+头部）与下段（detail/镜像行）的最小分隔 */
+}
+
+/* box 模式下行间距统一由 .port-card-body 的 gap 控制 */
+.port-card-body .port-image {
+  margin-top: 0;
+}
+
+.port-card-top {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .port-logo {
@@ -826,7 +743,7 @@ html, body {
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: nowrap;
   margin-top: auto; /* 把状态行推到卡片底部，配合 min-height 形成稳定布局 */
@@ -1216,8 +1133,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* 与 port-card 等高（135px = 最富 4 行场景），避免网格内视觉抖动 */
-  min-height: 135px;
+  /* 与 port-card 等高（145px = 最富 4 行场景），避免网格内视觉抖动 */
+  min-height: 145px;
 }
 
 .gap-info {
@@ -1253,7 +1170,7 @@ html, body {
   border: 1px dashed var(--border-light);
   border-radius: var(--radius);
   padding: 14px 16px;
-  min-height: 135px;
+  min-height: 145px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1858,6 +1775,43 @@ html, body {
   pointer-events: none;
 }
 
+/* v1.6.6：全局搜索 — 清除按钮（有搜索词时替换 kbd 提示） */
+.topbar-search .search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.topbar-search .search-clear:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+/* 当前页无匹配 → 搜索框抖动一次 */
+.topbar-search.search-shaking {
+  animation: searchShake 0.4s ease;
+}
+
+@keyframes searchShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -1893,6 +1847,7 @@ html, body {
 
 /* ── 主体：左侧图标轨 + 右侧内容 ── */
 .app-body {
+  position: relative; /* 自动隐藏标签/悬停区 absolute 定位基准 */
   display: flex;
   min-height: 0;
   overflow: hidden;
@@ -1907,7 +1862,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
+  transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease, border-right-width 0.2s ease;
 }
 
 .rail-nav {
@@ -1983,6 +1938,16 @@ html, body {
   display: none;
 }
 
+/* v1.6.6：自动隐藏模式 — rail 收起不占空间。
+   必须放在 .rail.collapsed 之后：两者特异性相同，收起态下让 0 宽度覆盖 60px。 */
+.rail.auto-hidden {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right-width: 0;
+  overflow: hidden;
+}
+
 .rail-toggle {
   margin-top: auto;
   display: flex;
@@ -2001,6 +1966,51 @@ html, body {
 .rail-toggle:hover {
   background: var(--bg-card-hover);
   color: var(--text-secondary);
+}
+
+/* v1.6.6：自动隐藏开关（位于收起/展开按钮上方，两者一起贴底） */
+.rail-auto-toggle {
+  margin-top: auto;
+}
+
+.rail-auto-toggle + .rail-toggle {
+  margin-top: 0;
+}
+
+/* v1.6.6：自动隐藏模式 — 左缘半圆标签（悬停滑出 / 点按钉住） */
+.rail-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 18px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-sidebar);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rail-tab:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* 自动隐藏模式 — rail 隐藏时的左缘窄悬停区 */
+.rail-edge-zone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 15;
 }
 
 .main-content {
@@ -2075,6 +2085,22 @@ html, body {
 .status-sep {
   color: var(--text-muted);
   opacity: 0.5;
+}
+
+/* v1.6.6：收藏页计数器 chip（分组名 · 总数 · 离线 · 在线） */
+.fav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.fav-status-group {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* v1.4.3：状态栏「未设密码」入口 */
@@ -2297,88 +2323,6 @@ html, body {
   margin-right: 16px;
 }
 
-/* ── Notes ──────────────────────────────────────────────── */
-.notes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-.note-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: border-color 0.18s ease, transform 0.18s ease;
-}
-.note-item:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-.note-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.note-port {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.note-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.note-svc {
-  font-size: 14px;
-  color: var(--accent);
-  font-weight: 500;
-}
-.note-protocol {
-  font-size: 11px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.note-remark {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  max-width: 65ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-.note-meta {
-  display: flex;
-  gap: 10px;
-  font-size: 11.5px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-.note-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
 /* ── Settings ───────────────────────────────────────────── */
 .settings-grid {
   display: grid;
@@ -2463,6 +2407,11 @@ html, body {
   background: var(--accent-light);
   color: var(--accent);
 }
+/* v1.6.6：禁用态（如无背景图时的作用域选项） */
+.radio-pill.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 /* accent 网格 */
 .accent-grid {
@@ -2544,6 +2493,8 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
+  /* v1.6.6：搜索框上移顶栏后，范围选择器靠右保持工具栏平衡 */
+  margin-left: auto;
 }
 .range-label {
   font-size: 12px;
@@ -2700,15 +2651,6 @@ html, body {
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.hidden-detail-remark {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-style: italic;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .hidden-detail-offline {
   font-size: 11px;
   font-weight: 600;
@@ -2817,3 +2759,39 @@ html, body {
   border-radius: 6px;
 }
 .auth-warning-ico { flex-shrink: 0; }
+
+/* ── v1.6.6：全应用毛玻璃背景（scope=all 且有图时，<html data-fav-bg="all">）──
+   背景层是 fixed <img>（已 blur/brightness）。这里只把各表面转半透明让背景透出，
+   卡片（.port-card / .settings-card 等）保持不透明保证文字可读。
+   注意：fixed 背景是定位元素（z-index:0），会盖在静态定位内容之上 ——
+   必须给 topbar/app-body/statusbar 提升 z-index，否则整个页面被背景图盖住不可见。 */
+html[data-fav-bg='all'] .app-shell {
+  background: transparent;
+}
+html[data-fav-bg='all'] .topbar,
+html[data-fav-bg='all'] .app-body,
+html[data-fav-bg='all'] .statusbar,
+html[data-fav-bg='all'] .main-header {
+  position: relative;
+  z-index: 1;
+}
+html[data-fav-bg='all'] .topbar,
+html[data-fav-bg='all'] .rail,
+html[data-fav-bg='all'] .statusbar,
+html[data-fav-bg='all'] .main-header {
+  background: color-mix(in srgb, var(--bg-secondary) var(--fav-bg-glass), transparent);
+}
+html[data-fav-bg='all'] .main-content {
+  background: transparent;
+}
+
+/* ── v1.6.9：元素级强调 — 不做全内容区 scrim 底，只给原本无表面的元素补表面/投影 ──
+   间隙卡：与其他卡片一致，背景生效时用玻璃底（虚线边框保留） */
+html[data-fav-bg='all'] .gap-card {
+  background: color-mix(in srgb, var(--bg-secondary) var(--fav-bg-glass), transparent);
+}
+
+/* 空状态：裸文本加主题感知的轻量投影（复用 --text-shadow），不加底色块 */
+html[data-fav-bg='all'] .empty-state .empty-text {
+  text-shadow: var(--text-shadow);
+}

@@ -21,7 +21,6 @@ export interface PortCard {
   is_running?: boolean
   container_status?: string
   is_host_network?: boolean
-  remark?: string
   // gap
   start_port?: number
   end_port?: number
@@ -44,10 +43,6 @@ export interface ApiResponse<T = unknown> {
   data: T
   error: string | null
   message: string | null
-}
-
-export interface ConfigEntry {
-  [key: string]: string
 }
 
 // ── 通用请求 ──────────────────────────────────────────
@@ -143,15 +138,7 @@ export function clearPortScheme(port: number): Promise<ApiResponse> {
   return request(`/api/ports/scheme/${port}`, { method: 'DELETE' })
 }
 
-// ── 配置 ──────────────────────────────────────────────
-
-export function fetchConfig(): Promise<ApiResponse<ConfigEntry>> {
-  return request<ConfigEntry>('/api/config')
-}
-
-export function saveConfig(config: ConfigEntry): Promise<ApiResponse> {
-  return request('/api/config', { method: 'POST', body: JSON.stringify(config) })
-}
+// ── 访问地址 ──────────────────────────────────────────
 
 export function getAccessAddress(): Promise<ApiResponse<{ address: string }>> {
   return request<{ address: string }>('/api/config/access_address')
@@ -201,7 +188,6 @@ export interface HiddenPortDetail {
   container: string | null
   image: string | null
   is_running: boolean
-  remark: string
 }
 
 export function fetchHiddenPortDetails(): Promise<ApiResponse<HiddenPortDetail[]>> {
@@ -214,38 +200,29 @@ export function healthCheck(): Promise<{ status: string; version: string; channe
   return fetch('/api/health').then(r => r.json())
 }
 
-// ── P1-1 端口备注 ─────────────────────────────────────────
+// ── 收藏网格（v1.6.5）─────────────────────────────────
 
-export type NoteProtocol = '' | 'tcp' | 'udp' | 'both'
-
-export interface NoteRead {
-  port: number
-  service_name: string
-  protocol: NoteProtocol
-  remark: string
-  created_at: number
-  updated_at: number
+/** 收藏条目：port（带在线状态的服务）或 url（外部站点） */
+export interface FavEntry {
+  id: string
+  kind: 'port' | 'url'
+  port?: number
+  url?: string
+  title?: string
+  logoKey?: string
 }
 
-export interface NotePayload {
-  port: number
-  service_name: string
-  protocol: NoteProtocol
-  remark: string
+/** 文件夹（单层，不可嵌套） */
+export interface FavFolder {
+  id: string
+  kind: 'folder'
+  name: string
+  /** 预设图标名（lucide），缺省为 Folder */
+  icon?: string
+  items: FavEntry[]
 }
 
-export function listNotes(search = ''): Promise<ApiResponse<NoteRead[]>> {
-  const qs = search ? `?search=${encodeURIComponent(search)}` : ''
-  return request<NoteRead[]>(`/api/notes${qs}`)
-}
-
-export function upsertNote(payload: NotePayload): Promise<ApiResponse> {
-  return request('/api/notes', { method: 'POST', body: JSON.stringify(payload) })
-}
-
-export function deleteNote(port: number): Promise<ApiResponse> {
-  return request(`/api/notes/${port}`, { method: 'DELETE' })
-}
+export type GridItem = FavEntry | FavFolder
 
 // ── P1-2 用户偏好 ─────────────────────────────────────────
 
@@ -256,7 +233,11 @@ export interface UserPrefs {
   refresh_interval: number
   logo_scrim: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode: 'background' | 'box'
-  favorites: number[]
+  favorites: GridItem[]
+  // v1.6.6
+  default_tab: 'overview' | 'favorites'
+  background_scope: 'favorites' | 'all'
+  background_blur: number
 }
 
 export interface UserPrefsPatch {
@@ -266,7 +247,11 @@ export interface UserPrefsPatch {
   refresh_interval?: number
   logo_scrim?: 'none' | 'left' | 'overlay' | 'glass'
   logo_display_mode?: 'background' | 'box'
-  favorites?: number[]
+  favorites?: GridItem[]
+  // v1.6.6
+  default_tab?: 'overview' | 'favorites'
+  background_scope?: 'favorites' | 'all'
+  background_blur?: number
 }
 
 export function getPrefs(): Promise<ApiResponse<UserPrefs>> {
@@ -338,9 +323,6 @@ export function deleteRange(id: number): Promise<ApiResponse> {
   return request(`/api/ranges/${id}`, { method: 'DELETE' })
 }
 
-// ── notes (upsert with remark) ──────────────────────
-// NotePayload / upsertNote 已存在；此处仅确保 remark 字段被允许。
-
 // ── logos (v1.5.0) ──────────────────────────────────
 
 export interface LogoMeta {
@@ -371,6 +353,14 @@ export function discoverLogo(appKey: string, port: number, path = '/'): Promise<
   })
 }
 
+/** 外部 URL favicon 抓取（v1.6.5）：服务端从 URL origin 抓取并存为 app_key（幂等）。 */
+export function fetchFavicon(appKey: string, url: string): Promise<ApiResponse<{ status: string; mime: string | null }>> {
+  return request<{ status: string; mime: string | null }>('/api/logos/fetch', {
+    method: 'POST',
+    body: JSON.stringify({ app_key: appKey, url }),
+  })
+}
+
 /** 构建 logo 图片 URL（供 <img src> 使用）。 */
 export function logoUrl(appKey: string): string {
   return `/api/logos/${encodeURIComponent(appKey)}`
@@ -389,4 +379,34 @@ export function fetchDefaultLogos(): Promise<ApiResponse<DefaultLogos>> {
 /** 构建内置默认 Logo 图片 URL（供 <img src> 使用）。 */
 export function defaultLogoUrl(key: string): string {
   return `/api/logos/default/${encodeURIComponent(key)}`
+}
+
+// ── 自定义背景图 (v1.6.6) ─────────────────────────────
+
+/** 上传 / 替换背景图（base64 图片字节）。 */
+export function setBackground(mime: string, dataBase64: string): Promise<ApiResponse> {
+  return request('/api/background', {
+    method: 'PUT',
+    body: JSON.stringify({ mime, data: dataBase64 }),
+  })
+}
+
+/** 删除背景图（幂等）。 */
+export function deleteBackground(): Promise<ApiResponse> {
+  return request('/api/background', { method: 'DELETE' })
+}
+
+/** 构建背景图 URL（供 <img src> 使用）。version 非 0 时附加缓存击穿参数。 */
+export function backgroundUrl(version = 0): string {
+  return version ? `/api/background?v=${version}` : '/api/background'
+}
+
+/** 探测背景图是否已设置（404 = 未设置）。 */
+export async function hasBackground(): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/background', { method: 'HEAD', credentials: 'same-origin' })
+    return resp.ok
+  } catch {
+    return false
+  }
 }

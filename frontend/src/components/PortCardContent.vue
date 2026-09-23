@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { StickyNote, Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
+import { Container, Cog, Server, Lock, Globe, Pencil, MousePointerClick, Star } from 'lucide-vue-next'
 import type { PortCard } from '@/api'
-import { usePrefs } from '@/store/prefs'
+import { usePrefs, hasPortFavorite } from '@/store/prefs'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   card: PortCard
   // 最终展示的服务协议（人工指定 > 自动探测）；unknown 或未探测时不传
   scheme?: 'http' | 'https' | 'unknown'
   // 是否为人工指定（徽章显示铅笔标记）
   manual?: boolean
-}>()
+  // box 模式下分段渲染：top=头部+服务名，bottom=detail+镜像行，all=完整（默认）
+  section?: 'top' | 'bottom' | 'all'
+}>(), {
+  section: 'all',
+})
 
 const emit = defineEmits<{
   (e: 'scheme-toggle'): void
@@ -22,10 +26,13 @@ const { t } = useI18n()
 const { favorites } = usePrefs()
 
 // v1.6.2：已收藏端口在端口号旁显示实心 ★，点击取消收藏
-const isFavorite = computed(() => props.card.port != null && favorites.value.includes(props.card.port))
+const isFavorite = computed(
+  () => props.card.port != null && hasPortFavorite(favorites.value, props.card.port),
+)
 </script>
 
 <template>
+  <template v-if="section !== 'bottom'">
   <div class="port-card-header">
     <span class="port-header-left">
       <span
@@ -56,13 +63,9 @@ const isFavorite = computed(() => props.card.port != null && favorites.value.inc
   <div class="port-service">
     {{ card.service_name || t('ports.unknownService') }}
   </div>
+  </template>
 
-  <!-- v1.2：用户备注 -->
-  <div v-if="card.remark" class="port-remark" :title="card.remark">
-    <StickyNote :size="11" class="port-remark-icon" />
-    <span class="port-remark-text">{{ card.remark }}</span>
-  </div>
-
+  <template v-if="section !== 'top'">
   <div class="port-detail">
     <span class="port-detail-left">
       <span
@@ -125,6 +128,7 @@ const isFavorite = computed(() => props.card.port != null && favorites.value.inc
   <!-- 镜像信息独立成一行，避免卡片高度不齐 -->
   <div v-if="card.image" class="port-image">
     <span class="port-image-label">{{ t('ports.image') }}</span>
-    <span class="port-image-value">{{ card.image }}</span>
+    <span class="port-image-value" :title="card.image">{{ card.image }}</span>
   </div>
+  </template>
 </template>

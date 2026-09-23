@@ -25,22 +25,28 @@ import {
   type PortCard,
   type RangeRead,
   type LogoMeta,
+  type GridItem,
 } from '@/api'
 import { appKey, normalizeServiceName } from '@/logo'
 import { exportPorts, type ExportFormat } from '@/utils/export'
-import usePrefs from '@/store/prefs'
+import usePrefs, { hasPortFavorite, removePortFavorite, uid } from '@/store/prefs'
+import { useSearch } from '@/store/search'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import PortCardContent from '@/components/PortCardContent.vue'
-import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
+import { Plus, Trash2, SlidersHorizontal } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
 // ── 状态 ──
 const analysis = ref<PortAnalysis | null>(null)
 const loading = ref(false)
-const searchQuery = ref('')
+// v1.6.6：搜索词改由顶栏全局搜索驱动（store 单例，切页自动清空）
+const { query: searchQuery, activeTab: searchActiveTab } = useSearch()
 const protocolFilter = ref('') // '' | 'TCP' | 'UDP'
 const sourceFilter = ref('') // '' | 'local' | 'docker'（前端侧按 card.source 归类）
+// v1.6.11：快速筛选（独立 toggle，与协议/来源 AND 叠加）
+const unknownFilter = ref(false) // 仅显示「未知服务」端口，方便快速命名
+const noLogoFilter = ref(false) // 仅显示未显示 Logo 的卡片，方便逐一上传
 const editingPort = ref<number | null>(null)
 const editServiceName = ref('')
 
@@ -463,9 +469,10 @@ function handleExport(format: ExportFormat) {
   exportPorts(analysis.value.port_cards, format)
 }
 
-// ── 搜索防抖 ──
+// ── 搜索防抖（v1.6.6：词来自顶栏全局搜索，仅本页激活时生效）──
 let searchTimer: ReturnType<typeof setTimeout>
 watch(searchQuery, () => {
+  if (searchActiveTab.value !== 'ports') return
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadData, 300)
 })
@@ -474,18 +481,26 @@ watch(protocolFilter, () => {
   loadData()
 })
 
-// ── 源类型过滤（本地 / Docker）──────────────
+// ── 前端侧卡片过滤（源类型 / 未知服务 / 无 Logo）──────────────
 // 后端已把卡片分好：`source === 'docker'` 是 Docker 端；
 // `source ∈ {'host','system'}` 是主机/本地端。
 // 这里纯前端侧 v-show 即可，无需往返 API。
+// 各条件 AND 叠加；模板仅对 used 卡片调用本函数。
 function cardVisible(card: PortCard): boolean {
-  if (!sourceFilter.value) return true
-  // gap / unknown_range 卡片没有 source —— 归类筛选时一并隐藏，
-  // 让视图聚焦「本地/Docker 端」这一组。
   if (card.type !== 'used') return false
-  const s = (card.source || '').toLowerCase()
-  if (sourceFilter.value === 'docker') return s === 'docker'
-  if (sourceFilter.value === 'local') return s === 'host' || s === 'system'
+  // 源类型筛选（本地 / Docker）
+  if (sourceFilter.value) {
+    const s = (card.source || '').toLowerCase()
+    if (sourceFilter.value === 'docker' && s !== 'docker') return false
+    if (sourceFilter.value === 'local' && s !== 'host' && s !== 'system') return false
+  }
+  // 未知服务筛选：service_name 为空或字面量「未知服务」（后端固定值）
+  if (unknownFilter.value) {
+    const name = card.service_name
+    if (name && name !== '未知服务') return false
+  }
+  // 无 Logo 筛选：卡片实际未显示 Logo（无用户上传、无内置默认）
+  if (noLogoFilter.value && logoSrc(card) != null) return false
   return true
 }
 
@@ -606,16 +621,18 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 // v1.5.11：Logo 展示模式（background / box）驱动卡片条件渲染
 const { refreshInterval, refreshTick, logoDisplayMode, favorites, saveFavorites, triggerRefresh } = usePrefs()
 
-// ── 收藏（v1.5.6）：按端口号收藏，顺序存 user_prefs.favorites ──
+// ── 收藏（v1.5.6 / v1.6.5 网格模型）：按端口号收藏，存 user_prefs.favorites ──
 function isFavorite(card: PortCard): boolean {
-  return card.port != null && favorites.value.includes(card.port)
+  return card.port != null && hasPortFavorite(favorites.value, card.port)
 }
 
 async function toggleFavorite(card: PortCard) {
   if (card.port == null) return
   const port = card.port
-  const has = favorites.value.includes(port)
-  const next = has ? favorites.value.filter((p) => p !== port) : [...favorites.value, port]
+  const has = hasPortFavorite(favorites.value, port)
+  const next: GridItem[] = has
+    ? removePortFavorite(favorites.value, port)[0]
+    : [...favorites.value, { id: uid('port'), kind: 'port', port }]
   // v1.6.4：串行写入 + 失败回滚（原先并发 PATCH 可能乱序到达互相覆盖）
   const ok = await saveFavorites(next)
   showToast(t(ok ? (has ? 'ports.removedFavorite' : 'ports.addedFavorite') : 'common.saveFailed'))
@@ -700,17 +717,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="main-body">
-      <!-- 工具栏 -->
+      <!-- 工具栏（搜索已上移顶栏全局搜索） -->
       <div class="toolbar">
-        <div class="search-box">
-          <span class="search-icon"><Search :size="15" /></span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('ports.searchPlaceholder')"
-          />
-        </div>
-
         <div class="filter-group">
           <button
             class="filter-btn"
@@ -757,6 +765,23 @@ onBeforeUnmount(() => {
             :title="t('common.sourceDocker')"
           >
             {{ t('ports.filterDocker') }}
+          </button>
+          <span class="filter-divider" aria-hidden="true"></span>
+          <button
+            class="filter-btn"
+            :class="{ active: unknownFilter }"
+            @click="unknownFilter = !unknownFilter"
+            :title="t('ports.filterUnknownTip')"
+          >
+            {{ t('ports.filterUnknown') }}
+          </button>
+          <button
+            class="filter-btn"
+            :class="{ active: noLogoFilter }"
+            @click="noLogoFilter = !noLogoFilter"
+            :title="t('ports.filterNoLogoTip')"
+          >
+            {{ t('ports.filterNoLogo') }}
           </button>
         </div>
 
@@ -836,27 +861,38 @@ onBeforeUnmount(() => {
                 </div>
               </template>
               <div v-else class="port-card-body">
-                <!-- box：64px Logo 框 + 信息列 -->
-                <div class="port-logo">
-                  <img
-                    v-if="logoSrc(card)"
-                    :src="logoSrc(card)!"
-                    class="port-logo-img"
-                    :style="{ display: hasLogoError(card) ? 'none' : '' }"
-                    :alt="card.service_name || 'logo'"
-                    @error="markLogoError(card)"
-                  />
-                  <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
+                <!-- box：上段 64px Logo 框 + 头部信息列，下段 detail/镜像行整宽（与 Logo 左对齐） -->
+                <div class="port-card-top">
+                  <div class="port-logo">
+                    <img
+                      v-if="logoSrc(card)"
+                      :src="logoSrc(card)!"
+                      class="port-logo-img"
+                      :style="{ display: hasLogoError(card) ? 'none' : '' }"
+                      :alt="card.service_name || 'logo'"
+                      @error="markLogoError(card)"
+                    />
+                    <span v-if="!logoSrc(card) || hasLogoError(card)" class="port-logo-placeholder">🖼</span>
+                  </div>
+                  <div class="port-info">
+                    <PortCardContent
+                      :card="card"
+                      :scheme="effectiveScheme(card)"
+                      :manual="isManualScheme(card)"
+                      section="top"
+                      @scheme-toggle="handleSchemeToggle(card)"
+                      @favorite-toggle="toggleFavorite(card)"
+                    />
+                  </div>
                 </div>
-                <div class="port-info">
-                  <PortCardContent
-                    :card="card"
-                    :scheme="effectiveScheme(card)"
-                    :manual="isManualScheme(card)"
-                    @scheme-toggle="handleSchemeToggle(card)"
-                    @favorite-toggle="toggleFavorite(card)"
-                  />
-                </div>
+                <PortCardContent
+                  :card="card"
+                  :scheme="effectiveScheme(card)"
+                  :manual="isManualScheme(card)"
+                  section="bottom"
+                  @scheme-toggle="handleSchemeToggle(card)"
+                  @favorite-toggle="toggleFavorite(card)"
+                />
               </div>
 
               <div class="port-actions">
@@ -890,8 +926,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-          <!-- 可用端口间隙：仅在无源类型过滤时显示 -->
-          <div v-else-if="card.type === 'gap'" v-show="sourceFilter === ''">
+          <!-- 可用端口间隙：仅在无源类型/未知服务/无Logo 过滤时显示 -->
+          <div v-else-if="card.type === 'gap'" v-show="sourceFilter === '' && !unknownFilter && !noLogoFilter">
             <div class="gap-card">
               <div class="gap-range">{{ card.start_port }} — {{ card.end_port }}</div>
               <div class="gap-count">{{ t('ports.gapCount', { n: card.available_count }) }}</div>

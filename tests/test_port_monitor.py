@@ -10,15 +10,15 @@ def _make_monitor() -> PortMonitor:
     monitor.container_cache = {}
     monitor.cache_timestamp = 0.0
     monitor.cache_ttl = 30
-    monitor.default_ports = {22: "SSH", 80: "HTTP", 443: "HTTPS", 3306: "MySQL"}
-    monitor.self_port = 8081
+    # 与真实 _DEFAULT_PORTS 对齐（含 8081 → PortView，v1.6.13 起自身端口无特判）
+    monitor.default_ports = {22: "SSH", 80: "HTTP", 443: "HTTPS", 3306: "MySQL", 8081: "PortView"}
     return monitor
 
 
 class TestGetServiceName:
     def test_from_config(self):
         monitor = _make_monitor()
-        config = {"my_service": {"port": 8080, "protocol": "TCP"}}
+        config = {8080: {"service_name": "my_service", "port_type": "host"}}
         assert monitor.get_service_name(8080, config) == "my_service"
 
     def test_from_default(self):
@@ -30,14 +30,18 @@ class TestGetServiceName:
         monitor = _make_monitor()
         assert monitor.get_service_name(12345, {}) == "未知服务"
 
-    def test_self_port_always_portview(self):
-        """PortView 自身端口（8081）恒识别为 PortView，通用端口库标注不覆盖。"""
+    def test_self_port_unified_logic(self):
+        """v1.6.13：自身端口（8081）无特判，走统一逻辑。
+
+        无标注 → 回落默认映射 8081 → PortView；
+        有用户标注 → 标注优先（编辑生效，不再被硬编码覆盖）。
+        """
         monitor = _make_monitor()
-        # 无配置
+        # 无配置 → 默认映射
         assert monitor.get_service_name(8081, {}) == "PortView"
-        # 通用端口库把 8081 标注为 "模式注册:host"，仍应识别为 PortView
-        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
-        assert monitor.get_service_name(8081, config) == "PortView"
+        # 用户编辑的标注优先于默认值
+        config = {8081: {"service_name": "我的监控", "port_type": "host"}}
+        assert monitor.get_service_name(8081, config) == "我的监控"
 
 
 class TestMergeUnknownAndGaps:
@@ -259,7 +263,7 @@ class TestPortAnalysis:
     def test_no_docker_no_host(self):
         """无 Docker、无主机端口时，应返回全 gap。"""
         monitor = _make_monitor()
-        config = {"ssh": {"port": 22, "protocol": "TCP"}}
+        config = {22: {"service_name": "ssh", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=100)
 
         assert result["total_used"] == 0
@@ -283,7 +287,7 @@ class TestPortAnalysis:
         monitor = _make_monitor()
         # 模拟：手动构造一个有已用端口的场景
         # 由于没有 Docker 和主机端口，用 config 里的端口来测试
-        config_with_port = {"test": {"port": 80, "protocol": "TCP"}}
+        config_with_port = {80: {"service_name": "test", "port_type": "host"}}
         result = monitor.get_port_analysis(
             config_with_port, start_port=1, end_port=200, hidden_ports=[80]
         )
@@ -319,7 +323,7 @@ class TestPortAnalysis:
             "get_host_ports",
             lambda config: {3306: {"protocol": "TCP", "service_name": "MySQL"}},
         )
-        config = {"MySQL数据库": {"port": 3306, "protocol": "TCP", "service_type": "host"}}
+        config = {3306: {"service_name": "MySQL数据库", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
 
         card = next(c for c in result["port_cards"] if c.get("port") == 3306)
@@ -328,13 +332,13 @@ class TestPortAnalysis:
         assert card["container"] == "1p-mysql"
         assert card["image"] == "mysql:8.4.11"
 
-    def test_self_port_host_network_identified_as_portview(self, monkeypatch):
-        """回归：PortView 自身端口（host 网络容器 8081）即使配置标注 host，
-        也应识别为 docker / PortView，而非「主机 / 未知服务」。
+    def test_self_port_host_network_identified_as_docker(self, monkeypatch):
+        """回归：自身端口（host 网络容器 8081）经 EXPOSE 检测应识别为 docker，
+        而非「主机 / 未知服务」。v1.6.13 起无 PortView 特判，source 由
+        host 网络容器检测得出；service_name 走统一逻辑（标注 > 默认映射）。
 
         复现场景：PortView 以 network_mode: host 运行，无 PortBindings，
-        8081 经 EXPOSE 检测为 host 网络容器；config.json 里 "模式注册:host"
-        把 8081 标注为 host。修复前该卡片 source="host"、service_name="未知服务"。
+        8081 经 EXPOSE 检测为 host 网络容器。
         """
         monitor = _make_monitor()
         # host 网络容器：无 PortBindings → docker SDK 无命中
@@ -343,21 +347,32 @@ class TestPortAnalysis:
             monitor,
             "get_host_ports",
             lambda config: {
+                # 真实流程里 service_name 由 get_service_name 计算（含默认映射回落），
+                # 无标注时 8081 → "PortView"
                 8081: {
                     "protocol": "TCP",
-                    "service_name": "未知服务",
+                    "service_name": "PortView",
                     "container_name": "portview",
+                    "container_image": "portview:1.6.13",
                 }
             },
         )
-        config = {"模式注册": {"port": 8081, "protocol": "TCP", "service_type": "host"}}
-        result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
-
+        # 无标注：host_info.service_name 已是默认映射值 PortView
+        result = monitor.get_port_analysis({}, start_port=1, end_port=10000)
         card = next(c for c in result["port_cards"] if c.get("port") == 8081)
         assert card["type"] == "used"
         assert card["source"] == "docker"
         assert card["service_name"] == "PortView"
         assert card["container"] == "portview"
+        # v1.6.13：host 分支卡片带出镜像信息
+        assert card["image"] == "portview:1.6.13"
+
+        # 用户编辑标注后应生效（不再被硬编码覆盖）
+        config = {8081: {"service_name": "我的监控", "port_type": "host"}}
+        result2 = monitor.get_port_analysis(config, start_port=1, end_port=10000)
+        card2 = next(c for c in result2["port_cards"] if c.get("port") == 8081)
+        assert card2["source"] == "docker"
+        assert card2["service_name"] == "我的监控"
 
     def test_host_network_container_wins_over_config_host(self, monkeypatch):
         """回归：非自身端口的 host 网络容器，检测结果（docker）应优先于配置标注（host）。"""
@@ -371,13 +386,16 @@ class TestPortAnalysis:
                     "protocol": "TCP",
                     "service_name": "未知服务",
                     "container_name": "some-app",
+                    "container_image": "some-app:latest",
                 }
             },
         )
-        config = {"监控系统": {"port": 9090, "protocol": "TCP", "service_type": "host"}}
+        config = {9090: {"service_name": "监控系统", "port_type": "host"}}
         result = monitor.get_port_analysis(config, start_port=1, end_port=10000)
 
         card = next(c for c in result["port_cards"] if c.get("port") == 9090)
         assert card["type"] == "used"
         assert card["source"] == "docker"
         assert card["container"] == "some-app"
+        # v1.6.13：host 网络容器卡片带出镜像信息
+        assert card["image"] == "some-app:latest"
