@@ -666,6 +666,12 @@ html, body {
   flex-direction: column;
   flex: 1;
   padding: 14px 16px;
+  gap: 8px; /* 上段（Logo+头部）与下段（detail/镜像行）的最小分隔 */
+}
+
+/* box 模式下行间距统一由 .port-card-body 的 gap 控制 */
+.port-card-body .port-image {
+  margin-top: 0;
 }
 
 .port-card-top {
