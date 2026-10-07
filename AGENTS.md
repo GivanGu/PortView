@@ -107,6 +107,7 @@ cd frontend && npm install && npm run dev
 - `@` alias → `frontend/src/`
 - Components in `frontend/src/components/` — main views: `OverviewView`, `PortsView`, `HiddenPortsView`, `SettingsView`, `LoginView`, `PasswordPrompt`
 - i18n: `frontend/src/locales/{zh,en}.json`, fallback `zh`
+- **移动端适配**：断点 768px（≤420px 单列卡片），移动端规则集中在 `style.css` 末尾（靠出现序覆盖 `.rail` / `.port-card` 等同特异性规则）。窄屏布局 = 顶栏两行 + 状态栏细条 + `.rail` 转固定底部标签栏 + 弹层转底部抽屉（`.settings-menu--sheet`）。触摸端靠 `@media (hover: none), (pointer: coarse)` 常显 `.port-actions`、卡片整块可点跳转；收藏页长按唤出菜单（`composables/useLongPress.ts`，触摸端禁用 Sortable 拖拽）。JS 侧判定用 `utils/device.ts` 的 `isNarrow()` / `isCoarsePointer()`，与 CSS 断点保持一致
 - Built assets (`frontend/dist/`) are served by FastAPI in production via SPA fallback
 
 ### Data Flow

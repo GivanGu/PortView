@@ -52,6 +52,11 @@
   --topbar-height: 56px;
   --statusbar-height: 32px;
 
+  /* 移动端：安全区（刘海/圆角/Home 条）+ 底部导航高度 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-nav-height: 58px;
+
   /* v1.5.2：Logo 遮罩 */
   --scrim: rgba(8, 10, 18, 0.55);
   --text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
@@ -143,10 +148,44 @@ html, body {
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  /* 移动端：禁止横屏/旋转时系统擅自放大字号；关闭点击高亮闪块 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #app {
   height: 100%;
+}
+
+/* ── 触控基线 ──
+   touch-action: manipulation 去掉触摸端的 300ms 点击延迟与双击缩放；
+   仅作用于交互控件，拖拽容器（如收藏磁贴）不受影响。 */
+button,
+a,
+label,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+button,
+.port-card,
+.fav-tile,
+.hidden-item,
+.add-port-row {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 滚动容器不把滑动「传染」给页面（避免下拉刷新/橡皮筋打断列表滚动） */
+.main-content,
+.main-body,
+.view,
+.fav-group-list,
+.modal-body,
+.add-port-list {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── 滚动条 ── */
@@ -1309,6 +1348,21 @@ html, body {
   color: var(--text-muted);
 }
 
+/* 卡片内联编辑行（服务名）：紧凑一行贴在卡片底部；
+   字号走 .form-input 的响应式规则（窄屏 16px，防 iOS 聚焦自动缩放页面） */
+.edit-row {
+  margin-top: 10px;
+  padding: 0 14px 14px;
+  display: flex;
+  gap: 6px;
+}
+.edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 /* ── 隐藏端口列表 ── */
 .hidden-list {
   display: flex;
@@ -1439,25 +1493,8 @@ html, body {
   to { transform: rotate(360deg); }
 }
 
-/* ── 响应式 ── */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 60px;
-    min-width: 60px;
-  }
-  .sidebar-logo span,
-  .nav-item span:not(.nav-icon),
-  .nav-badge,
-  .sidebar-footer {
-    display: none;
-  }
-  .port-grid {
-    grid-template-columns: 1fr;
-  }
-  .stats-bar {
-    flex-direction: column;
-  }
-}
+/* ── 响应式 ──
+   移动端规则集中在文件末尾（避免与 .rail / .port-card 等同特异性规则的产生序覆盖）。 */
 
 
 /* ═══════════════════════════════════════════
@@ -1477,6 +1514,14 @@ html, body {
   margin-top: 4px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .view-header-right {
@@ -1680,6 +1725,7 @@ html, body {
   display: grid;
   grid-template-rows: var(--topbar-height) 1fr var(--statusbar-height);
   height: 100vh;
+  height: 100dvh; /* 移动端动态视口：不被浏览器地址栏遮挡/留白 */
   overflow: hidden;
   background: var(--bg-primary);
 }
@@ -2794,4 +2840,224 @@ html[data-fav-bg='all'] .gap-card {
 /* 空状态：裸文本加主题感知的轻量投影（复用 --text-shadow），不加底色块 */
 html[data-fav-bg='all'] .empty-state .empty-text {
   text-shadow: var(--text-shadow);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   移动端适配（≤768px）
+   顶栏两行（品牌+操作 / 全宽搜索）→ 状态栏细条 → 内容区；
+   导航轨转固定底部标签栏；卡片菜单与弹窗转底部抽屉；
+   表单字号 ≥16px（防 iOS 聚焦自动缩放）、控件高度 ≥40px。
+   本段刻意放在文件末尾：与 .rail / .port-card / .settings-menu 等
+   同特异性规则要靠「后出现」取胜，写在前面会被覆盖。
+   ═══════════════════════════════════════════════════════════ */
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --topbar-height: auto;
+    --statusbar-height: auto;
+  }
+
+  html, body { font-size: 15px; }
+
+  /* ── 外壳三行：顶栏 / 状态栏 / 内容 ── */
+  .app-shell { grid-template-rows: auto auto 1fr; }
+
+  .topbar {
+    grid-row: 1;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: calc(8px + var(--safe-top)) 12px 8px;
+  }
+  .topbar-brand { padding-right: 0; border-right: none; }
+  .topbar-actions { margin-left: auto; gap: 2px; }
+  .icon-btn { height: 40px; min-width: 40px; padding: 0 8px; }
+  /* 搜索独占一行 → 全宽，触摸端不再挤在品牌与图标之间 */
+  .topbar-search { order: 3; flex: 1 0 100%; max-width: none; margin: 0; }
+  .topbar-search input { height: 42px; padding: 0 40px 0 36px; font-size: 16px; }
+  .topbar-search .kbd { display: none; }
+
+  .statusbar {
+    grid-row: 2;
+    height: auto;
+    min-height: 30px;
+    padding: 5px 12px;
+    gap: 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .statusbar::-webkit-scrollbar { display: none; }
+
+  .app-body { grid-row: 3; }
+
+  /* ── 导航轨 → 底部标签栏（图标 + 文字，拇指热区） ── */
+  .rail,
+  .rail.collapsed,
+  .rail.auto-hidden {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: auto;
+    min-width: 0;
+    flex-direction: column;
+    padding: 6px 6px calc(6px + var(--safe-bottom));
+    border-right: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.28);
+    overflow: visible;
+    transition: none;
+  }
+  .rail-nav { flex-direction: row; gap: 2px; }
+  .rail-item {
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 2px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+  .rail-item.active { box-shadow: inset 0 3px 0 var(--accent); }
+  .rail-label { font-size: 11px; }
+  /* 悬停唤出 / 收缩 / 自动隐藏都是桌面交互，触摸端无意义 */
+  .rail-toggle,
+  .rail-auto-toggle,
+  .rail-tab,
+  .rail-edge-zone { display: none; }
+
+  /* 底部导航是覆盖层，内容区留出不被遮挡的空间 */
+  .main-content { padding: 0 0 calc(var(--mobile-nav-height) + var(--safe-bottom)); }
+  .main-body,
+  .view { padding: 14px 12px; }
+  .main-header { padding: 12px; gap: 10px; flex-wrap: wrap; }
+  .main-header h1 { font-size: 16px; }
+  .header-actions { gap: 8px; flex-wrap: wrap; }
+  .export-group { padding-right: 0; border-right: none; }
+
+  /* ── 工具栏 / 过滤组（横向可滑，不挤爆） ── */
+  .toolbar { gap: 10px; margin-bottom: 14px; }
+  .filter-group { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .filter-group::-webkit-scrollbar { display: none; }
+  .filter-btn { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+  .range-selector { width: 100%; margin-left: 0; }
+  .range-select { flex: 1; max-width: none; padding: 8px 10px; font-size: 14px; }
+
+  /* ── 统计卡 ── */
+  .stats-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stats-bar .stat-card { min-width: 0; padding: 10px 12px; }
+  .stats-bar .stat-value { font-size: 18px; }
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat-value { font-size: 24px; }
+
+  /* ── 端口卡片 ── */
+  .port-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .port-card-content,
+  .port-card-body { padding: 12px 14px; }
+  .gap-card { min-height: 110px; }
+  .port-status-container { max-width: 40vw; }
+
+  /* ── 概览图表 ── */
+  .view-header { flex-wrap: wrap; gap: 6px; }
+  .chart-row { grid-template-columns: 1fr; }
+  .chart-card { padding: 14px; }
+  .ring-wrap { width: 140px; height: 140px; }
+
+  /* ── 设置 ── */
+  .settings-grid { grid-template-columns: 1fr; gap: 12px; }
+  .settings-card { padding: 14px; min-height: 0; }
+  .radio-pill { padding: 12px 10px; font-size: 13.5px; }
+  .accent-chip { padding: 12px 8px; }
+  .access-addr-row { flex-wrap: wrap; }
+  .access-addr-row .btn { flex: 1; }
+  .bg-row { flex-wrap: wrap; }
+
+  /* ── 表单与按钮：字号 ≥16px 防 iOS 聚焦缩放，点击区 ≥40px ── */
+  .form-input { font-size: 16px; padding: 10px 12px; }
+  .search-box input { font-size: 16px; padding: 10px 12px 10px 36px; }
+  .btn { padding: 9px 14px; font-size: 13.5px; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .settings-menu-item { min-height: 44px; font-size: 14px; }
+  .edit-row { padding: 0 12px 12px; flex-wrap: wrap; }
+
+  /* ── 弹层 → 底部抽屉 ── */
+  .modal-overlay,
+  .range-overlay { align-items: flex-end; padding: 0; }
+  .modal,
+  .range-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 86dvh;
+    border-right: none;
+    border-bottom: none;
+    border-left: none;
+    border-radius: 16px 16px 0 0;
+    animation: sheetIn 0.22s ease;
+  }
+  .modal-body { padding: 16px; }
+  .modal-footer { padding-bottom: calc(14px + var(--safe-bottom)); }
+  .range-dialog { padding: 18px 16px calc(18px + var(--safe-bottom)); }
+  .range-textarea { min-height: 96px; font-size: 16px; }
+
+  /* 卡片 ⚙ 菜单 / 收藏右键菜单：窄屏改底部抽屉（JS 挂 --sheet 修饰类） */
+  .settings-menu--sheet {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 8px);
+    min-width: 0;
+    max-height: 55dvh;
+    overflow-y: auto;
+    animation: sheetIn 0.18s ease-out;
+  }
+
+  /* 轻提示 */
+  .save-toast {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 12px);
+    max-width: none;
+    text-align: center;
+  }
+  .toast-container { top: 12px; left: 12px; right: 12px; }
+
+  .empty-state { padding: 40px 16px; }
+  .hidden-item { padding: 12px; }
+}
+
+/* 更窄的手机：卡片单列，顶栏让位给操作按钮（品牌只留 mark） */
+@media (max-width: 420px) {
+  .port-grid { grid-template-columns: 1fr; }
+  .brand-name { display: none; }
+}
+
+/* ── 纯触摸设备（无悬停能力）──
+   「悬停才出现」的操作按钮必须常显；悬停位移在触摸端会残留成"翘起"，一并取消。 */
+@media (hover: none), (pointer: coarse) {
+  .port-actions { opacity: 1; }
+  .port-action-btn { width: 36px; height: 36px; font-size: 14px; }
+  /* 触摸端卡片整块可点（= 打开服务）：给光标与按下反馈 */
+  .port-card { cursor: pointer; }
+  .port-card:active { border-color: var(--accent); }
+  /* 操作按钮常显 → 头部右腾出位置，别压住 TCP/UDP 徽章 */
+  .port-card-header { padding-right: 80px; }
+  .port-scheme { padding: 5px 9px; font-size: 11px; }
+  .port-fav-star { padding: 8px; margin: -8px; }
+  .modal-close { width: 40px; height: 40px; }
+  .topbar-search .search-clear { width: 28px; height: 28px; }
+  .accent-swatch { width: 26px; height: 26px; }
+
+  .port-card:hover,
+  .stat-card:hover,
+  .fav-tile:hover,
+  .accent-swatch:hover,
+  .btn:active:not(:disabled) { transform: none; }
 }

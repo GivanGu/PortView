@@ -160,7 +160,7 @@ function skip() {
 .pw-input {
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -223,4 +223,20 @@ function skip() {
   cursor: pointer;
 }
 .pw-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 移动端：改底部抽屉，输入 16px 防 iOS 缩放 */
+@media (max-width: 768px) {
+  .pw-prompt-overlay {
+    place-items: end center;
+    padding: 0;
+  }
+  .pw-prompt-card {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 16px calc(20px + var(--safe-bottom));
+  }
+  .pw-input { font-size: 16px; padding: 12px 14px; }
+  .pw-btn-ghost,
+  .pw-btn-primary { padding: 11px 16px; font-size: 14px; }
+}
 </style>

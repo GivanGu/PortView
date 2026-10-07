@@ -115,4 +115,19 @@ function cancel() {
   cursor: pointer;
 }
 .addr-btn-primary:hover { filter: brightness(1.1); }
+
+/* 移动端：改底部抽屉 */
+@media (max-width: 768px) {
+  .addr-prompt-overlay {
+    place-items: end center;
+    padding: 0;
+  }
+  .addr-prompt-card {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 20px 16px calc(20px + var(--safe-bottom));
+  }
+  .addr-btn-ghost,
+  .addr-btn-primary { padding: 11px 16px; font-size: 14px; }
+}
 </style>
