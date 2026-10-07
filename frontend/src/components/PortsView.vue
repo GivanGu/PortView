@@ -28,6 +28,7 @@ import {
   type GridItem,
 } from '@/api'
 import { appKey, normalizeServiceName } from '@/logo'
+import { isCoarsePointer, isNarrow } from '@/utils/device'
 import { exportPorts, type ExportFormat } from '@/utils/export'
 import usePrefs, { hasPortFavorite, removePortFavorite, uid } from '@/store/prefs'
 import { useSearch } from '@/store/search'
@@ -204,6 +205,8 @@ async function handleDeleteLogo(card: PortCard) {
 // 原 6 个按钮收敛为「🔗 打开服务（快速跳转）+ ⚙️ 设置（分层下拉）」两个。
 const settingsMenuPort = ref<number | null>(null)
 const settingsMenuPos = ref({ top: 0, right: 0 })
+// 窄屏：菜单不再贴着卡片弹（卡片小、菜单大，容易溢出视口），改底部抽屉
+const settingsMenuSheet = ref(false)
 
 const settingsMenuCard = computed<PortCard | null>(() => {
   if (settingsMenuPort.value == null || !analysis.value) return null
@@ -217,15 +220,18 @@ function toggleSettingsMenu(card: PortCard, event: MouseEvent) {
     settingsMenuPort.value = null
     return
   }
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  // 菜单右边缘对齐按钮右边缘，向下展开；靠近视口底部时向上翻
-  const estHeight = 260
-  const top =
-    rect.bottom + estHeight + 8 > window.innerHeight ? Math.max(8, rect.top - estHeight - 4) : rect.bottom + 4
-  // 钳制 right，防止卡片靠近左缘时菜单溢出视口左边界（菜单宽约 180px）
-  const menuWidth = 180
-  const right = Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - 8 - menuWidth))
-  settingsMenuPos.value = { top, right }
+  settingsMenuSheet.value = isNarrow()
+  if (!settingsMenuSheet.value) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    // 菜单右边缘对齐按钮右边缘，向下展开；靠近视口底部时向上翻
+    const estHeight = 260
+    const top =
+      rect.bottom + estHeight + 8 > window.innerHeight ? Math.max(8, rect.top - estHeight - 4) : rect.bottom + 4
+    // 钳制 right，防止卡片靠近左缘时菜单溢出视口左边界（菜单宽约 180px）
+    const menuWidth = 180
+    const right = Math.max(8, Math.min(window.innerWidth - rect.right, window.innerWidth - 8 - menuWidth))
+    settingsMenuPos.value = { top, right }
+  }
   settingsMenuPort.value = card.port ?? null
 }
 
@@ -614,6 +620,16 @@ function onAddrDismissed() {
   showAddrPrompt.value = false
 }
 
+// 触摸端卡片整块可点 → 打开服务（拇指够不到右上角的小按钮）；
+// 桌面端不变：卡片空白处点击不做跳转，避免误触。
+function onCardClick(card: PortCard, e: MouseEvent) {
+  if (!isCoarsePointer()) return
+  if (editingPort.value === card.port) return
+  const el = e.target as HTMLElement
+  if (el.closest('.port-actions, .port-scheme, .port-fav-star, .edit-row')) return
+  void handleOpenService(card)
+}
+
 // ── 初始化 ──
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -837,7 +853,11 @@ onBeforeUnmount(() => {
         <template v-for="(card, idx) in analysis.port_cards" :key="idx">
           <!-- 已用端口 -->
           <div v-if="card.type === 'used'" v-show="cardVisible(card)">
-            <div class="port-card" :class="{ offline: card.is_running === false, editing: editingPort === card.port }">
+            <div
+              class="port-card"
+              :class="{ offline: card.is_running === false, editing: editingPort === card.port }"
+              @click="onCardClick(card, $event)"
+            >
               <!-- v1.5.11：Logo 展示模式（background / box），内容统一走 PortCardContent -->
               <template v-if="logoDisplayMode === 'background'">
                 <!-- background：Logo 铺满整卡作为背景层（contain 填充，随卡片尺寸自动缩放） -->
@@ -912,13 +932,12 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- 编辑模式 -->
-            <div v-if="editingPort === card.port" style="margin-top: 10px; display: flex; gap: 6px;">
+            <div v-if="editingPort === card.port" class="edit-row">
               <input
-                class="form-input"
+                class="form-input edit-input"
                 v-model="editServiceName"
                 @keyup.enter="handleEditSave"
                 :placeholder="t('ports.editPlaceholder')"
-                style="flex: 1; padding: 4px 8px; font-size: 12px;"
               />
               <button class="btn btn-sm btn-primary" @click="handleEditSave">{{ t('common.save') }}</button>
               <button class="btn btn-sm" @click="editingPort = null">{{ t('common.cancel') }}</button>
@@ -987,7 +1006,8 @@ onBeforeUnmount(() => {
         <div class="settings-menu-overlay" @click="closeSettingsMenu"></div>
         <div
           class="settings-menu"
-          :style="{ top: settingsMenuPos.top + 'px', right: settingsMenuPos.right + 'px' }"
+          :class="{ 'settings-menu--sheet': settingsMenuSheet }"
+          :style="settingsMenuSheet ? undefined : { top: settingsMenuPos.top + 'px', right: settingsMenuPos.right + 'px' }"
         >
           <div class="settings-menu-group">
             <div class="settings-menu-label">{{ t('ports.menuService') }}</div>

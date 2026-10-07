@@ -55,6 +55,8 @@ import { usePrefs, uid, urlLogoKey, hasPortFavorite } from '@/store/prefs'
 import { useSearch } from '@/store/search'
 import { useFavStatus } from '@/store/favStatus'
 import { useOpenService } from '@/composables/useOpenService'
+import { longPressSuppressed, useLongPress } from '@/composables/useLongPress'
+import { isCoarsePointer, isNarrow } from '@/utils/device'
 import AccessAddressPrompt from '@/components/AccessAddressPrompt.vue'
 import BackgroundLayer from '@/components/BackgroundLayer.vue'
 
@@ -513,18 +515,22 @@ function openEntry(entry: FavEntry) {
   }
 }
 
-// ── 右键菜单 ──
+// 触摸端长按已弹出菜单，抬手带来的 click 不再打开服务
+function onTileClick(entry: FavEntry) {
+  if (longPressSuppressed()) return
+  openEntry(entry)
+}
+
+// ── 右键 / 长按菜单 ──
 type CtxTarget =
   | { kind: 'entry'; entry: FavEntry; folder: FavFolder | null }
   | { kind: 'folder'; folder: FavFolder }
   | { kind: 'root' }
-const ctxMenu = ref<{ x: number; y: number; target: CtxTarget } | null>(null)
+const ctxMenu = ref<{ x: number; y: number; target: CtxTarget; sheet: boolean } | null>(null)
 
-function clampMenu(e: MouseEvent): { x: number; y: number } {
+function clampMenu(x: number, y: number): { x: number; y: number } {
   const menuWidth = 200
   const menuHeight = 320
-  let x = e.clientX
-  let y = e.clientY
   if (x + menuWidth > window.innerWidth) x = Math.max(8, window.innerWidth - menuWidth - 8)
   if (y + menuHeight > window.innerHeight) y = Math.max(8, window.innerHeight - menuHeight - 8)
   return { x, y }
@@ -537,23 +543,55 @@ function findFolderOf(entryId: string): FavFolder | null {
   return null
 }
 
-function openEntryMenuAt(entry: FavEntry, e: MouseEvent) {
-  ctxMenu.value = { ...clampMenu(e), target: { kind: 'entry', entry, folder: findFolderOf(entry.id) } }
+function openEntryMenu(entry: FavEntry, x: number, y: number) {
+  const pos = isNarrow() ? { x: 0, y: 0 } : clampMenu(x, y)
+  ctxMenu.value = {
+    ...pos,
+    sheet: isNarrow(),
+    target: { kind: 'entry', entry, folder: findFolderOf(entry.id) },
+  }
 }
-function openFolderMenu(folder: FavFolder, e: MouseEvent) {
-  ctxMenu.value = { ...clampMenu(e), target: { kind: 'folder', folder } }
+function openFolderMenu(folder: FavFolder, x: number, y: number) {
+  const pos = isNarrow() ? { x: 0, y: 0 } : clampMenu(x, y)
+  ctxMenu.value = { ...pos, sheet: isNarrow(), target: { kind: 'folder', folder } }
 }
-function openRootMenu(e: MouseEvent) {
-  ctxMenu.value = { ...clampMenu(e), target: { kind: 'root' } }
+function openRootMenu(x: number, y: number) {
+  const pos = isNarrow() ? { x: 0, y: 0 } : clampMenu(x, y)
+  ctxMenu.value = { ...pos, sheet: isNarrow(), target: { kind: 'root' } }
 }
 // 网格空白处右键：仅文件夹视图弹出「添加」菜单（根下不允许添加）
 function onGridContextMenu(e: MouseEvent) {
   if (!isFolderView.value) return
+  if (ctxMenu.value || longPressSuppressed()) return
   e.preventDefault()
-  openRootMenu(e)
+  openRootMenu(e.clientX, e.clientY)
 }
 function closeCtxMenu() {
   ctxMenu.value = null
+}
+
+// 触摸端没有右键：长按 450ms 唤出同一份菜单（桌面端仍走 contextmenu）
+const pendingPress = ref<((x: number, y: number) => void) | null>(null)
+const longPress = useLongPress((x, y) => pendingPress.value?.(x, y))
+
+function pressEntry(entry: FavEntry, e: PointerEvent) {
+  pendingPress.value = (x, y) => openEntryMenu(entry, x, y)
+  longPress.onPointerdown(e)
+}
+function pressFolder(folder: FavFolder, e: PointerEvent) {
+  pendingPress.value = (x, y) => openFolderMenu(folder, x, y)
+  longPress.onPointerdown(e)
+}
+// 网格空白处长按 → 「添加」菜单（pointerdown 会从磁贴冒泡上来，需排除磁贴）
+function pressGrid(e: PointerEvent) {
+  if ((e.target as HTMLElement).closest('.fav-tile')) return
+  pendingPress.value = (x, y) => openRootMenu(x, y)
+  longPress.onPointerdown(e)
+}
+// 长按已弹菜单 → 抬手后的 click 不再切分组
+function onFolderClick(f: FavFolder) {
+  if (longPressSuppressed()) return
+  selectedGroup.value = f.id
 }
 
 // 模板用收窄后的 computed（vue-tsc 不跨 <template v-if> 收窄联合类型）
@@ -622,19 +660,24 @@ function destroySortables() {
   folderSortable?.destroy()
   folderSortable = null
   // 拖拽中卸载组件时 onEnd 不会触发，需在此兜底移除悬停检测监听
-  window.removeEventListener('mousemove', onRootDragMove)
+  window.removeEventListener('pointermove', onRootDragMove)
 }
 
-function onRootDragMove(e: MouseEvent) {
+function onRootDragMove(e: PointerEvent) {
   const el = document.elementFromPoint(e.clientX, e.clientY)
   const tile = el?.closest?.('[data-folder-id]') as HTMLElement | null
   dragOverFolderId.value = tile?.dataset.folderId ?? null
 }
 
+// 触摸端不启用拖拽：与「长按唤出菜单」手势冲突，且容易劫持页面滚动。
+// 跨分组移动改由长按菜单里的「移动到分组」完成。
+const dragEnabled = () => !isCoarsePointer()
+
 // 网格：条目排序 + 拖到左侧分组栏移动（仅文件夹视图；扁平视图禁用拖拽）
 function setupRootSortable() {
   rootSortable?.destroy()
   rootSortable = null
+  if (!dragEnabled()) return
   if (loading.value || searching.value || !isFolderView.value || visible.value.length === 0 || !gridEl.value) return
   rootSortable = Sortable.create(gridEl.value, {
     animation: 150,
@@ -643,11 +686,11 @@ function setupRootSortable() {
     onStart: (evt) => {
       // 拖拽中的节点自身会挡住 elementFromPoint 命中检测，需排除
       ;(evt.item as HTMLElement).style.pointerEvents = 'none'
-      window.addEventListener('mousemove', onRootDragMove)
+      window.addEventListener('pointermove', onRootDragMove)
     },
     onEnd: (evt) => {
       ;(evt.item as HTMLElement).style.pointerEvents = ''
-      window.removeEventListener('mousemove', onRootDragMove)
+      window.removeEventListener('pointermove', onRootDragMove)
       const id = evt.item.dataset.id
       const over = dragOverFolderId.value
       dragOverFolderId.value = null
@@ -672,6 +715,7 @@ function setupRootSortable() {
 function setupFolderSortable() {
   folderSortable?.destroy()
   folderSortable = null
+  if (!dragEnabled()) return
   if (!folderListEl.value || folders.value.length < 2) return
   folderSortable = Sortable.create(folderListEl.value, {
     animation: 150,
@@ -965,6 +1009,7 @@ onBeforeUnmount(() => {
               @mouseleave="onGroupLeave"
             >
               <Star :size="20" class="fav-group-ico" />
+              <span class="fav-group-name">{{ t('favorites.allGroup') }}</span>
             </div>
 
             <div
@@ -975,6 +1020,7 @@ onBeforeUnmount(() => {
               @mouseleave="onGroupLeave"
             >
               <Wifi :size="20" class="fav-group-ico" />
+              <span class="fav-group-name">{{ t('favorites.onlineGroup') }}</span>
             </div>
 
             <div
@@ -985,6 +1031,7 @@ onBeforeUnmount(() => {
               @mouseleave="onGroupLeave"
             >
               <WifiOff :size="20" class="fav-group-ico" />
+              <span class="fav-group-name">{{ t('favorites.offlineGroup') }}</span>
             </div>
 
             <div class="fav-divider"></div>
@@ -996,12 +1043,17 @@ onBeforeUnmount(() => {
                 class="fav-group-item"
                 :class="{ active: selectedGroup === f.id, 'drag-over': dragOverFolderId === f.id }"
                 :data-folder-id="f.id"
-                @click="selectedGroup = f.id"
-                @contextmenu.prevent.stop="openFolderMenu(f, $event)"
+                @click="onFolderClick(f)"
+                @contextmenu.prevent.stop="openFolderMenu(f, $event.clientX, $event.clientY)"
+                @pointerdown="pressFolder(f, $event)"
+                @pointermove="longPress.onPointermove($event)"
+                @pointerup="longPress.onPointerup()"
+                @pointercancel="longPress.onPointercancel()"
                 @mouseenter="onGroupEnter($event, f.name)"
                 @mouseleave="onGroupLeave"
               >
                 <component :is="folderIcon(f)" :size="20" class="fav-group-ico" />
+                <span class="fav-group-name">{{ f.name }}</span>
               </div>
             </div>
 
@@ -1014,6 +1066,7 @@ onBeforeUnmount(() => {
               @mouseleave="onGroupLeave"
             >
               <Plus :size="20" class="fav-group-ico" />
+              <span class="fav-group-name">{{ t('favorites.newFolder') }}</span>
             </button>
           </aside>
 
@@ -1043,6 +1096,10 @@ onBeforeUnmount(() => {
               class="fav-grid"
               :class="{ 'no-drag': !isFolderView || searching }"
               @contextmenu="onGridContextMenu($event)"
+              @pointerdown="pressGrid($event)"
+              @pointermove="longPress.onPointermove($event)"
+              @pointerup="longPress.onPointerup()"
+              @pointercancel="longPress.onPointercancel()"
             >
               <div
                 v-for="entry in visible"
@@ -1052,10 +1109,15 @@ onBeforeUnmount(() => {
                 :data-id="entry.id"
                 :data-kind="entry.kind"
                 :title="t('ports.openService')"
-                @contextmenu.prevent.stop="openEntryMenuAt(entry, $event)"
+                @click="onTileClick(entry)"
+                @contextmenu.prevent.stop="openEntryMenu(entry, $event.clientX, $event.clientY)"
+                @pointerdown="pressEntry(entry, $event)"
+                @pointermove="longPress.onPointermove($event)"
+                @pointerup="longPress.onPointerup()"
+                @pointercancel="longPress.onPointercancel()"
               >
                 <span v-if="entry.kind === 'port'" class="port-status-dot" :class="isOfflineEntry(entry) ? 'is-offline' : 'is-online'"></span>
-                <div class="fav-tile-logo" @click="openEntry(entry)">
+                <div class="fav-tile-logo">
                   <img v-if="entryLogoSrc(entry)" :src="entryLogoSrc(entry)" :alt="entryName(entry)" @error="onLogoError(entry.id)" />
                   <span v-else class="fav-tile-fallback">{{ entryName(entry).charAt(0).toUpperCase() }}</span>
                 </div>
@@ -1234,7 +1296,11 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <template v-if="ctxMenu">
         <div class="settings-menu-overlay" @click="closeCtxMenu"></div>
-        <div class="settings-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+        <div
+          class="settings-menu"
+          :class="{ 'settings-menu--sheet': ctxMenu.sheet }"
+          :style="ctxMenu.sheet ? undefined : { left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+        >
           <template v-if="ctxEntry">
             <div class="settings-menu-group">
               <button
@@ -1365,6 +1431,7 @@ onBeforeUnmount(() => {
   min-height: 240px;
   /* 长网格时坞高封顶到视口内，保证底部「+」始终可见 */
   max-height: calc(100vh - 180px);
+  max-height: calc(100dvh - 180px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1408,6 +1475,11 @@ onBeforeUnmount(() => {
 
 .fav-group-ico {
   flex-shrink: 0;
+}
+
+/* 分组名：桌面端靠 hover 浮出（fav-hover-label），窄屏直接常驻在图标下方 */
+.fav-group-name {
+  display: none;
 }
 
 /* hover 浮出名称：body 级 fixed 白色胶囊（WeTab 同款），定位在图标右侧 */
@@ -1728,10 +1800,34 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-/* 窄屏：分组坞退化为顶部横向图标行 */
+/* 触摸端：hover 浮出的名称标签无用（改常驻，见下）；按下给一点即时反馈 */
+@media (hover: none), (pointer: coarse) {
+  .fav-hover-label {
+    display: none;
+  }
+
+  /* 长按用于唤出菜单：屏蔽系统长按弹窗/文本选择；拖拽已禁用，光标改回 pointer */
+  .fav-tile {
+    cursor: pointer;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .fav-tile:active .fav-tile-logo {
+    background: rgba(128, 128, 160, 0.3);
+  }
+
+  .fav-group-item {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* 窄屏：分组坞退化为顶部横向「图标 + 名称」条，可横滑（放在触摸段之后，覆盖 44px 方形） */
 @media (max-width: 768px) {
   .fav-layout {
     flex-direction: column;
+    gap: 12px;
   }
 
   .fav-sidebar {
@@ -1740,14 +1836,22 @@ onBeforeUnmount(() => {
     width: 100%;
     min-width: 0;
     min-height: 0;
+    max-height: none;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     overflow-x: auto;
     padding: 8px;
-    gap: 8px;
+    gap: 6px;
+    scrollbar-width: none;
+  }
+
+  .fav-sidebar::-webkit-scrollbar {
+    display: none;
   }
 
   .fav-group-list {
+    flex: 0 0 auto;
+    width: auto;
     flex-direction: row;
     justify-content: flex-start;
     overflow: visible;
@@ -1756,16 +1860,47 @@ onBeforeUnmount(() => {
 
   .fav-group-item {
     flex-shrink: 0;
+    width: 64px;
+    height: 52px;
+    flex-direction: column;
+    gap: 3px;
+    border-radius: 10px;
+  }
+
+  /* 触摸端没有 hover，名称必须常驻否则分不清哪个是哪个分组 */
+  .fav-group-name {
+    display: block;
+    max-width: 100%;
+    font-size: 10px;
+    line-height: 1.2;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .fav-divider {
     width: 2px;
-    height: 22px;
+    height: 30px;
   }
 
   .fav-new-btn {
     margin-top: 0;
     margin-left: auto;
+  }
+
+  .fav-grid {
+    gap: 14px;
+    padding: 8px 0;
+  }
+
+  .fav-tile {
+    width: 84px;
+  }
+
+  .fav-tile-logo {
+    width: 60px;
+    height: 60px;
   }
 }
 </style>

@@ -53,6 +53,7 @@ async function submit() {
 <style scoped>
 .login-wrap {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -63,6 +64,7 @@ async function submit() {
   border-radius: 16px;
   padding: 32px 36px;
   width: 320px;
+  max-width: 100%;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
 .login-logo { font-size: 40px; text-align: center; margin-bottom: 8px; }
@@ -71,7 +73,7 @@ async function submit() {
 .login-input {
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -93,4 +95,12 @@ async function submit() {
   cursor: pointer;
 }
 .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 移动端：输入框 16px（iOS 聚焦不缩放页面）、按钮够拇指按 */
+@media (max-width: 768px) {
+  .login-wrap { padding: 16px; }
+  .login-card { padding: 24px 20px; }
+  .login-input { font-size: 16px; padding: 12px 14px; }
+  .login-btn { padding: 12px; font-size: 15px; }
+}
 </style>
