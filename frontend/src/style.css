@@ -177,13 +177,12 @@ button,
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 滚动容器不把滑动「传染」给页面（避免下拉刷新/橡皮筋打断列表滚动） */
-.main-content,
-.main-body,
-.view,
-.fav-group-list,
-.modal-body,
-.add-port-list {
+/* 滚动容器不把滑动「传染」给页面（阻断下拉刷新 / 橡皮筋）。
+   ⚠ 只能挂在真正会滚的容器上：.main-body / .view 是高度自适应的 overflow:auto 容器，
+   自身永远不会滚动，Chrome 仍把它们当作滚轮链上的一环 —— 一旦带 overscroll-behavior
+   就会吞掉滚轮事件且不再向上冒泡，导致 PC 端整页无法滚动。
+   页面唯一的真实滚动容器是 .main-content，overscroll-behavior 只留在这里。 */
+.main-content {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
